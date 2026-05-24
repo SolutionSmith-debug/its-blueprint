@@ -37,6 +37,9 @@ draft`) until reconciled.
 - [`archive/`](archive/) — retired-doc registry. Retired docs are NOT
   in-tree; `archive/README.md` lists what existed pre-migration and
   what superseded each.
+- [`prompts/`](prompts/) — orchestration scaffolds + reusable snippets
+  for chat-to-CC and operator-to-CC direction. Distinct from
+  execution-repo `its/prompts/` (runtime prompts called by Python).
 - [`scripts/`](scripts/) — linters for frontmatter, cross-references,
   workstream taxonomy.
 - [`.github/workflows/`](.github/workflows/) — CI: lint on every push.
