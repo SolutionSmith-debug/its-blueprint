@@ -1,19 +1,19 @@
 ---
 type: doctrine
-version: 11
+version: 12
 status: canonical
 last_verified: 2026-05-24
-last_verified_against: 3b7d56d
-supersedes: doctrine/operational-standards.md@v10
+last_verified_against: 79eec73
+supersedes: doctrine/operational-standards.md@v11
 workstream: null
-tags: [push-vs-record, picklist-hardening, attachment-screening, polling-daemon, sdk-vs-live]
+tags: [push-vs-record, picklist-hardening, attachment-screening, polling-daemon, sdk-vs-live, cc-tooling, fork-security, pii-logging, actions-version-discipline]
 ---
 
-**ITS Operational Standards v11**
+**ITS Operational Standards v12**
 
-2026-05-22 — Full Consolidation Absorbing 2026-05-21/22 Cascade
+2026-05-24 — CC-Tooling + Fork-Security + PII-Logging Cluster Absorb
 
-*Five new sections: §31 polling daemons, §32 operator visibility, §33 trusted contacts, §34 attachment screening, §35 picklist convention · §36 in-repo tech debt*
+*Five new sections: §37 CC skills, §38 local agent guardrails, §39 per-customer-fork security setup, §40 migration-script PII asymmetry, §41 GitHub Actions version-bump discipline*
 
 # Purpose
 
@@ -44,6 +44,26 @@ v11 is a full consolidation since v10 (2026-05-21 morning). It folds in the v10.
 - §36 NEW — In-Repo Tech Debt Log. docs/tech_debt.md is canonical execution-layer log; planning-project tech debt scoped to owner-decision items.
 
 - Sections §§4-22, 25-30 carry forward from v10/v10.1 with cross-reference refresh only.
+
+# What Changed in v12
+
+- §37 NEW — CC Skills Usage Convention. mattpocock/skills installed repo-local at `.agents/skills/` with `.claude/skills/` symlinks; 14-skill default install; skills-lock.json pins upstream revisions; auto-recommend list + gated list + not-in-default-install list.
+
+- §38 NEW — Local Agent Guardrails. block-dangerous-git.sh PreToolUse hook with ITS carve-outs; allow plain `git push` and `branch -d` (canonical workflow); block destructive variants.
+
+- §39 NEW — Per-Customer-Fork Security Setup. Mandatory hardening baseline for every customer fork: branch protection, fork-PR approval policy, secret scanning + push protection, Dependabot alerts (NOT auto-fixes), CodeQL default setup.
+
+- §40 NEW — Migration-Script PII Logging Asymmetry. All `scripts/migrations/*` follow this pattern: dry-run path may print PII (operator review); live-write path strips PII (positional indices + system IDs only).
+
+- §41 NEW — GitHub Actions Version-Bump Discipline. Verify latest tag via `gh api`, read release notes for breaking changes, never blanket-upgrade.
+
+- §3.1 Push-vs-Record Separation — cross-reference added: server-side branch protection is the push-layer enforcement that complements the local block-dangerous-git.sh hook (per §38). Direct push to main is blocked at platform layer (server-side), not just at local-hook layer.
+
+- §14 Preservation-over-refactor — cross-reference added: §37's gated-skills list (`improve-codebase-architecture`) requires explicit operator approval per §14. Don't invoke speculatively.
+
+- §30 SDK-vs-Live Integration Test Discipline — cross-reference added: §37's auto-recommend for `tdd` skill applies to new `shared/*` SDK wrappers per §30.
+
+- Sections §§4–22, 25–36 carry forward from v11 with cross-reference refresh only.
 
 # §1 — Kill Switch
 
@@ -325,10 +345,190 @@ docs/tech_debt.md is the canonical execution-layer tech debt log. Planning-proje
 
 39 entries as of 2026-05-22. Mix of closed/open/partially-mitigated. Notable open items: anomaly_logger SUSPICIOUS_FIELD_PATTERNS FP risk, R2 Watchdog Check E (Phase 1.5 deferral), Picklist_Sync_Config config/state mix, Smartsheet MULTI_PICKLIST round-trip gotcha, safety_reports week-folder race condition, Daily Reports schema gap (no Box Link column).
 
+# §37 (NEW) — CC Skills Usage Convention
+
+mattpocock/skills installed repo-local in every ITS execution repo. Skills physically live at `.agents/skills/` (universal multi-agent location); `.claude/skills/` is a symlink pointing at it. `.agents/skills/` is the source of truth. `skills-lock.json` at repo root pins upstream revisions for reproducible installs.
+
+Customer-fork-portable: when ITS forks for Customer 2+, skills come with the code.
+
+## Default Install (14 skills)
+
+caveman, diagnose, grill-me, grill-with-docs, handoff, improve-codebase-architecture, prototype, setup-matt-pocock-skills, tdd, to-issues, to-prd, triage, write-a-skill, zoom-out.
+
+Install command (one-time per fork): `npx skills@latest add mattpocock/skills`. Adding skills outside the default set requires `--full-depth` flag for `misc/` subdirectory skills (e.g., `git-guardrails-claude-code` per §38).
+
+## Auto-Recommend (trigger-driven)
+
+CC should suggest invoking these skills when their triggers fire:
+
+- `diagnose` — any bug investigation that touches an SDK boundary (Smartsheet, Box, Graph). The reproduce → minimise → hypothesise → instrument → fix → regression-test loop is the standard response to the SDK-vs-Live class of bug (§30).
+- `tdd` — any new `shared/*` SDK wrapper with create/update/delete on typed columns/rows (§30 integration discipline).
+
+## Gated (require operator approval)
+
+These skills conflict with established conventions and must not be invoked speculatively:
+
+- `improve-codebase-architecture` — conflicts with §14 preservation-over-refactor. Operator must confirm the refactor target meets the ≥4 real reuse cases threshold before invoking.
+- `request-refactor-plan` — same §14 constraint when installed.
+
+## Safe to Invoke On Demand
+
+grill-me, grill-with-docs, to-prd, to-issues, handoff, caveman, zoom-out, triage, prototype, write-a-skill, setup-matt-pocock-skills.
+
+## Not in Default Install (available, install on demand)
+
+`request-refactor-plan`, `qa`, `git-guardrails-claude-code` (§38). Skills not in `mattpocock/skills` at all (e.g., `migrate-to-shoehorn` cited from search results) are flagged as nonexistent rather than silently ignored.
+
+# §38 (NEW) — Local Agent Guardrails
+
+block-dangerous-git.sh PreToolUse hook installed via `mattpocock/skills` git-guardrails-claude-code skill. Wired via `.claude/settings.json` (committed; distinct from gitignored `.claude/settings.local.json`).
+
+Hook only blocks the model-agent's Bash tool calls. Operator shell is unaffected. Recovery operations (e.g., `git branch -D` on a force-delete-needed branch) are performed manually by the operator in their own shell.
+
+## Allow-List (carved out from defaults)
+
+These commands are allowed even when their pattern overlaps with destructive operations:
+
+- `git push` (any branch, non-force) — required for canonical PR workflow
+- `git branch -d` (safe-delete; lowercase d) — canonical post-merge branch cleanup
+- `gh pr merge --squash --delete-branch` — canonical merge command (composite of the above)
+- `gh pr view` and all read-only `gh` commands — required for four-part verification (per existing PR-merge discipline)
+
+## Block-List
+
+- `git push --force`, `git push -f` — force-push
+- `git push origin --delete <branch>` — remote branch deletion
+- `git push origin main` (direct) — defended at server-side branch protection layer; local hook does NOT differentiate `push origin main` from `push origin feature-branch`. Direct-push-to-main enforcement lives at the GitHub branch protection layer per §39
+- `reset --hard` — local history destruction
+- `clean -f`, `clean -fd` — local working-tree destruction
+- `branch -D` (force-delete; uppercase D) — operator-only via manual shell
+- `checkout .`, `restore .` — uncommitted-changes destruction
+
+## Defense Complement
+
+The local hook protects the operator's machine from agent error. Server-side GitHub branch protection (per §39) protects the repo from any contributor, on any machine. Direct push to `main` is blocked at both layers.
+
+# §39 (NEW) — Per-Customer-Fork Security Setup
+
+Mandatory security-hardening baseline for every customer fork. Establishes the minimum posture that all ITS forks (Evergreen + future Customer 2+) inherit. The operational checklist with verbatim `gh api` commands lives at `references/customer-fork-setup-checklist.md`.
+
+## Baseline Configuration
+
+### Branch Protection on main
+
+- Required status checks: `strict=true`, `contexts=["test"]` (or the canonical CI job name for the fork), GitHub Actions app
+- `required_linear_history=true` (squash-only merges)
+- `allow_force_pushes=false`
+- `allow_deletions=false`
+- `required_conversation_resolution=true`
+- `enforce_admins=false` (emergency lever preserved for solo + CC operation; tighten to `true` for multi-contributor forks)
+- `required_pull_request_reviews=null` (solo + CC default; tighten when adding human reviewers)
+
+### Fork-PR Approval Policy (public forks only)
+
+`approval_policy=all_external_contributors` (strongest). Tightens default `first_time_contributors` to require operator approval before CI runs on any PR from a non-collaborator, regardless of contributor history.
+
+### Secret Scanning
+
+- `secret_scanning.status=enabled`
+- `secret_scanning_push_protection.status=enabled` — blocks pushes containing detected secret patterns at the platform layer (not just alerts post-push)
+
+### Dependabot Alerts
+
+- Alerts: ENABLED (`PUT /vulnerability-alerts`)
+- Automated-security-fixes: NOT ENABLED — auto-PR opens would conflict with the four-part-verify + manual-merge workflow. Operator reviews + lands dependency bumps via §41 discipline.
+
+### CodeQL Default Setup
+
+- `code-scanning/default-setup` with `state=configured`, `query_suite=default`
+- Languages auto-detected (typically `python` + `actions` for ITS forks)
+- Weekly scan schedule
+
+## Operator-Only Audit (Not API-Automatable)
+
+- Fine-grained Personal Access Token inventory — `Settings → Developer settings → Personal access tokens → Fine-grained tokens`. Verify scope is per-repo not All-repositories; verify expiration dates set; revoke unused.
+- Classic Personal Access Token inventory — same UI, classic tab. Most-likely place for forgotten tokens from `gh auth login` or one-off scripts.
+
+## Architectural Defense (not configuration)
+
+All secrets MUST live in macOS Keychain. `shared/keychain.py` is the canonical interface. `.gitignore` covers `.env*`, `*_secret*`, `*credentials*`, `*.token`, `*.pem`, `*.key`. This eliminates the design pathway for secrets to enter the repo, making the configuration items above defense-in-depth around an already-secure baseline.
+
+## Verification Pattern
+
+After hardening, run gitleaks against full history (`gitleaks detect --source . --log-opts="--all" --redact -v`). Zero findings + zero CI/env/Dependabot secrets + zero workflow `secrets.*` references = clean baseline. Re-run periodically after any new `shared/*` SDK wrapper merges.
+
+# §40 (NEW) — Migration-Script PII Logging Asymmetry
+
+Applies to all `scripts/migrations/*` and any script that handles operator-known PII (email addresses, contact names, customer details).
+
+## Asymmetry Rule
+
+- **Dry-run path** — PII permitted in logs. Dry-run output is review material: the operator needs to see emails/names to verify what WILL be added before confirming. Stripping PII from dry-run defeats the review purpose.
+
+- **Live-write path** — PII stripped. The write IS the side effect. Logging confirmation needs only positional indices + system IDs (Smartsheet row IDs, sheet IDs). Logging emails/names in the live-write path puts PII in terminal scrollback, screen-share recordings, and shell history without operational benefit.
+
+## Canonical Example (PR #84)
+
+Live-write before:
+
+```python
+print(f"[ok] added: {r['Email']} (row {new_row.id})")
+```
+
+Live-write after:
+
+```python
+print(f"[ok] added row {i+1}/{total} (smartsheet row_id={new_row.id})")
+```
+
+Dry-run path unchanged (still prints `r['Email']`).
+
+## Rationale
+
+Per-customer-template scripts run on multiple operator terminals over the customer-fork lifecycle. The same script that runs at Evergreen will run at Customer 2, possibly during screen-shares, customer hand-overs, or demo recordings. Code-as-documentation also matters on public repos — the established pattern for `scripts/migrations/*` is the wrong norm to set as "logs PII to stdout."
+
+# §41 (NEW) — GitHub Actions Version-Bump Discipline
+
+Applies to every `.github/workflows/*.yml` action version bump.
+
+## Procedure
+
+1. Verify the latest stable tag via API:
+
+   ```bash
+   gh api repos/<owner>/<repo>/releases/latest --jq '.tag_name'
+   ```
+
+   Examples: `actions/checkout`, `actions/setup-python`, `actions/cache`.
+
+2. Read the release notes for breaking changes:
+
+   ```bash
+   gh release view <tag> --repo <owner>/<repo>
+   ```
+
+   Pay attention to: new required inputs, removed flags, behavior changes, runtime version (Node.js 20 vs 24) requirements, default-value changes.
+
+3. If breaking changes affect ITS workflows → STOP. Surface the breaking change to operator. Do not force-through.
+
+4. If clean → bump in a focused PR. One bump per PR family (e.g., bump both `checkout` and `setup-python` in one PR if both are deprecated together; do NOT bundle with unrelated workflow changes).
+
+5. Four-part PR-landed verify per execution-repo discipline.
+
+## Anti-Patterns
+
+- DO NOT blanket-upgrade ("bump everything to latest"). Each action's latest tag is a separate decision.
+- DO NOT bump from a deprecation annotation without reading the release notes. The annotation says "deprecated"; the notes say "what changed."
+- DO NOT bump in the same PR as unrelated workflow edits. Isolate so a CI failure is unambiguously attributable.
+
+## Canonical Example (PR #81)
+
+`actions/checkout` @v4 → @v6.0.2 and `actions/setup-python` @v5 → @v6.2.0 in a single PR. Both bumps verified via `gh api releases/latest`; release notes read for breaking changes; both clean; CI green on bumped versions; deprecation annotation cleared on next main-branch run.
+
 # Authority
 
-Operational Standards v11, 2026-05-22. Full consolidation absorbing v10/v10.1 overlay + 2026-05-21/22 cascade (polling daemons, operator visibility, trusted contacts, attachment screening, picklist hardening, in-repo tech debt). v10 + v10.1 retire on acceptance of v11.
+Operational Standards v12, 2026-05-24. Adds §§37–41 absorbing the 2026-05-24 CC-tooling + fork-security + PII-logging cluster. v11 retires on acceptance of v12.
 
-v12 trigger: substantive doctrine change or new §. v11.x absorbs further status updates without major revision.
+v13 trigger: substantive doctrine change or new §. v12.x absorbs further status updates without major revision.
 
-Companion to FM v8 (Invariant 2 layer-6 addition), V&R v7.2 (Phase 1.5 security-hardening precondition), Handover Plan v6.3, Excellence Roadmap v2.3, FSU v6.5, Memory Archive v5, Cascade Unification Update 2026-05-22 Security Hardening.
+Companion to FM v8 (Invariant 2 layer-6 addition), V&R v7.2 (Phase 1.5 security-hardening precondition), Handover Plan v6.3, Excellence Roadmap v2.3, FSU v6.5, Memory Archive v5 (extended §G7 in parallel PR), `references/customer-fork-setup-checklist.md` (downstream cascade in next PR).
