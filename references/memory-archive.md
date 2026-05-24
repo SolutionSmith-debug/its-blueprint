@@ -3,7 +3,7 @@ type: reference
 version: 5
 status: canonical
 last_verified: 2026-05-24
-last_verified_against: d13fcda
+last_verified_against: 79eec73
 supersedes: references/memory-archive.md@v4
 workstream: null
 tags: [restoration, operational-detail, post-compaction-recovery]
@@ -388,6 +388,70 @@ Other rows in the PDF do NOT have this typo — verified by spot-check
 Resolution path: when the PDF is next regenerated (operator-side action),
 correct the typo at source. Until then, anywhere chat or cc references
 Ezra by email, use the corrected spelling.
+
+# §G7 — 2026-05-24 Security-Hardening + CC-Tooling Cluster (NEW 2026-05-24)
+
+Day-record for the 2026-05-24 work cluster. Seven execution-repo PRs (#79–85) plus two server-side configuration passes (branch protection on main; audit-gap closures). Adds doctrine sections §§37–41 to Op Stds (PR 1 in this blueprint repo) and a derived operational checklist (PR 2). This entry captures the day-record per the memory-archive append-only convention.
+
+## §G7.1 — Execution-repo PRs landed
+
+| PR | Topic | Merge SHA | Date | Notes |
+|---|---|---|---|---|
+| #79 | mattpocock/skills install | 18e90fd | 2026-05-24 | 14 skills at `.agents/skills/` with `.claude/skills/` symlinks |
+| #80 | git-guardrails install | e948944 | 2026-05-24 | block-dangerous-git.sh with ITS carve-outs |
+| #81 | actions version bumps | 59b440f | 2026-05-24 | checkout v4→v6, setup-python v5→v6 |
+| #82 | CLAUDE.md post-merge habit | c6333e7 | 2026-05-24 | docs: add post-merge checkout-main habit |
+| #83 | .gitignore *.pem and *.key | 13af7a7 | 2026-05-24 | defense-in-depth, audit gap #5 closure |
+| #84 | trusted-contacts PII stripping | be6f8f7 | 2026-05-24 | live-write strips PII; dry-run preserves for review |
+| #85 | explicit workflow permissions | 79eec73 | 2026-05-24 | contents: read; closed CodeQL TP |
+
+origin/main HEAD after PR #85: `79eec73`. All four-part verify clean.
+
+## §G7.2 — Server-side configuration (no PR artifacts)
+
+**Branch protection on main:** required_status_checks (strict=true, contexts=["test"], app_id=15368), required_linear_history=true (squash-only), allow_force_pushes=false, allow_deletions=false, required_conversation_resolution=true, enforce_admins=false (emergency lever), required_pull_request_reviews=null (solo+CC, CI is gate).
+
+**Audit-gap closures:**
+- Secret scanning + push protection: enabled
+- Dependabot alerts: enabled (automated-security-fixes deliberately NOT enabled)
+- CodeQL default setup: state=configured, query_suite=default, languages=python+actions, schedule=weekly
+- Fork-PR approval policy: tightened from `first_time_contributors` (default) to `all_external_contributors` (strongest)
+
+## §G7.3 — Audit baseline
+
+Comprehensive secret-exposure audit run 2026-05-24 via gitleaks 8.30.1 against full git history (112 commits, all refs). **Zero findings.** Full audit report in `audits/2026-05-24_secret-exposure-audit.md`. Clean baseline by architecture (all secrets in macOS Keychain via `shared/keychain.py` + `.gitignore` + CLAUDE.md doctrine).
+
+## §G7.4 — CodeQL initial-scan FP patterns
+
+Three false-positive patterns surfaced during the 2026-05-24 initial CodeQL scan triage. Documented here for future scan triage:
+
+1. Variable names containing TOKEN/SECRET/KEY logged as names (not values) — e.g., Keychain service-name constants logged in error messages.
+2. OAuth 2.0 authorize URLs containing public `client_id` + single-use CSRF `state` token — public by design.
+3. Module paths containing `trusted_contacts` triggering py/clear-text-logging-sensitive-data on every print() in the file regardless of content (filename heuristic over-trigger).
+
+Future alerts matching these patterns default to dismiss-as-FP unless content shows actual secret/PII value being logged.
+
+## §G7.5 — Doctrine implications cascaded
+
+Op Stds v11 → v12 (PR 1 in this blueprint repo, landed `74ee6f8`):
+- §37 CC Skills Usage Convention
+- §38 Local Agent Guardrails
+- §39 Per-Customer-Fork Security Setup
+- §40 Migration-Script PII Logging Asymmetry
+- §41 GitHub Actions Version-Bump Discipline
+
+Derived operational checklist:
+- `references/customer-fork-setup-checklist.md` (PR 2 in this blueprint repo, landed `5f80ff8`)
+
+This memory-archive extension (§G7) — captured in PR 3 (this PR).
+
+## §G7.6 — Class-of-bug observations
+
+**Verify-before-fix extends to citations.** The original CLAUDE.md draft for PR #79 referenced `migrate-to-shoehorn` as a "TypeScript-specific, ignore" skill. CC's pre-PR verification surfaced that the skill doesn't exist in `mattpocock/skills` upstream at all — it was cited from search-result snippet without verifying against the actual repo. Codified in Op Stds (verify-before-fix discipline now explicitly covers citations and external-state claims, not just PR-landed claims).
+
+**Push-vs-Record extends to multi-layer defense.** Op Stds §3.1 push-vs-record separation pattern generalizes to defense-in-depth at multiple layers: local hook (operator's machine) + server-side branch protection (everyone, all sources). Each layer protects a different threat surface; neither is redundant.
+
+**Architecture-as-defense is the dominant pattern.** Today's clean audit was not luck. The "all secrets in Keychain" architectural choice means there's no design pathway for secrets to enter the repo. This pattern (make the secure path the obvious path; eliminate design pathways for unsafe outcomes) is more durable than vigilance-based defenses. Worth surfacing when designing future capabilities.
 
 # Cross-References
 
