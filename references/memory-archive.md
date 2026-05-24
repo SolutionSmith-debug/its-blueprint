@@ -3,7 +3,7 @@ type: reference
 version: 5
 status: canonical
 last_verified: 2026-05-24
-last_verified_against: 3b7d56d
+last_verified_against: d13fcda
 supersedes: references/memory-archive.md@v4
 workstream: null
 tags: [restoration, operational-detail, post-compaction-recovery]
@@ -363,6 +363,27 @@ Memory entry 25 strengthened after Claude violated the rule with Path A vs Path 
 ### Forensic verification before cascade (NEW pattern)
 
 2026-05-22 verification audit established the pattern: before any v-bumped cascade doc lands, verify every claim against live repository state. Drift between canonical docs and repo is the rule, not the exception. Operator's verify-before-fix discipline (memory entry 5) extends to cascade authorship: don't write v-bumped authority against memory state; write against verified live state.
+
+## §G6 — Contacts Data Quality
+
+Added 2026-05-24 during memory consolidation (30 → 15 entries). Captures a class of data trap before its memory entry retires.
+
+### Ezra Jones email typo
+
+The Evergreen contact "Ezra Jones" appears in source PDFs (subcontractor onboarding forms, certificate-of-insurance scans, internal directory exports) with a recurring email-address typo. The canonical/correct address differs from what auto-extraction tools (and OCR) tend to produce when the typo is present. Memory entry #7 historically held the verbatim correction so cc didn't re-introduce the typo when authoring intake fixtures, mock contact lists, or test data.
+
+Why it's archived here rather than in memory:
+- The specific typo + correction is contact-level data, not a behavioral rule.
+- It belongs with the system of record (Smartsheet `ITS_Trusted_Contacts` row for Ezra Jones — that's the canonical email; cc reads from there).
+- Restoration path: when cc generates fixtures or test data referencing Ezra, the value must come from `ITS_Trusted_Contacts`, not from the source PDFs. If a future audit catches the typo re-introduced anywhere, this section's existence + the trusted-contacts sheet are the recovery surface.
+
+### General principle
+
+External-document extractions of contact data are NOT canonical. The canonical contacts surface is `ITS_Trusted_Contacts` (Op Stds v11 §33). Any contact data flowing from PDF/OCR/scan into ITS code paths must be validated against `ITS_Trusted_Contacts` before being trusted. This is a specific instance of Adversarial Input Handling Layer 1 (sender allowlist + scope enforcement) applied to outbound use of the same data.
+
+### Future entries in §G6
+
+If additional contact-level data quality traps surface (similar typos, name-spelling variants that block lookup, address-format ambiguities), append them as `### Contact name — issue` subsections under §G6 with the same shape: what the trap is, what the canonical surface is, what the restoration path looks like.
 
 # Cross-References
 
