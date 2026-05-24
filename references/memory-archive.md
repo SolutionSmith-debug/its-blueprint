@@ -364,26 +364,30 @@ Memory entry 25 strengthened after Claude violated the rule with Path A vs Path 
 
 2026-05-22 verification audit established the pattern: before any v-bumped cascade doc lands, verify every claim against live repository state. Drift between canonical docs and repo is the rule, not the exception. Operator's verify-before-fix discipline (memory entry 5) extends to cascade authorship: don't write v-bumped authority against memory state; write against verified live state.
 
-## §G6 — Contacts Data Quality
+# §G6 — Contacts Data Quality (NEW 2026-05-24)
 
-Added 2026-05-24 during memory consolidation (30 → 15 entries). Captures a class of data trap before its memory entry retires.
+Captures known data-quality issues in operator-provided contact data
+that survived migration from memory. Append future contact-data issues
+here as discovered.
 
-### Ezra Jones email typo
+## §G6.1 — Ezra Jones email typo in Evergreen_Contacts.pdf
 
-The Evergreen contact "Ezra Jones" appears in source PDFs (subcontractor onboarding forms, certificate-of-insurance scans, internal directory exports) with a recurring email-address typo. The canonical/correct address differs from what auto-extraction tools (and OCR) tend to produce when the typo is present. Memory entry #7 historically held the verbatim correction so cc didn't re-introduce the typo when authoring intake fixtures, mock contact lists, or test data.
+The `Evergreen_Contacts.pdf` operator-data artifact (in Claude.ai project
+knowledge; not in this repo) contains a typo in Ezra Jones's row only:
+`evergreenrenwables.com` (missing the 'e' in 'renewables'). The correct
+spelling is `ezraj@evergreenrenewables.com`.
 
-Why it's archived here rather than in memory:
-- The specific typo + correction is contact-level data, not a behavioral rule.
-- It belongs with the system of record (Smartsheet `ITS_Trusted_Contacts` row for Ezra Jones — that's the canonical email; cc reads from there).
-- Restoration path: when cc generates fixtures or test data referencing Ezra, the value must come from `ITS_Trusted_Contacts`, not from the source PDFs. If a future audit catches the typo re-introduced anywhere, this section's existence + the trusted-contacts sheet are the recovery surface.
+Operationally relevant when:
+- Drafting any doc that references Ezra by email
+- Wiring ITS_Config rows that include Ezra as a recipient
+- Setting up mirror tenant aliases at Phase 1.5 cutover
 
-### General principle
+Other rows in the PDF do NOT have this typo — verified by spot-check
+2026-05-21. The typo is isolated to Ezra's row.
 
-External-document extractions of contact data are NOT canonical. The canonical contacts surface is `ITS_Trusted_Contacts` (Op Stds v11 §33). Any contact data flowing from PDF/OCR/scan into ITS code paths must be validated against `ITS_Trusted_Contacts` before being trusted. This is a specific instance of Adversarial Input Handling Layer 1 (sender allowlist + scope enforcement) applied to outbound use of the same data.
-
-### Future entries in §G6
-
-If additional contact-level data quality traps surface (similar typos, name-spelling variants that block lookup, address-format ambiguities), append them as `### Contact name — issue` subsections under §G6 with the same shape: what the trap is, what the canonical surface is, what the restoration path looks like.
+Resolution path: when the PDF is next regenerated (operator-side action),
+correct the typo at source. Until then, anywhere chat or cc references
+Ezra by email, use the corrected spelling.
 
 # Cross-References
 
