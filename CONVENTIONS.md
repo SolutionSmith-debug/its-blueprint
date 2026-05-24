@@ -12,7 +12,7 @@ linter).
 
 ```yaml
 ---
-type: doctrine | mission | brief | reference | audit | session_log | overlay
+type: doctrine | mission | brief | reference | audit | session_log | overlay | scaffold | snippet
 version: 8                          # monotonic integer; canonical state tagged in git
 status: canonical | draft | superseded | archived
 last_verified: 2026-05-24           # ISO date; lint warns if stale beyond N days
@@ -39,12 +39,51 @@ tags: [external-send-gate, invariant]   # optional
 
 ### Canonical sets
 
-- **types**: `doctrine`, `mission`, `brief`, `reference`, `audit`, `session_log`, `overlay`
+- **types**: `doctrine`, `mission`, `brief`, `reference`, `audit`, `session_log`, `overlay`, `scaffold`, `snippet`
 - **status**: `canonical`, `draft`, `superseded`, `archived`
 - **workstream**: `safety_reports`, `email_triage`, `purchase_orders`, `subcontracts`, `ai_employee_capabilities`, `null`
 
 Adding a workstream = small PR editing `scripts/lint_frontmatter.py`
 and this file. Don't ad-hoc.
+
+## Prompt Scaffolds
+
+The `prompts/` directory holds orchestration scaffolds (meta-prompts
+for chat-to-CC or operator-to-CC direction) and reusable snippets.
+Distinct from `its/prompts/` (execution repo), which holds runtime
+prompts called by Python at API time.
+
+### Scaffold frontmatter
+
+```yaml
+---
+type: scaffold
+name: <slug matching filename without .md>
+version: 1                    # monotonic int; bump on substantive revision
+audience: chat | cc | operator | (combination, e.g., "chat | cc")
+usage_count: 0                # monotonic; bump on substantive revision (not every use)
+---
+```
+
+### Snippet frontmatter
+
+Same shape as scaffolds, with `type: snippet`. Snippets get extracted
+when a fragment is used by ≥2 scaffolds.
+
+### Filename convention
+
+- Scaffolds: `prompts/scaffold/<slug>.md` — slug kebab-case.
+- Snippets: `prompts/snippets/<slug>.md` — slug kebab-case.
+
+### When to add a scaffold
+
+When the same orchestration pattern has been used ≥3 times in chat or
+by operator and is worth capturing. Don't speculatively scaffold.
+
+### When to extract a snippet
+
+When a fragment appears verbatim in ≥2 scaffolds. Move to `snippets/`,
+reference from each scaffold.
 
 ## Filename convention
 

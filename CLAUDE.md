@@ -30,6 +30,7 @@ Flag the inconsistency.
 | Excellence Roadmap | `doctrine/excellence-roadmap.md` | Quality bar + tooling stack. |
 | Workstream missions/briefs | `workstreams/<slug>/{mission,brief}.md` | Per-workstream architecture. |
 | Memory archive | `references/memory-archive.md` | Operational detail; consulted on demand. |
+| Prompt scaffolds | `prompts/scaffold/` + `prompts/snippets/` | Orchestration patterns for chat-to-CC + reusable snippets. |
 
 ## Conventions
 

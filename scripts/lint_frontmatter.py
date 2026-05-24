@@ -38,6 +38,8 @@ CANONICAL_TYPES = frozenset({
     "audit",
     "session_log",
     "overlay",
+    "scaffold",
+    "snippet",
 })
 
 CANONICAL_STATUS = frozenset({
@@ -57,6 +59,8 @@ CANONICAL_WORKSTREAMS = frozenset({
 
 VERSION_REQUIRED_TYPES = frozenset({"doctrine", "mission", "brief"})
 DATE_PREFIXED_TYPES = frozenset({"audit", "session_log"})
+# Scaffolds and snippets require: name, version, audience, usage_count
+SCAFFOLD_TYPES = frozenset({"scaffold", "snippet"})
 
 EXEMPT_FILES = frozenset({
     "README.md",
@@ -143,32 +147,54 @@ def lint_file(rel_path: Path, stale_days: int) -> list[Violation]:
         ))
 
     status = fm.get("status")
-    if not isinstance(status, str) or status not in CANONICAL_STATUS:
-        violations.append(Violation(
-            rel_path, "status-canonical", "error",
-            f"status={status!r} not in {sorted(CANONICAL_STATUS)}",
-        ))
+    if doc_type not in SCAFFOLD_TYPES:
+        if not isinstance(status, str) or status not in CANONICAL_STATUS:
+            violations.append(Violation(
+                rel_path, "status-canonical", "error",
+                f"status={status!r} not in {sorted(CANONICAL_STATUS)}",
+            ))
 
-    workstream = fm.get("workstream", "MISSING")
-    if workstream == "MISSING":
-        violations.append(Violation(
-            rel_path, "workstream-required", "error",
-            "missing field 'workstream' (use null for cross-cutting)",
-        ))
-    elif workstream is not None and (
-        not isinstance(workstream, str) or workstream not in CANONICAL_WORKSTREAMS
-    ):
-        violations.append(Violation(
-            rel_path, "workstream-canonical", "error",
-            f"workstream={workstream!r} not in {sorted(CANONICAL_WORKSTREAMS)} or null",
-        ))
+    if doc_type not in SCAFFOLD_TYPES:
+        workstream = fm.get("workstream", "MISSING")
+        if workstream == "MISSING":
+            violations.append(Violation(
+                rel_path, "workstream-required", "error",
+                "missing field 'workstream' (use null for cross-cutting)",
+            ))
+        elif workstream is not None and (
+            not isinstance(workstream, str) or workstream not in CANONICAL_WORKSTREAMS
+        ):
+            violations.append(Violation(
+                rel_path, "workstream-canonical", "error",
+                f"workstream={workstream!r} not in {sorted(CANONICAL_WORKSTREAMS)} or null",
+            ))
 
-    if doc_type in VERSION_REQUIRED_TYPES:
+    if doc_type in VERSION_REQUIRED_TYPES or doc_type in SCAFFOLD_TYPES:
         version = fm.get("version")
         if not isinstance(version, int) or version < 1:
             violations.append(Violation(
                 rel_path, "version-required", "error",
                 f"type={doc_type!r} requires integer version >= 1",
+            ))
+
+    if doc_type in SCAFFOLD_TYPES:
+        name = fm.get("name")
+        if not isinstance(name, str):
+            violations.append(Violation(
+                rel_path, "scaffold-name-required", "error",
+                "scaffold/snippet requires string 'name' field",
+            ))
+        audience = fm.get("audience")
+        if not isinstance(audience, str):
+            violations.append(Violation(
+                rel_path, "scaffold-audience-required", "error",
+                "scaffold/snippet requires string 'audience' field",
+            ))
+        usage_count = fm.get("usage_count")
+        if not isinstance(usage_count, int) or usage_count < 0:
+            violations.append(Violation(
+                rel_path, "scaffold-usage-count-required", "error",
+                "scaffold/snippet requires integer 'usage_count' >= 0",
             ))
 
     if status == "canonical":
