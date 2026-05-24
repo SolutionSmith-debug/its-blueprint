@@ -1,0 +1,11 @@
+__pycache__/
+*.pyc
+.venv/
+.DS_Store
+
+# Rendered handoff packets are regenerable; not committed
+handoff/
+
+# Local IDE settings
+.idea/
+.vscode/
