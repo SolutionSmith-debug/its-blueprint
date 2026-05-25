@@ -47,12 +47,14 @@ four-part PR verify block) appears verbatim in ≥2 scaffolds. Move it to
 |---|---|---|
 | `_example.md` | n/a | Copy-this template |
 | `cc-implementation.md` | chat | Writing CC implementation prompts |
+| `shared-module-migration.md` | chat | New shared/* helper + consumer migrations in one PR |
 | `session-orientation.md` | chat | Fresh-session loading order |
 | `forensic-audit.md` | chat | Repo audit pattern |
 | `pr-merge-verify.md` | cc | Four-part PR landing check |
 | `doctrine-revision.md` | chat | Updating a doctrine doc safely |
 | `session-log.md` | chat / cc | Writing a session log |
 | `new-workstream.md` | chat | Bootstrapping a new workstream |
+| `manual-smoke.md` | chat / operator | Operator-side post-CC, pre-merge verification |
 
 | Snippet | Used by |
 |---|---|
