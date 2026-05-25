@@ -330,6 +330,92 @@ export default form;
 
 For forms whose layout doesn't fit the generic walker — currently anticipated only for Daily Site Safety's sum-to-100 physical-demands grid — the form directory may include a `pdf_override.ts` (and optionally `render_override.tsx`) that exports a custom renderer the `_runtime/` walker delegates to. Escape hatch is opt-in per form; 90% of forms fit the generic walker.
 
+### Per-form field inventories (v1 forms)
+
+Source design notes for each v1 form's field set, derived from the existing paper forms during the 2026-05-24 architecture session. Preserved here as build-time reference for the operator-developer; informs each `form.ts` implementation in Phase 4 (build sequencing per §14).
+
+**jha-v1** — `its/safety_portal/forms/jha-v1/form.ts`
+
+Original sketch:
+
+```typescript
+{
+  form_code: "jha-v1",
+  fields: {
+    work_date: { type: "date", required: true, source: "home-page" },
+    project_name: { type: "text", required: true, source: "home-page" },
+    project_address: { type: "text", required: true, source: "home-page" },
+    job_being_performed: { type: "text", required: true, max_length: 200 },
+    crew_members: { type: "text", required: true, max_length: 200 },
+    task_rows: {
+      type: "repeatable",
+      min: 1, max: 8,
+      fields: {
+        task: { type: "text", required: true },
+        major_hazards: { type: "text", required: true },
+        mitigation: { type: "text", required: true }
+      }
+    },
+    worker_roster: {
+      type: "repeatable",
+      min: 1, max: 30,
+      fields: {
+        name: { type: "text", required: true },
+        company: { type: "text", required: false },
+        signature: { type: "signature", required: false }
+      }
+    }
+  }
+}
+```
+
+The Q6b declarative-form structure expresses this as `sections: [{ title: "Project Information", fields: [...] }, { title: "Task Hazards", fields: [{ id: "task_rows", type: "repeatable", min: 1, max: 8, row_fields: [...] }] }, { title: "Worker Acknowledgement", fields: [{ id: "worker_roster", ... }] }]` per the §6 example pattern.
+
+**daily-site-safety-v1** — `its/safety_portal/forms/daily-site-safety-v1/form.ts`
+
+The largest form. Field inventory (paper-form-derived):
+
+- **Project metadata:** project_name, project_number, address (auto-fill from job), job_type, area_onsite, prepared_by, date.
+- **Today's work:** description (multi-line text).
+- **Environmental conditions** (multi-select): Inside, Outside, Heat, Cold, Wet, Dry, Dust, Vapors-Mist, Noise, Vibration, Other (text-input fallback).
+- **Heat/cold index:** expected_temp (text).
+- **Physical demands percentages** (sum-to-100 validation): Standing, Sitting, Walking, Pushing, Pulling, Bending/Stooping, Kneeling, Reaching, Carrying-lbs.
+- **Basic job sequence:** sequence_steps (repeatable text).
+- **Potential hazards found:** hazards_found (repeatable text).
+- **Commonly faced hazards matrix** (5 rows × 4 control columns):
+  - Rows: Slips/Trips/Falls, Pinch Points, Lifting/Handling, Caught on or Between, Over Exertion.
+  - Columns (each a checkbox per row): PPE, Procedure, Training, Guards.
+- **Safety requirements and procedures:** safety_requirements (repeatable text).
+- **Additional considerations:** additional_considerations (text).
+- **Worker roster:** Name & Company, Time In, Lunch, Time Out, Signature.
+
+This is the form most likely to need `pdf_override.ts` per §6 escape hatch — specifically for the sum-to-100 physical-demands grid layout and the 5×4 hazards matrix.
+
+**equipment-preinspection-v1** — `its/safety_portal/forms/equipment-preinspection-v1/form.ts`
+
+Field inventory:
+
+- **Header:** operator, operator_signature, unit_identifier (equipment ID), date.
+- **Before-engine-start** (two parallel columns of OK/Not-OK checkbox pairs):
+  Bucket, Cutting Edge, Mirror/Windows, Windshield, Tires, Tracks, Ladder/Grab Handles, Hydraulic Cylinder Lines, Hydraulic Level, Leaks Exterior, FOPS/ROPS, Engine Oil, Coolant, Belts, Air Filter, Next Oil Change Hours, Leaks Motor.
+- **After-startup** (two parallel columns of OK/Not-OK checkbox pairs):
+  Owner Manual, Seat Bar, Seat Belt, Park Brake, Vibrations, Engine Noise, Horn, Bucket/Attachment Tilt, Lift Arm, Steering, Forward, Reverse, Backup Alarm, Transmission Noise, Lights, Fuel Level (picklist: ¼ / ½ / ¾ / Full), Hours on Machine.
+- **Maintenance:** Maintenance Done (text), Maintenance Required (text).
+
+Generic walker handles this with `type: "ok-not-ok"` field rendering for the checkbox pairs.
+
+**toolbox-talk-v1** — `its/safety_portal/forms/toolbox-talk-v1/form.ts`
+
+Field inventory:
+
+- topic_title (text)
+- topic_body (text — open question deferred to build session: free-text per submission, or library of pre-written topics with editable body? See [§16 Open Questions Remaining](#16-open-questions-remaining))
+- date
+- instructor_name
+- worker_roster (Name, Signature)
+
+The simplest of the four forms in absolute terms — recommended as the second form to build (after jha-v1) per §14 Phase 4b sequencing to validate the pattern works for forms without the task/hazard structure.
+
 ## 7. Signature Handling
 
 Signature canvas is a standard touch-event handler that records SVG path data as the user draws. Storage format: SVG `<path d="...">` element data (~500B–3KB per signature).
