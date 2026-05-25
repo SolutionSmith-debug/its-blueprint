@@ -1,19 +1,19 @@
 ---
 type: doctrine
-version: 12
+version: 13
 status: canonical
-last_verified: 2026-05-24
-last_verified_against: 79eec73
-supersedes: doctrine/operational-standards.md@v11
+last_verified: 2026-05-25
+last_verified_against: a1dc227
+supersedes: doctrine/operational-standards.md@v12
 workstream: null
-tags: [push-vs-record, picklist-hardening, attachment-screening, polling-daemon, sdk-vs-live, cc-tooling, fork-security, pii-logging, actions-version-discipline]
+tags: [push-vs-record, picklist-hardening, attachment-screening, polling-daemon, sdk-vs-live, cc-tooling, fork-security, pii-logging, actions-version-discipline, code-self-documentation]
 ---
 
-**ITS Operational Standards v12**
+**ITS Operational Standards v13**
 
-2026-05-24 — CC-Tooling + Fork-Security + PII-Logging Cluster Absorb
+2026-05-25 — Code-Level Self-Documentation Discipline + Scaffold Pass
 
-*Five new sections: §37 CC skills, §38 local agent guardrails, §39 per-customer-fork security setup, §40 migration-script PII asymmetry, §41 GitHub Actions version-bump discipline*
+*One new section: §42 code-level self-documentation discipline*
 
 # Purpose
 
@@ -64,6 +64,16 @@ v11 is a full consolidation since v10 (2026-05-21 morning). It folds in the v10.
 - §30 SDK-vs-Live Integration Test Discipline — cross-reference added: §37's auto-recommend for `tdd` skill applies to new `shared/*` SDK wrappers per §30.
 
 - Sections §§4–22, 25–36 carry forward from v11 with cross-reference refresh only.
+
+# What Changed in v13
+
+One new section captures a discipline whose absence kept surfacing as "future-Seth + future-CC have to leave the file to understand the why":
+
+- **§42 — Code-Level Self-Documentation Discipline.** Mandatory module docstrings with four headings (Purpose / Invariants / Failure modes / Consumers) for every new `shared/*` module and workstream entrypoint. In-code rationale comments for non-obvious decisions, citing the motivating F-finding, session log, doctrine §, or PR. Retrofit existing modules opportunistically per §14.
+
+Cross-references added: §14 ↔ §42 (preservation comments capture the "why we kept this" anchor); §30 ↔ §42 (rationale comments capture the live-API quirk that motivated the integration test); verify-before-fix discipline ↔ §42 (the in-code rationale IS the verification anchor for future-fix decisions).
+
+- Sections §§1–41 carry forward from v12 with cross-reference refresh only.
 
 # §1 — Kill Switch
 
@@ -525,10 +535,139 @@ Applies to every `.github/workflows/*.yml` action version bump.
 
 `actions/checkout` @v4 → @v6.0.2 and `actions/setup-python` @v5 → @v6.2.0 in a single PR. Both bumps verified via `gh api releases/latest`; release notes read for breaking changes; both clean; CI green on bumped versions; deprecation annotation cleared on next main-branch run.
 
+# §42 (NEW) — Code-Level Self-Documentation Discipline
+
+Every `shared/*` module and every workstream entrypoint will be read again — by future-Seth, by future-CC, by the maintainer of a customer fork three months out. The code should answer "why" without forcing the reader to leave the file.
+
+## Mandatory module docstrings
+
+Every NEW module in `shared/*` and every workstream entrypoint (e.g., `safety_reports/intake_poll.py`, `safety_reports/weekly_generate.py`) opens with a docstring carrying four named headings, in this order:
+
+```python
+"""One-sentence module purpose.
+
+Purpose
+-------
+What this module does. Two sentences max.
+
+Invariants
+----------
+What cannot change without breaking consumers. Reference Foundation
+Mission invariants and Op Stds sections by stable anchor where
+applicable. If the module is on the External Send Gate path or
+processes adversarial input, restate the relevant invariant here.
+
+Failure modes
+-------------
+Fail-open vs. fail-closed posture. Exception types raised. error_log
+categories used. What recovers vs. what propagates.
+
+Consumers
+---------
+What imports this module. What depends on its outputs (sheets, files,
+external APIs). Useful for impact-analysis when changing internals.
+"""
+```
+
+## In-code rationale comments
+
+Any decision that would surprise a future reader gets a comment block above the relevant code:
+
+```python
+# Rationale: {short explanation of why this choice over alternatives}.
+# Reference: {F-finding, session-log path, doctrine §, or PR number}.
+```
+
+Decisions worth a rationale comment:
+
+- Fail-open vs. fail-closed (either direction — both are choices).
+
+- Working around an SDK quirk or live-API behavior that differs from the SDK's stated contract.
+
+- Accepting a documented risk (the comment IS the acceptance record).
+
+- Choosing a less-obvious pattern when an obvious one was considered.
+
+- Preservation-over-refactor decisions per §14 (the comment captures why a working pattern is preserved over a cleaner rewrite).
+
+The reference must be specific enough that the future reader can find the source. "F23 — see audit" is fine; "see audit" is not.
+
+## When to apply
+
+- All NEW `shared/*` modules and workstream entrypoints from this doctrine bump forward. CC briefs reference §42 when scoping new modules.
+
+- Existing modules retrofit opportunistically per the preservation-over-refactor convention (§14): when next touched for an unrelated reason, add the docstring + any motivation comments that surface during review. NOT a sweep PR. Doctrine §14 explicitly rejects "let's go fix every module" passes.
+
+## Interaction with existing doctrine
+
+- Complements verify-before-fix discipline. The in-code rationale IS the verification anchor for future-fix decisions: a reader who understands "this fail-open posture exists because of F23" doesn't re-litigate the choice when adjacent code needs changes.
+
+- Complements §30 (SDK-vs-Live Integration Test Discipline). The rationale comment captures the live-API quirk that motivated the integration test, so future-CC reading the test understands the defense-in-depth.
+
+- Complements §14 (preservation-over-refactor). The rationale comment captures why a working-but-ugly pattern is preserved. Without it, the next reader assumes the ugliness was an oversight and "fixes" it.
+
+## Enforcement
+
+Initial enforcement is by convention + review. CC briefs reference §42 explicitly when scoping new modules. Operator review at PR time checks for docstring presence and rationale comments on non-trivial decisions.
+
+Trigger for stricter enforcement (e.g., AST lint check for docstring presence; ruff-rule for missing rationale on decisions matching known patterns): three or more instances within a 30-day window of "I read this module and couldn't tell what the rationale was." Tracked in tech debt; revisit when triggered.
+
+## Example — `shared/state_io.py` post-§42 retrofit
+
+```python
+"""Atomic JSON/text writes + sidecar lock for daemon-managed state.
+
+Purpose
+-------
+Canonical entry point for all writes to files under `~/its/state/`.
+Provides crash-safe atomic write + concurrent-writer protection so
+the polling-daemon class (intake_poll, weekly_send_poll, and future
+consumers) cannot corrupt shared state files.
+
+Invariants
+----------
+- Raw `Path.write_text` / `Path.write_bytes` on files under
+  `~/its/state/` is forbidden. All writes route through this module.
+- The sidecar lock pattern (flock on `{path}.lock`, not on the data
+  file) is load-bearing: `os.replace` swaps the data-file inode,
+  which would invalidate any flock held directly on it.
+- `with_path_lock` is non-blocking with bounded retry (5×50ms,
+  mirroring `shared/alert_dedupe._acquire_lock`). On exhaustion it
+  raises `StateLockTimeoutError`; callers decide whether to log+
+  continue (heartbeat writes, per CLAUDE.md ARCH-2) or propagate.
+
+Failure modes
+-------------
+- Lock-acquisition timeout → raises `StateLockTimeoutError`. Heartbeat
+  consumers log a WARN under `error_log` category
+  `daemon_health_write_failed` and continue the cycle.
+- Atomic-write disk error → raises `OSError` natively. Callers do not
+  retry; the next cycle gets a fresh attempt.
+- Serialization error → raises `TypeError` / `ValueError` natively.
+
+Consumers
+---------
+- `safety_reports/intake_poll.py` — seen-set, heartbeat-row state.
+- `safety_reports/weekly_send_poll.py` — heartbeat-row state.
+- `shared/alert_dedupe.py` — pending migration in PR 2 of the
+  Phase 1.4 hardening cluster.
+- Future: `shared/circuit_breaker.py` per F08 will persist breaker
+  state through these helpers.
+
+Reference
+---------
+Audit F19 + F23 in `its-blueprint/audits/2026-05-25_forensic-audit.md`.
+Landed via `its` PR #88 (merge commit `36932bd`). Session log:
+`its/docs/session_logs/2026-05-25_state-io-atomic-write.md`.
+"""
+```
+
 # Authority
 
-Operational Standards v12, 2026-05-24. Adds §§37–41 absorbing the 2026-05-24 CC-tooling + fork-security + PII-logging cluster. v11 retires on acceptance of v12.
+Operational Standards v13, 2026-05-25. Adds §42 absorbing the 2026-05-25 code-level self-documentation discipline. v12 retires on acceptance of v13.
 
-v13 trigger: substantive doctrine change or new §. v12.x absorbs further status updates without major revision.
+v14 trigger: substantive doctrine change or new §. v13.x absorbs further status updates without major revision.
 
-Companion to FM v8 (Invariant 2 layer-6 addition), V&R v7.2 (Phase 1.5 security-hardening precondition), Handover Plan v6.3, Excellence Roadmap v2.3, FSU v6.5, Memory Archive v5 (extended §G7 in parallel PR), `references/customer-fork-setup-checklist.md` (downstream cascade in next PR).
+v13 trigger: code-level self-documentation discipline added (§42). v12 was complete on its own terms; v13 captures a discipline whose absence was surfacing as a recurring "future-reader has to leave the file" cost. Tag pushed post-merge: `operational-standards-v13`.
+
+Companion to FM v8 (Invariant 2 layer-6 addition), V&R v7.2 (Phase 1.5 security-hardening precondition), Handover Plan v6.3, Excellence Roadmap v2.3, FSU v6.5, Memory Archive v5 (extended §G7 in v12 parallel PR), `references/customer-fork-setup-checklist.md` (downstream cascade in v12). v13 parallel companion: `prompts/scaffold/` (PR 2 of this cascade — `shared-module-migration.md`, `manual-smoke.md`, `cc-implementation.md` v1 → v2).
