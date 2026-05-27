@@ -85,6 +85,23 @@ The planning-side session logs live in `session-logs/`. They capture
 land in a doctrine doc. They're staging; once a decision is load-bearing
 it carries up to doctrine via a small PR. See `session-logs/README.md`.
 
+## Session-close maintenance
+
+Living docs go stale without active refresh — they're not git-history-derivable. At every session close, the following must be updated:
+
+| Doc | Path (from this repo) | Update trigger |
+|-----|----------------------|----------------|
+| Info-gap | `references/claude-code-info-gap.md` | Chat-memory context shift (preferences, traps, current-state). `§8` snapshot always needs a date check; `Last refreshed:` frontmatter must move to today. |
+| Memory archive | `references/memory-archive.md` | New operational detail. **Append a new `§G<N>`** — never bump to `v2`. Find the highest existing §G<N> and increment. |
+| Session log (planning) | `session-logs/<date>_<topic>.md` | Captures chat-side decisions not yet in doctrine. |
+| Session log (execution) | `../its/docs/session_logs/<date>_<topic>.md` | CC delegates to `session-log-writer` agent. Reference `pr-landed-verifier` output verbatim. |
+| Auto-memory | `~/.claude/projects/-Users-sethsmith/memory/` | When feedback / project / reference patterns emerge that future sessions need. |
+| Tech-debt | `../its/docs/tech_debt.md` | When deferred work is identified. |
+
+Invoke the `session-close-maintainer` agent at session close — it surveys git activity in both repos, classifies changes, and updates the docs above. Doctrine (`doctrine/*`) is version-gated and requires explicit approval before any edit; the maintainer agent will ask once and not touch doctrine without it.
+
+Without this maintenance, the info-gap doc and memory archive drift, and the next CC session can't reconstruct chat-only context. Don't skip it.
+
 ## Useful commands
 
 ```bash
