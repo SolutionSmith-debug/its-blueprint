@@ -2,7 +2,7 @@
 
 **Purpose:** Context that lives only in chat memory / chat conversation and is NOT reachable from `~/its/` or `~/its-blueprint/` on a fresh Claude Code (CC) session. Drop this in project files so a chat-session can hand it to CC at spin-up, or so a fresh chat-session can re-orient quickly.
 
-**Last refreshed:** 2026-05-27
+**Last refreshed:** 2026-05-28
 **Maintained by:** chat-session at session close (treat as living doc)
 
 ---
@@ -213,6 +213,11 @@ Applies across all three external systems.
 - CC skills installed (PR #79)
 - Actions version bumps (PR #81)
 - Secret-exposure audit clean (2026-05-24)
+- CC subagents + session-close convention (PRs #90–#94); codeql-fp-triager propose-only + structural dismiss block (#93)
+- 2026-05-28 forensic audit: tag-breakout injection fix in `untrusted_content.wrap()` (#95) + LOW hygiene batch + audit doc (#96)
+- Safety Portal pivot reconciled into exec repo (Task A, #99); HIGH-2 attachment-screening superseded for safety reports → reassigned to Email Triage (#98); NOT-WIRED `attachment_screening.py` stub deleted
+- Cross-repo supersession drift-guard: session-close-maintainer check + doc_conventions note (Tasks B+D, #100)
+- Doctrine-version reconciliation in flight (this session): Op Stds v11→v13 sweep (exec PR #101) + canonical-doctrine manifest + `doc-reconciliation-auditor` agent
 
 ### Bradley 1 (BBCHS 1)
 - Template project, six sheets migrated, demo seeding complete.
@@ -223,7 +228,7 @@ Applies across all three external systems.
 - Three `box_migration` parser tech_debts deferred: V/S vendor-sub parser, ISO date prefix, import-time hygiene wrap
 
 ### On the horizon
-- Safety Reports workstream build (Mission v5, Brief v6) — own dedicated session after shared modules stable.
+- Safety Reports: pivoting to the **Safety Portal** (blueprint `workstreams/safety-portal/` mission v1, 2026-05-25 canonical) — form-fill replaces PDF-email submission; the portal feeds the existing `intake.py` via an HMAC-verified email shim (portal-marker branches PLANNED, not built; legacy PDF-email is the documented fallback). Attachment-screening (Invariant 2 Layer 6) is N/A for safety reports and reassigned to Email Triage.
 - DFR backfill and Portfolio Rollups Reports continued expansion.
 - **Managed Agents Phase 3 gate** (V&R v7.1 + FM v7.1 + Op Stds §29): No agents in Phase 0/1/1.5/1.6. Phase 3 gate evaluates 4 candidates against capability-equivalence for Invariants 1 & 2:
   - Closeout Package Assembly
@@ -242,7 +247,7 @@ If a fresh chat-session needs to reload operational detail, the canonical source
 
 - **`its-blueprint/references/memory-archive.md`** — append-only, loaded on demand. Covers M365 IDs + EXO gotcha, full Smartsheet topology + IDs, wiring history, 23-PR window, Bradley 1 migration + demo seeding, schema decisions, Picklist Sync (PRs #45–51), SDK-vs-Live class-of-bug, polling daemon + heartbeat, 2026-05-22 cascade.
 - **`its-blueprint/doctrine/`** — Foundation Mission, V&R, Op Stds, Handover Plan, Excellence Roadmap. Version in frontmatter, not filename. Git tags mark canonical versions (e.g., `foundation-mission-v8`).
-- **`its-blueprint/workstreams/<slug>/{mission,brief}.md`** — 5 workstreams.
+- **`its-blueprint/workstreams/<slug>/{mission,brief}.md`** — 6 workstreams (safety-portal added 2026-05-25).
 - **`its-blueprint/audits/`** — historical audits.
 
 Linters: `scripts/lint_frontmatter.py` + `scripts/lint_crossrefs.py`, CI on every push.
