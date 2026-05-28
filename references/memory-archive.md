@@ -2,8 +2,8 @@
 type: reference
 version: 5
 status: canonical
-last_verified: 2026-05-24
-last_verified_against: 79eec73
+last_verified: 2026-05-28
+last_verified_against: 8c09a6b
 supersedes: references/memory-archive.md@v4
 workstream: null
 tags: [restoration, operational-detail, post-compaction-recovery]
@@ -452,6 +452,20 @@ This memory-archive extension (§G7) — captured in PR 3 (this PR).
 **Push-vs-Record extends to multi-layer defense.** Op Stds §3.1 push-vs-record separation pattern generalizes to defense-in-depth at multiple layers: local hook (operator's machine) + server-side branch protection (everyone, all sources). Each layer protects a different threat surface; neither is redundant.
 
 **Architecture-as-defense is the dominant pattern.** Today's clean audit was not luck. The "all secrets in Keychain" architectural choice means there's no design pathway for secrets to enter the repo. This pattern (make the secure path the obvious path; eliminate design pathways for unsafe outcomes) is more durable than vigilance-based defenses. Worth surfacing when designing future capabilities.
+
+## §G8 — 2026-05-28 Portal-pivot reconciliation + HIGH-2 supersession
+
+The safety-report intake model pivoted from inbox-and-PDF to the form-fill **Safety Portal** (`workstreams/safety-portal/mission.md` v1, 2026-05-25 canonical; `brief.md`). The portal feeds the *same* `safety_reports` intake via an HMAC-verified email shim (`portal-noreply@` → unified `safety@` inbox; the `X-ITS-Portal-HMAC` header is the trust boundary, not the destination address). Signatures are SVG vector path data; PMs cannot attach arbitrary files; mission §7 rules Foundation Mission v8 Invariant 2 **Layer 6 (attachment screening) N/A** for the portal.
+
+**This superseded the 2026-05-28 forensic audit's HIGH-2 for safety reports.** The execution repo's #96 HIGH-2 artifacts were undone: the NOT-WIRED `shared/attachment_screening.py` stub deleted, the `docs/tech_debt.md` HIGH-2 entry flipped to `[SUPERSEDED 2026-05-28]`, the audit-doc finding marked superseded (preserved, not rewritten).
+
+**Layer 6 reassigned to Email Triage** (`workstreams/email-triage/` — mission v4→v5, brief v5→v6), the workstream that actually ingests arbitrary inbound attachments. Wording mirrors FM v8 §34 sub-layers (a)–(d); clamd (Homebrew ClamAV + pyclamd) is the operator prerequisite for sub-layer (c); VirusTotal stays Phase 2+.
+
+**Cross-repo drift guard added** (root cause: the execution repo asserted a model the blueprint had superseded, with no divergence check). `~/its/.claude/agents/session-close-maintainer.md` gained a recurring "Cross-repo supersession check" (both directions: blueprint workstream with no exec acknowledgment; exec asserting a superseded model); `~/its/docs/operations/doc_conventions.md` gained a "Cross-repo supersession drift" note pointing at the existing `last_verified`/`last_verified_against` + audit-snapshot mechanisms. No automated cross-repo check exists by design.
+
+Landed PRs (all four-part PR-landed verify clean): exec #98 `bf2a94a` (undo), #99 `a1fe04b` (exec docs reconcile), #100 `8c09a6b` (drift guard); blueprint #15 `133afb8` (Email Triage Layer 6). Logs: `~/its/docs/session_logs/2026-05-28_portal-pivot-reconciliation.md` (execution) + `session-logs/2026-05-28_portal-pivot-reconciliation.md` (here).
+
+Operational notes for restoration: the portal-marker intake branches (brief §8 Step 4 — Stage 1.5 HMAC gate, Stage 8' JSON parse, Stage 13' rollup) are PLANNED, not built; the legacy PDF-email path is the transition fallback; the legacy ITS_Config `allowed_senders` fallback in `intake.py` must NOT be removed before the trusted-contacts sheet is seeded (would quarantine all real reports). The repo-local `.claude/agents/` were unreachable this session (CC rooted at `/Users/sethsmith`), so this entry + the session logs were authored manually; `claude-code-info-gap.md` §8 snapshot was not refreshed — left for an in-repo `session-close-maintainer` run.
 
 # Cross-References
 
