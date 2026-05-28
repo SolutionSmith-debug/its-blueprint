@@ -1,14 +1,14 @@
 ---
 type: mission
-version: 5
+version: 6
 status: canonical
 last_verified: 2026-05-28
-last_verified_against: 09f8c02
+last_verified_against: c5cc456
 workstream: email_triage
 tags: [workstream-mission]
 ---
 
-**ITS — Email Triage Mission v5**
+**ITS — Email Triage Mission v6**
 
 *v5 | Adversarial Input Handling as primary architecture; Layer 6 attachment screening assigned to this workstream | 2026-05-28*
 
@@ -26,7 +26,7 @@ ITS is being built with Evergreen Renewables as Customer 0 — the first deploym
 
 # Foundation Invariants Inherited
 
-This workstream inherits two Foundation-level invariants: External Send Gate — no external transmission without explicit human approval; and Adversarial Input Handling — all external content treated as untrusted data. See Foundation Mission v8 for canonical definitions and Operational Standards v11 for implementation patterns.
+This workstream inherits two Foundation-level invariants: External Send Gate — no external transmission without explicit human approval; and Adversarial Input Handling — all external content treated as untrusted data. See Foundation Mission v8 for canonical definitions and Operational Standards v13 for implementation patterns.
 
 **Adversarial Input Handling — implementation (primary focus of this workstream):**
 
@@ -40,7 +40,7 @@ This workstream inherits two Foundation-level invariants: External Send Gate —
 
 - **Anomaly logging: **extracted classification fields are checked for sentinels (e.g., classifier returning a category outside the enumerated set, suspiciously long rationale, references to known injection phrases). Anomalies route to ITS_Review_Queue with security_flag = true; owner notified.
 
-- **Attachment screening (Layer 6): **Email Triage ingests arbitrary inbound mail with arbitrary attachments, so it is the **load-bearing owner** of Foundation Mission v8 Invariant 2 Layer 6 (new in v8; implementation pattern in Operational Standards v11 §34). Every attachment passes four sub-layers before being uploaded to Box or referenced in any AI call: (a) static signature checks — magic-number verification, size sanity, filename pattern matching; (b) format-aware structural inspection — PDF JavaScript/embedded-file detection, Office macro detection, polyglot detection; (c) ClamAV antivirus scan via pyclamd; (d) optional VirusTotal hash check (Phase 2+ enhancement, deferred). Failure disposition: malicious → ITS_Quarantine + CRITICAL triple-fire + sender DISABLED in ITS_Trusted_Contacts pending operator review; suspicious → ITS_Review_Queue; clean → proceed. **Operator prerequisite:** ClamAV installed (Homebrew) with the `clamd` daemon running for sub-layer (c); an EICAR test signature in fixtures verifies pipeline health.
+- **Attachment screening (Layer 6): **Email Triage ingests arbitrary inbound mail with arbitrary attachments, so it is the **load-bearing owner** of Foundation Mission v8 Invariant 2 Layer 6 (new in v8; implementation pattern in Operational Standards v13 §34). Every attachment passes four sub-layers before being uploaded to Box or referenced in any AI call: (a) static signature checks — magic-number verification, size sanity, filename pattern matching; (b) format-aware structural inspection — PDF JavaScript/embedded-file detection, Office macro detection, polyglot detection; (c) ClamAV antivirus scan via pyclamd; (d) optional VirusTotal hash check (Phase 2+ enhancement, deferred). Failure disposition: malicious → ITS_Quarantine + CRITICAL triple-fire + sender DISABLED in ITS_Trusted_Contacts pending operator review; suspicious → ITS_Review_Queue; clean → proceed. **Operator prerequisite:** ClamAV installed (Homebrew) with the `clamd` daemon running for sub-layer (c); an EICAR test signature in fixtures verifies pipeline health.
 
 **External Send Gate — implementation: **this workstream does not directly send external mail — it routes inbound. However, mis-routed external content can flow into a downstream workstream's external-send path, so the gate at the destination workstream protects this layer as well. Defense in depth.
 
@@ -170,6 +170,10 @@ Version bumped to reflect the 2026-05-13 cascade: two new Foundation invariants 
 
 - Removed: friend-favor and best-effort reliability language.
 
+# What Changed in v6
+
+Doctrine-version-reference sweep (2026-05-28 doc-reconciliation pass). The remaining stale Operational Standards citations are swept from **v11** to **v13** (current canonical — v12 added §§37–41, v13 added §42); Foundation Mission references were already at v8. Reference currency only — no scope, architecture, or decision change. The two **Operational Standards v5** mentions are historical provenance (when a pattern was first introduced) and are intentionally left. This also completes the bookkeeping for the v5 portal-pivot reconciliation, which bumped the frontmatter but left these citations and the Authority block behind.
+
 # Authority & Versioning
 
-This is the canonical mission for this sub-project (v4, 2026-05-13). It supersedes v3 (which did not center Adversarial Input Handling as primary architecture or include the two Foundation invariants).
+This is the canonical mission for this sub-project (v6, 2026-05-28). It supersedes v5 (2026-05-28 portal-pivot reconciliation) and v4 (2026-05-13, which first centered Adversarial Input Handling as primary architecture and added the two Foundation invariants).
