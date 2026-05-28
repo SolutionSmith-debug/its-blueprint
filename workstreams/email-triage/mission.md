@@ -1,22 +1,22 @@
 ---
 type: mission
-version: 4
+version: 5
 status: canonical
-last_verified: 2026-05-24
-last_verified_against: 3b7d56d
+last_verified: 2026-05-28
+last_verified_against: 09f8c02
 workstream: email_triage
 tags: [workstream-mission]
 ---
 
-**ITS — Email Triage Mission v4**
+**ITS — Email Triage Mission v5**
 
-*v4 | Adversarial Input Handling as primary architecture | 2026-05-13*
+*v5 | Adversarial Input Handling as primary architecture; Layer 6 attachment screening assigned to this workstream | 2026-05-28*
 
 # Mission
 
 Classify inbound mail at one or more shared Evergreen mailboxes and route each message into the appropriate downstream ITS workstream or to a human review queue when classification is uncertain. Reduce the manual triage burden on whoever currently reads the shared inbox.
 
-**Architectural significance: **this workstream is the primary entry point for external content into ITS. The Foundation Mission v4 Invariant 2 (Adversarial Input Handling) applies more directly here than anywhere else — sender allowlist, untrusted-content tagging, capability gating, structured output enforcement, and anomaly logging are mandatory architecture, not optional defenses.
+**Architectural significance: **this workstream is the primary entry point for external content into ITS. The Foundation Mission v8 Invariant 2 (Adversarial Input Handling) applies more directly here than anywhere else — sender allowlist, untrusted-content tagging, capability gating, structured output enforcement, anomaly logging, and attachment screening (Layer 6) are mandatory architecture, not optional defenses.
 
 **Note on grounding: **no May 7 progress doc exists for this workstream. Content here remains forward-looking until a first orientation session produces real reference material. Below content is conceptual and subject to revision once a progress doc is generated.
 
@@ -26,7 +26,7 @@ ITS is being built with Evergreen Renewables as Customer 0 — the first deploym
 
 # Foundation Invariants Inherited
 
-This workstream inherits two Foundation-level invariants: External Send Gate — no external transmission without explicit human approval; and Adversarial Input Handling — all external content treated as untrusted data. See Foundation Mission v4 for canonical definitions and Operational Standards v5 for implementation patterns.
+This workstream inherits two Foundation-level invariants: External Send Gate — no external transmission without explicit human approval; and Adversarial Input Handling — all external content treated as untrusted data. See Foundation Mission v8 for canonical definitions and Operational Standards v11 for implementation patterns.
 
 **Adversarial Input Handling — implementation (primary focus of this workstream):**
 
@@ -39,6 +39,8 @@ This workstream inherits two Foundation-level invariants: External Send Gate —
 - **Capability gating: **the classifier script's only outputs are: write to ITS_Triage_Log, write to ITS_Review_Queue, or hand off to a downstream workstream's intake script. The classifier cannot send external email, cannot modify ITS_Config, cannot write outside its sandbox of allowed sheets.
 
 - **Anomaly logging: **extracted classification fields are checked for sentinels (e.g., classifier returning a category outside the enumerated set, suspiciously long rationale, references to known injection phrases). Anomalies route to ITS_Review_Queue with security_flag = true; owner notified.
+
+- **Attachment screening (Layer 6): **Email Triage ingests arbitrary inbound mail with arbitrary attachments, so it is the **load-bearing owner** of Foundation Mission v8 Invariant 2 Layer 6 (new in v8; implementation pattern in Operational Standards v11 §34). Every attachment passes four sub-layers before being uploaded to Box or referenced in any AI call: (a) static signature checks — magic-number verification, size sanity, filename pattern matching; (b) format-aware structural inspection — PDF JavaScript/embedded-file detection, Office macro detection, polyglot detection; (c) ClamAV antivirus scan via pyclamd; (d) optional VirusTotal hash check (Phase 2+ enhancement, deferred). Failure disposition: malicious → ITS_Quarantine + CRITICAL triple-fire + sender DISABLED in ITS_Trusted_Contacts pending operator review; suspicious → ITS_Review_Queue; clean → proceed. **Operator prerequisite:** ClamAV installed (Homebrew) with the `clamd` daemon running for sub-layer (c); an EICAR test signature in fixtures verifies pipeline health.
 
 **External Send Gate — implementation: **this workstream does not directly send external mail — it routes inbound. However, mis-routed external content can flow into a downstream workstream's external-send path, so the gate at the destination workstream protects this layer as well. Defense in depth.
 
