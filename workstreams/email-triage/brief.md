@@ -1,20 +1,20 @@
 ---
 type: brief
-version: 5
+version: 6
 status: canonical
-last_verified: 2026-05-24
-last_verified_against: 3b7d56d
+last_verified: 2026-05-28
+last_verified_against: 09f8c02
 workstream: email_triage
 tags: [workstream-brief]
 ---
 
-**ITS — Email Triage Brief v5**
+**ITS — Email Triage Brief v6**
 
-*v5 | Defense-layered classifier with mandatory sender allowlist | 2026-05-13*
+*v6 | Defense-layered classifier with mandatory sender allowlist; Layer 6 attachment screening assigned | 2026-05-28*
 
 # Pointer to Mission
 
-Engineering complement to ITS — Email Triage Mission v4 (2026-05-13). No May 7 progress doc exists; this workstream has not had an orientation session, so the brief remains forward-looking. Adversarial Input Handling is the central architecture.
+Engineering complement to ITS — Email Triage Mission v5 (2026-05-28). No May 7 progress doc exists; this workstream has not had an orientation session, so the brief remains forward-looking. Adversarial Input Handling is the central architecture.
 
 # Status
 
@@ -34,9 +34,9 @@ ITS — Email Triage runs as a set of Claude Code scripts on the production MacB
 
 - **Classifier trigger: **allowlisted mail triggers the classifier script via hot-folder pattern.
 
-**Foundation Invariants implementation. **This workstream inherits two Foundation-level invariants: External Send Gate — no external transmission without explicit human approval; and Adversarial Input Handling — all external content treated as untrusted data. See Foundation Mission v4 for canonical definitions and Operational Standards v5 for implementation patterns.
+**Foundation Invariants implementation. **This workstream inherits two Foundation-level invariants: External Send Gate — no external transmission without explicit human approval; and Adversarial Input Handling — all external content treated as untrusted data. See Foundation Mission v8 for canonical definitions and Operational Standards v11 for implementation patterns.
 
-See ITS Operational Standards v5 for the cross-cutting patterns (kill switch, watchdog, error logging, review queue, structured outputs, sender allowlist, untrusted-content tagging, capability gating, anomaly logging, remote access, hardware lifecycle).
+See ITS Operational Standards v11 for the cross-cutting patterns (kill switch, watchdog, error logging, review queue, structured outputs, sender allowlist, untrusted-content tagging, capability gating, anomaly logging, attachment screening (§34), remote access, hardware lifecycle).
 
 # What Gets Built
 
@@ -47,6 +47,8 @@ Triggered by Mail.app rule on inbound to a designated shared mailbox (allowliste
 - Reads the email content (subject, body, attachments metadata) from the hot-folder.
 
 - **Wraps content in untrusted-content tags: **<untrusted_content source="email-body">...</untrusted_content>, <untrusted_content source="email-subject">...</untrusted_content>, etc.
+
+- **Screens every attachment (Layer 6) BEFORE any AI call or Box upload: **per Foundation Mission v8 Invariant 2 Layer 6 / Operational Standards v11 §34 — (a) static signature checks (magic-number, size sanity, filename pattern); (b) format-aware structural inspection (PDF JS/embedded-file, Office macros, polyglot); (c) ClamAV scan via pyclamd; (d) optional VirusTotal hash (Phase 2+, deferred). Malicious → ITS_Quarantine + CRITICAL triple-fire + sender DISABLED in ITS_Trusted_Contacts pending operator review; suspicious → ITS_Review_Queue; clean → proceed. The declared MIME type is attacker-controlled, so signature checks sniff bytes rather than trust it. (This is the workstream that owns the arbitrary-attachment surface — see Mission "Attachment screening (Layer 6)".)
 
 - **Applies sensitive-content filter first: **HR/legal/financial categories are excluded entirely or summary-only per owner decision.
 
@@ -107,6 +109,8 @@ Triggered by Mail.app rule on inbound to a designated shared mailbox (allowliste
 - **Smartsheet service-account user **with access to the sheets this workstream touches.
 
 - **Box service account **with write access to the relevant active jobs folder structure (for attachment handling).
+
+- **ClamAV installed + `clamd` daemon running **on the production MacBook (Homebrew install + `pyclamd` wrapper) — operator prerequisite for Layer 6 sub-layer (c) attachment screening. An EICAR test signature in fixtures verifies pipeline health. VirusTotal (sub-layer d) is deferred to Phase 2+.
 
 - **Microsoft Graph (Outlook) credentials **for reading the shared mailboxes.
 
