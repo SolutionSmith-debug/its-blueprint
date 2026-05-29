@@ -1,19 +1,19 @@
 ---
 type: doctrine
-version: 13
+version: 14
 status: canonical
-last_verified: 2026-05-25
-last_verified_against: a1dc227
-supersedes: doctrine/operational-standards.md@v12
+last_verified: 2026-05-29
+last_verified_against: 64526a1
+supersedes: doctrine/operational-standards.md@v13
 workstream: null
 tags: [push-vs-record, picklist-hardening, attachment-screening, polling-daemon, sdk-vs-live, cc-tooling, fork-security, pii-logging, actions-version-discipline, code-self-documentation]
 ---
 
-**ITS Operational Standards v13**
+**ITS Operational Standards v14**
 
-2026-05-25 — Code-Level Self-Documentation Discipline + Scaffold Pass
+2026-05-29 — Kill Switch Reframed: Operator-Convenience Pause, Not a Security Control
 
-*One new section: §42 code-level self-documentation discipline*
+*§1 recategorized — the fail-open kill switch is an operator-convenience suggested pause, explicitly not a security boundary (audit F07); the External Send Gate (FM Invariant 1) remains the real boundary. No mechanism change; fail_closed_until stays deferred to tech debt.*
 
 # Purpose
 
@@ -75,11 +75,21 @@ Cross-references added: §14 ↔ §42 (preservation comments capture the "why we
 
 - Sections §§1–41 carry forward from v12 with cross-reference refresh only.
 
+# What Changed in v14
+
+One reframe corrects a security-posture overstatement the 2026-05-25 forensic audit flagged (audits/2026-05-25_forensic-audit.md, finding F07): §1 was written in a way that invited treating the kill switch as a security control when it is fail-open by design.
+
+- **§1 — Kill Switch reframed.** The kill switch is recategorized as an operator-convenience suggested pause, explicitly NOT a security boundary. It is fail-open on three modes — sheet unreachable / row missing / invalid value all resolve to ACTIVE + WARN — which is intentional (availability is chosen over a hard stop) and is precisely why it cannot be relied on as a control: an adversary who can make the sheet unreachable defeats it, because it fails toward running. A security-relevant halt must come from the External Send Gate (Foundation Mission Invariant 1), which is the real boundary. The mechanism, the three fail-open modes, the picklist-hardening forward reference, and the per-daemon runtime gate are all unchanged; only the framing is corrected. The deferred fail_closed_until timestamp mechanism stays in tech debt and is not implemented here.
+
+- Sections §§2–42 carry forward from v13 with cross-reference refresh only.
+
 # §1 — Kill Switch
+
+**What it is — and is not.** The kill switch is an operator-convenience suggested pause: a way for the operator to halt scheduled work cleanly. It is **not** a security control and not a security boundary. It is fail-open by design — if ITS_Config is unreachable, the system.state row is missing, or the value is invalid, the kill switch resolves to ACTIVE (work proceeds) and emits a WARN. That fail-open posture is intentional (availability is chosen over a hard stop) and is exactly why the mechanism cannot be relied on as a control: an adversary who can make the sheet unreachable — or an accidental misconfiguration — defeats it, because it fails toward running, not toward halting. A security-relevant halt must come from a different mechanism: the External Send Gate (Foundation Mission Invariant 1), which is the real boundary — the two-process model means a successful injection at the AI layer still cannot transmit externally regardless of kill-switch state.
 
 ITS_Config Smartsheet (sheet id 3072320166907780, see §24). Tall key/value layout. system.state setting reads ACTIVE / PAUSED / MAINTENANCE. Every Claude Code script reads it first via shared check_system_state() helper. PAUSED = scheduled scripts skip silently. MAINTENANCE = same, but watchdog does not alert. Anyone with edit access to the sheet can flip it.
 
-Status: shared/kill_switch.py wired against ITS_Config via shared.smartsheet_client.get_setting (PR #9, 2026-05-18). Fail-open on three modes with distinguishable WARN messages routed through error_log.
+Status: shared/kill_switch.py wired against ITS_Config via shared.smartsheet_client.get_setting (PR #9, 2026-05-18). Fail-open on three modes — sheet unreachable / row missing / invalid value — with distinguishable WARN messages routed through error_log. The three fail-open modes are intentional; see the reframe above for why they make this a pause, not a control. The deferred fail_closed_until timestamp mechanism (a future option to convert specific failure modes to fail-closed after a bounded window) is tracked in tech debt and is NOT implemented.
 
 ## Picklist-Hardening Forward Reference
 
@@ -664,10 +674,12 @@ Landed via `its` PR #88 (merge commit `36932bd`). Session log:
 
 # Authority
 
-Operational Standards v13, 2026-05-25. Adds §42 absorbing the 2026-05-25 code-level self-documentation discipline. v12 retires on acceptance of v13.
+Operational Standards v14, 2026-05-29. Security-posture honesty correction: §1 kill switch reframed from an implied security control to an operator-convenience suggested pause — explicitly NOT a security boundary — per audit finding F07 (audits/2026-05-25_forensic-audit.md). It is fail-open by design (three modes: sheet unreachable / row missing / invalid value → ACTIVE + WARN); the External Send Gate (FM Invariant 1) is the real boundary. The mechanism, the three fail-open modes, the picklist-hardening forward reference, and the per-daemon runtime gate are unchanged; the deferred fail_closed_until timestamp stays in tech debt and is not implemented. v13 retires on acceptance of v14.
 
-v14 trigger: substantive doctrine change or new §. v13.x absorbs further status updates without major revision.
+v15 trigger: substantive doctrine change, new §, or recharacterization of a mechanism's protective claim. The v13→v14 reframe established that recharacterizing what a mechanism *is* — security control vs. operator convenience — is itself bump-worthy, mirroring FM's v8→v9 layer-recharacterization precedent. v14.x absorbs further status updates without major revision.
+
+v14 trigger: §1 kill-switch security-posture reframe (F07). v13 was complete on its own terms; v14 corrects doctrine that over-described a fail-open pause as a security control. Tag pushed post-merge: `operational-standards-v14`.
 
 v13 trigger: code-level self-documentation discipline added (§42). v12 was complete on its own terms; v13 captures a discipline whose absence was surfacing as a recurring "future-reader has to leave the file" cost. Tag pushed post-merge: `operational-standards-v13`.
 
-Companion to FM v8 (Invariant 2 layer-6 addition), V&R v7.2 (Phase 1.5 security-hardening precondition), Handover Plan v6.3, Excellence Roadmap v2.3, FSU v6.5, Memory Archive v5 (extended §G7 in v12 parallel PR), `references/customer-fork-setup-checklist.md` (downstream cascade in v12). v13 parallel companion: `prompts/scaffold/` (PR 2 of this cascade — `shared-module-migration.md`, `manual-smoke.md`, `cc-implementation.md` v1 → v2).
+Companion to FM v9 (Invariant 2 Layer 5 tripwire reframe), V&R v7.2 (Phase 1.5 security-hardening precondition), Handover Plan v6.3, Excellence Roadmap v2.3, FSU v6.5, Memory Archive v5 (extended §G7 in v12 parallel PR), `references/customer-fork-setup-checklist.md` (downstream cascade in v12). v13 parallel companion: `prompts/scaffold/` (PR 2 of this cascade — `shared-module-migration.md`, `manual-smoke.md`, `cc-implementation.md` v1 → v2).

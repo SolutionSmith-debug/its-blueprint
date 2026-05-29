@@ -1,27 +1,27 @@
 ---
 type: doctrine
-version: 8
+version: 9
 status: canonical
-last_verified: 2026-05-24
-last_verified_against: 3b7d56d
-supersedes: doctrine/foundation-mission.md@v7
+last_verified: 2026-05-29
+last_verified_against: 64526a1
+supersedes: doctrine/foundation-mission.md@v8
 workstream: null
 tags: [invariants, external-send-gate, adversarial-input-handling]
 ---
 
-**ITS Foundation Mission v8**
+**ITS Foundation Mission v9**
 
-2026-05-22 — Invariant 2 Substantive Expansion
+2026-05-29 — Invariant 2 Layer 5 Reframed: Detection Tripwire, Not a Defense Layer
 
-*6th defense layer: attachment screening · Layer 1 expanded: trusted contacts + header-forgery detection · Invariant 1 unchanged*
+*Layer 5 (anomaly logging) recategorized from co-equal defense layer to post-hoc detection tripwire — an honest characterization of a trivially-evadable substring matcher (audit F13) · mechanism unchanged and retained in production · Layers 1–4 + 6 and the invariant principles unchanged*
 
-# Purpose of v8
+# Purpose of v9
 
-Foundation-level invariants are non-negotiable. Every workstream inherits both. v8 expands Invariant 2 (Adversarial Input Handling) with a sixth defense layer (attachment malware screening) and revises Layer 1 (sender allowlist) to canonical trusted-contacts pattern with scope enforcement and header-forgery detection.
+Foundation-level invariants are non-negotiable. Every workstream inherits both. v9 reframes Invariant 2's Layer 5 (anomaly logging) from a co-equal defense layer into what it actually is: a low-effort, post-hoc detection tripwire — not a barrier that prevents a successful injection. The mechanism is unchanged and stays in production; only the doctrine's characterization of its protective value is corrected.
 
-v8 trigger: substantive invariant enforcement-pattern change. v7's Invariant 2 enumerated five defense layers; v8 introduces a sixth. v7 + v7.1 retire on acceptance of v8.
+v9 trigger: the 2026-05-25 forensic audit (audits/2026-05-25_forensic-audit.md, finding F13) found that doctrine over-described Layer 5's protection relative to what the code delivers — exact-substring matching against a short sentinel phrase list is trivially evaded by paraphrase. Over-promising a tripwire as a defense is a worse failure than describing it honestly, because it invites trusting detection as prevention. The reframe is a security-posture honesty correction, not a principle change. v8 retires on acceptance of v9.
 
-The invariant principle itself is unchanged: all content originating outside the operating customer tenant is untrusted data. The implementation layers expand to cover attachment-borne malware (previously implicit; v8 makes it explicit and load-bearing) and to upgrade the sender-allowlist mechanism from JSON-list-in-ITS_Config to operator-visible trusted-contacts sheet with scope enforcement.
+The invariant principle itself is unchanged: all content originating outside the operating customer tenant is untrusted data. The load-bearing adversarial defenses remain Layers 2–4 (untrusted-content tagging, capability gating, structured output), backed by the two-process External Send Gate (Invariant 1) as the actual security boundary. Layer 6 (attachment screening) and Layer 1 (trusted-contacts + scope enforcement + header-forgery detection), both established in v8, are unchanged.
 
 # Product Context
 
@@ -47,7 +47,7 @@ No external transmission without explicit human approval. Permanent, not time-bo
 
 ## Invariant 2 — Adversarial Input Handling (Revised in v8)
 
-All content originating outside the operating customer tenant is untrusted data. Six-layer defense (v8 expanded from v7's five). The invariant itself is unchanged from v7; Layers 1 and 6 are revised/added.
+All content originating outside the operating customer tenant is untrusted data. Six-layer defense (v8 expanded from v7's five). The invariant itself is unchanged from v7; Layers 1 and 6 are revised/added (v8), and Layer 5 is recharacterized as a detection tripwire, not a defense layer (v9, see below).
 
 ### Layer 1 — Sender Allowlist + Scope Enforcement + Header-Forgery Detection (REVISED)
 
@@ -69,9 +69,13 @@ The AI has no permission to send or take action. Enforced by the two-process mod
 
 Anthropic tool-use forces JSON-schema-conforming responses. Non-conforming responses rejected and routed to ITS_Review_Queue. JSON schemas live in schemas/ with version field; scripts reject responses on schema mismatch.
 
-### Layer 5 — Anomaly Logging on Extraction Output (Unchanged)
+### Layer 5 — Anomaly Logging on Extraction Output (Reframed in v9: Tripwire, Not Defense Layer)
 
-shared.anomaly_logger.check() runs on every extraction output. Anomalies route to ITS_Review_Queue with security_flag=True. shared/anomaly_logger.py is live, tested. Phase 1 sentinel list covers system_*, role_*, ignore_*, recipient_override patterns; SUSPICIOUS_FIELD_PATTERNS FP risk tracked in docs/tech_debt.md for tuning during first 30 days against real extraction outputs.
+Layer 5 is a low-effort detection tripwire, not a defense layer. It does not prevent a successful prompt injection; it raises a post-hoc signal that an extraction output matched a known-suspicious pattern, so the item can be routed to human review and flagged. The implementation is exact-substring matching against a short sentinel phrase list — trivially evaded by paraphrase or a thesaurus — so it must never be relied on as a barrier.
+
+The real adversarial defenses are Layers 2–4 (untrusted-content tagging, capability gating, structured output), backed by the two-process External Send Gate (Invariant 1), which is the actual security boundary. Layer 5's value is detection and triage signal — route to ITS_Review_Queue, flag for a human — not prevention. Treating it as co-equal with Layers 2–4 would overstate the protection the doctrine delivers; v9 corrects that framing per audit finding F13. The code is unchanged and stays in production.
+
+Mechanism (unchanged): shared.anomaly_logger.check() runs on every extraction output. Anomalies route to ITS_Review_Queue with security_flag=True. shared/anomaly_logger.py is live, tested. Phase 1 sentinel list covers system_*, role_*, ignore_*, recipient_override patterns; SUSPICIOUS_FIELD_PATTERNS FP risk tracked in docs/tech_debt.md for tuning during first 30 days against real extraction outputs.
 
 ### Layer 6 — Attachment Screening Pipeline (NEW in v8)
 
@@ -95,7 +99,7 @@ Prompt injection is an unsolved research problem. The architecture assumes injec
 
 Attachment malware is partially addressable. Layers (a)-(c) catch known-signature and structural threats. Zero-day exploits in PDF/Office formats remain a residual risk. Mitigation: ITS does not open attachments in vulnerable viewers — files are uploaded to Box (cloud-managed; not opened locally) and text content extracted via library code (PyMuPDF, python-docx) that doesn't execute embedded code. The customer's downstream consumption (operator viewing in Box web UI; PMs downloading) inherits Box's threat model, not ITS's.
 
-Spoofed sender within trusted-contacts is partially addressable. Header-forgery detection catches authentication failures. A sophisticated attacker who compromises a legitimate sender's credentials and sends through their actual mail server bypasses all sender-side defenses. Layers 2-5 still apply: untrusted-content tagging, capability gating, structured output, anomaly logging. The damage ceiling under credential compromise is "extracted data is wrong" not "external action taken on attacker's behalf."
+Spoofed sender within trusted-contacts is partially addressable. Header-forgery detection catches authentication failures. A sophisticated attacker who compromises a legitimate sender's credentials and sends through their actual mail server bypasses all sender-side defenses. Layers 2-4 still apply (untrusted-content tagging, capability gating, structured output), with Layer 5 anomaly logging as a post-hoc detection signal, not a barrier. The damage ceiling under credential compromise is "extracted data is wrong" not "external action taken on attacker's behalf."
 
 # Invariant Enforcement Under Future Implementation Patterns
 
@@ -127,9 +131,9 @@ v8 implication: trusted-contacts sheet is per-customer (each customer fork has i
 
 # Scope of This Project
 
-- Foundation Mission (this doc, v8) — invariants, principles, project-level architecture, per-customer-repo invariant.
+- Foundation Mission (this doc, v9) — invariants, principles, project-level architecture, per-customer-repo invariant.
 
-- Operational Standards v11 — cross-cutting patterns every workstream uses.
+- Operational Standards v14 — cross-cutting patterns every workstream uses.
 
 - Vision & Roadmap v7.2 — phase plan with Phase 1.5 security-hardening precondition.
 
@@ -149,8 +153,8 @@ v8 implication: trusted-contacts sheet is per-customer (each customer fork has i
 
 # Authority
 
-Foundation Mission v8, 2026-05-22. Substantive invariant enforcement-pattern expansion: Invariant 2 Layer 6 added (attachment screening); Layer 1 revised (trusted-contacts + scope enforcement + header-forgery detection). Invariant principles themselves unchanged. v7 + v7.1 retire on acceptance of v8.
+Foundation Mission v9, 2026-05-29. Security-posture honesty correction: Invariant 2 Layer 5 (anomaly logging) reframed from co-equal defense layer to post-hoc detection tripwire, per audit finding F13 (audits/2026-05-25_forensic-audit.md). Mechanism unchanged and retained in production; only the doctrine's characterization of its protective value is corrected. Invariant principles, the six-layer structure, and Layers 1–4 + 6 are unchanged from v8. v8 retires on acceptance of v9.
 
-v9 trigger: substantive invariant principle change OR business-model change. v8.x absorbs further status updates without principle revision.
+v10 trigger: substantive invariant principle change, business-model change, or any defense-layer addition, removal, or recharacterization (the v8→v9 reframe established that recharacterizing a layer's protective claim is itself a bump-worthy change). v9.x absorbs further status updates without a framing change.
 
-Companion to Op Stds v11, V&R v7.2, Handover Plan v6.3, Excellence Roadmap v2.3, FSU v6.5, Memory Archive v5, Cascade Unification Update 2026-05-22.
+Companion to Op Stds v14, V&R v7.2, Handover Plan v6.3, Excellence Roadmap v2.3, FSU v6.5, Memory Archive v5.
