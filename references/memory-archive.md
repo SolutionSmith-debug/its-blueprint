@@ -2,8 +2,8 @@
 type: reference
 version: 5
 status: canonical
-last_verified: 2026-05-28
-last_verified_against: 8c09a6b
+last_verified: 2026-05-29
+last_verified_against: df83713
 supersedes: references/memory-archive.md@v4
 workstream: null
 tags: [restoration, operational-detail, post-compaction-recovery]
@@ -572,6 +572,40 @@ FM's Authority block was edited thoroughly (self-version v8→v9 plus its compan
 - Companion docs that cross-reference each other (FM ↔ Op Stds, V&R ↔ FM) must have their version refs updated symmetrically.
 - The diff review lens "does the Authority block match the frontmatter `version:`?" catches the self-reference; the lens "do companion-doc cross-refs still resolve?" catches the reciprocal side.
 This is not enforced by `lint_frontmatter.py` — it is a manual diff-review obligation.
+
+## §G13 — 2026-05-29 F02+F22: network-capability allowlist + approval-attestation verification (PR #118)
+
+### Summary
+
+Two Phase 1.4 hardening items landed together in exec PR #118 (`a3efca7`, 2026-05-29, four-part verify clean). Session log: `~/its/docs/session_logs/2026-05-29_f02-f22-capability-approval.md`.
+
+**F02 — network-capability allowlist in `tests/test_capability_gating.py`:**
+Extended the capability-gating test suite with a network-library allowlist walker. The test walks `shared/` and `safety_reports/` (operational scripts deliberately excluded — see below) and asserts that any module importing network-capable libraries (`socket`, `requests`, `httpx`, `urllib`, `aiohttp`) appears on a 5-entry allowlist (`shared/keychain.py`, `shared/graph_client.py`, `shared/box_client.py`, `shared/smartsheet_client.py`, `shared/resend_client.py`). Uses dotted-segment matching (not substring) to avoid `urllib.parse` false positives from same-name stdlib modules. The walker does NOT include `scripts/` — operational scripts (smoke tests, seed scripts, install helpers) legitimately need network access and are not production daemon code.
+
+**F22 — `shared/approval_verification.py` (NEW module) + per-row approval gate in `weekly_send_poll.py`:**
+`verify_approval(row_id, row_data, authorized_approvers)` is a fail-CLOSED total function: returns `(verified: bool, event_data: dict)`. It fetches Smartsheet cell history for the `Approved for Send` column on the given row, walks the history for a `True`-valued event where `modified_by.email` is in the `authorized_approvers` set. **Identity match on email only** (see §G13.1 below). `weekly_send_poll.py` calls `verify_approval` per row before dispatching to `send_one_row`; unverified rows are skipped with a forensic `approval_unverified` WARN event (threaded correlation_id). The ITS_Config row `safety_reports.authorized_approvers` holds a comma-separated email list; `scripts/seed_its_config.py` seeds it. `docs/operations/cutover_checklist.md` (NEW) covers operator prerequisites at Phase 1.5 cutover.
+
+### §G13.1 — Load-bearing technical decisions
+
+**(a) Smartsheet `get_cell_history` `modifiedBy` has name+email only — no stable user ID.**
+The Smartsheet REST API's cell-history endpoint returns `modifiedBy` with `name` and `email` fields; there is no unique stable user-ID field exposed in the response. `approval_verification.py` therefore matches on email address, compared against the `authorized_approvers` ITS_Config row. Implications: approver identity is only as reliable as the email claim, if an approver's email changes the ITS_Config row must be updated, and there is no cross-tenant user-object comparison available. Documented as a deliberate limitation in the module's §42 docstring.
+
+**(b) F02 walk-scope decision: `shared/` + `safety_reports/` only; `scripts/` excluded.**
+The allowlist check was scoped to production daemon code, not all Python files in the repo. `scripts/` (smoke tests, seed scripts, setup helpers) legitimately use network libraries; including them would require a prohibitively long allowlist that would dilute the signal the test exists to provide. The operator rationale: the External Send Gate and Invariant 2 defenses are daemon-code concerns; operational scripts are operator-run one-shots.
+
+**(c) `approval_verification.py` is fail-CLOSED.**
+If `get_cell_history` raises, if the history is empty, or if no authorized-approver match is found, the function returns `verified=False`. This is the opposite of the fail-open pattern used in kill-switch and heartbeat helpers. Rationale: a false negative here (blocking a send that was legitimately approved) is recoverable by operator recheck; a false positive (allowing an unverified send) violates Invariant 1 and is not recoverable.
+
+### §G13.2 — Worktree `gh pr merge --delete-branch` quirk
+
+When the session is rooted in a git worktree (here `~/its-f02-f22` on branch `f02-f22`), `gh pr merge --squash --delete-branch` lands the GitHub-side merge successfully but cannot execute the post-merge local `checkout main` step (main lives in `~/its`, not the worktree). The remote branch `origin/f02-f22` is also NOT auto-deleted. The four-part verify still passes. The git-guardrail hook blocks `git push origin --delete` syntax; the correct cleanup path is `gh api -X DELETE repos/SolutionSmith-debug/its/git/refs/heads/f02-f22`. As of this session close, `origin/f02-f22` is still live — tracked in `docs/tech_debt.md`.
+
+### §G13.3 — Final baseline
+
+- pytest: 1109 passed / 16 deselected
+- mypy: 0 errors / 135 source files (new `shared/approval_verification.py` + `tests/test_approval_verification.py` + `tests/test_approval_verification_integration.py`)
+- ruff: clean
+- main-branch CI on merge commit `a3efca7`: SUCCESS
 
 # Cross-References
 
