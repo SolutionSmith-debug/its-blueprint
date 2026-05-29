@@ -133,6 +133,14 @@ Dismiss-as-FP unless content shows actual secret/PII value being logged:
 2. OAuth URL with public `client_id` + single-use CSRF `state`.
 3. Any `print()` in modules with `trusted_contacts` in path (filename heuristic).
 
+### `security` CLI — `set-generic-password` stdin shape (F04, 2026-05-28)
+`shared/keychain.set_secret()` passes the secret via stdin, not argv. The argv shape is load-bearing and non-obvious:
+
+- **`-w` MUST be the last option.** `-w` reads from stdin when it's last; if any option follows it (e.g., `-U`) that next token is consumed as the password literal instead.
+- **stdin must be `f"{value}\n{value}\n"`** (password + retype confirmation). A single newline causes the CLI to wait for the second entry.
+- **The safe ordering:** `["security", "add-generic-password", "-U", "-a", account, "-s", service, "-w"]`
+- Discovered as a textbook SDK-vs-Live (Op Stds §30) bug: the brief's prescribed shape (`[... "-w", "-U"]` + `input=value`) was broken against the live `security` CLI — `-w` swallowed `-U` as the password, and stdin was the retype prompt, not the primary read. Live-verified with a create→read→rotate→delete round-trip before PR #113 merged.
+
 ### Secret-exposure baseline (gitleaks 8.30.1, 2026-05-24)
 - 0 findings, 0 CI/env/Dependabot secrets, 0 env/credential files ever committed.
 - Clean by architecture — all secrets in macOS Keychain (`shared/keychain.py` + `.gitignore`).
@@ -184,6 +192,11 @@ When Smartsheet/Box/Graph MCP lacks a primitive:
 
 Applies across all three external systems.
 
+### Exec-host worktree topology (observed 2026-05-28)
+The operator uses per-task git worktrees alongside `~/its` (main). Observed: `~/its-sweep` (branch `f17-f04-docstring-sweep`) + `~/its-f16` (branch `f16-heartbeat-ping`) alongside `~/its` (main). Two hazards:
+- **Branch-name collision:** a fresh session starting in `~/its` that tries to create a branch a reserved worktree already holds will fail. Check `git worktree list` before branching.
+- **Live daemon runs `~/its` working tree:** `org.solutionsmith.its.safety-intake` executes `~/its/safety_reports/intake_poll.py` from disk every ~60s. Uncommitted edits in `~/its` go live on the next cycle. Do daemon/intake feature edits in a worktree, not the `~/its` main checkout.
+
 ### CC skills installed (PR #79, mattpocock/skills)
 14 skills in `.agents/skills/` + `.claude/skills/` symlinks, pinned via `skills-lock.json`:
 
@@ -226,16 +239,17 @@ Applies across all three external systems.
 - Op Stds v13 drift fix + doctrine manifest + doc-reconciliation agent (PRs #101/#103/#106/#107, 2026-05-28)
 - `shared/state_io.py` atomic-write + sidecar-lock (PR #88, 2026-05-25; Phase 1.4 cluster PR 1)
 - `shared/alert_dedupe.py` migrated onto `state_io` helpers — same-FD-flock pattern retired (PR #104, 2026-05-28; Phase 1.4 cluster PR 2)
+- Phase 1.4 hardening sweep (PR #113, 2026-05-28): F17 (intake_poll watchdog Check C registration — `_write_watchdog_marker` added, live-confirmed on production daemon), F04 (`shared/keychain.set_secret` stdin correctness — `security -w` must be last arg, double-feed `value\nvalue\n`; live create→read→rotate→delete verified), watchdog docstring drift removed from 3 spots
 
 ### Bradley 1 (BBCHS 1)
 - Template project, six sheets migrated, demo seeding complete.
 - Next: UI work (conditional formatting, forms, filter views — Seth runs UI-only work himself) before cloning template to the other five projects.
 
 ### Open queue
-- Phase 1.4 hardening cluster PRs 3+: F02+F22 (capability-gating network-lib allowlist + `shared/approval_verification.py`), F08+F09 (`shared/circuit_breaker.py`), F16/F17/F18+F03/F04/F10 in parallel-safe order
+- Phase 1.4 hardening cluster PRs 3+: F02+F22 (capability-gating network-lib allowlist + `shared/approval_verification.py`), F08+F09 (`shared/circuit_breaker.py`), remaining: F16, F18, F03, F10 (F17 + F04 landed in PR #113)
 - `person_tag` regex refinement (138 hits, likely FPs)
 - Three `box_migration` parser tech_debts deferred: V/S vendor-sub parser, ISO date prefix, import-time hygiene wrap
-- `shared/heartbeat.py` extraction (heartbeat helpers currently copied verbatim across two daemons — 2nd-consumer extraction signal per Op Stds §14, deferred from R3 Session 3)
+- `shared/heartbeat.py` extraction (heartbeat helpers now copied verbatim across THREE consumers — intake_poll, weekly_send_poll, and intake_poll._write_watchdog_marker added in F17; 2nd-consumer extraction signal per Op Stds §14 still deferred)
 
 ### On the horizon
 - Safety Portal build (blueprint `workstreams/safety-portal/` mission v1 + brief; Cloudflare Worker, intake.py portal-marker branches, HMAC-verified shim — all PLANNED, not built). Replaces PDF-email submission; the portal feeds the existing `intake.py` via the HMAC-verified shim (legacy PDF-email is the documented fallback). Attachment-screening (Invariant 2 Layer 6) is N/A for safety reports and reassigned to Email Triage.
