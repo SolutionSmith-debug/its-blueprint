@@ -1,19 +1,19 @@
 ---
 type: doctrine
-version: 14
+version: 15
 status: canonical
 last_verified: 2026-05-29
-last_verified_against: 64526a1
-supersedes: doctrine/operational-standards.md@v13
+last_verified_against: 585823d
+supersedes: doctrine/operational-standards.md@v14
 workstream: null
-tags: [push-vs-record, picklist-hardening, attachment-screening, polling-daemon, sdk-vs-live, cc-tooling, fork-security, pii-logging, actions-version-discipline, code-self-documentation]
+tags: [push-vs-record, picklist-hardening, attachment-screening, polling-daemon, sdk-vs-live, cc-tooling, fork-security, pii-logging, actions-version-discipline, code-self-documentation, successor-operator, tier-2-repair, successor-remediation, capability-gated-repair]
 ---
 
-**ITS Operational Standards v14**
+**ITS Operational Standards v15**
 
-2026-05-29 — Kill Switch Reframed: Operator-Convenience Pause, Not a Security Control
+2026-05-29 — Three-Tier Successor-Maintenance Model: Roles, Tier-2 Repair Path, Successor-Remediation Docs
 
-*§1 recategorized — the fail-open kill switch is an operator-convenience suggested pause, explicitly not a security boundary (audit F07); the External Send Gate (FM Invariant 1) remains the real boundary. No mechanism change; fail_closed_until stays deferred to tech debt.*
+*Two named operator roles introduced (Developer-Operator / Successor-Operator) and applied across §§37-44. §43 (NEW) adds the Successor-Remediation Documentation Discipline — plain-language, document-as-you-build remediation entries for the non-developer Successor-Operator, distinct from §42's code-docstrings-for-code-readers. §44 (NEW) defines the Tier-2 Claude-assisted repair path: the in-scope LOW-capability-class repair set, the structurally-forbidden HIGH-capability-class set, and the non-developer-safe enforcement layer NAMED AS A PRE-CUTOVER BUILD GAP (it does not exist today). No execution-layer mechanism is asserted as built. v14 §1 kill-switch reframe carries forward unchanged.*
 
 # Purpose
 
@@ -83,6 +83,18 @@ One reframe corrects a security-posture overstatement the 2026-05-25 forensic au
 
 - Sections §§2–42 carry forward from v13 with cross-reference refresh only.
 
+# What Changed in v15
+
+Three changes codify the operator-decided three-tier non-developer-successor maintenance model. None asserts a new execution-layer mechanism as built; one explicitly names a missing enforcement layer as a pre-cutover build gap.
+
+- **Operator-role split (applied doc-wide).** Every "operator" usage is now classifiable to one of two named roles. **Developer-Operator** (Seth) is git/CC/shell/worktree-fluent and performs ALL developer-context operations — everything in §§37-41 (skills install, dangerous-git carve-outs, customer-fork `gh api` hardening, migration scripts, Actions version bumps), plus Keychain and any code change. **Successor-Operator** (a non-developer) works Smartsheet-UI + approval only and CANNOT perform developer-context operations. The Developer-Operator is a Tier-3 escalation asset, not the primary day-to-day operator.
+
+- **§43 NEW — Successor-Remediation Documentation Discipline.** A build-time discipline PARALLEL to §42 but for the opposite audience: §42 is code docstrings for code-readers; §43 is plain-language remediation entries for the non-developer Successor-Operator. Each capability ships its remediation entry AS it is built.
+
+- **§44 NEW — Tier-2 Claude-Assisted Repair Path.** Defines the LOW-capability-class repair set the Successor-Operator may approve (Claude driving), the structurally-forbidden HIGH-capability-class set that always escalates to Tier 3, the audit-trail requirement, and — critically — names the non-developer-safe enforcement layer as a PRE-CUTOVER BUILD GAP that does not exist today, alongside the Check H self-heal gap.
+
+- Sections §§1-42 carry forward from v14 with cross-reference refresh only.
+
 # §1 — Kill Switch
 
 **What it is — and is not.** The kill switch is an operator-convenience suggested pause: a way for the operator to halt scheduled work cleanly. It is **not** a security control and not a security boundary. It is fail-open by design — if ITS_Config is unreachable, the system.state row is missing, or the value is invalid, the kill switch resolves to ACTIVE (work proceeds) and emits a WARN. That fail-open posture is intentional (availability is chosen over a hard stop) and is exactly why the mechanism cannot be relied on as a control: an adversary who can make the sheet unreachable — or an accidental misconfiguration — defeats it, because it fails toward running, not toward halting. A security-relevant halt must come from a different mechanism: the External Send Gate (Foundation Mission Invariant 1), which is the real boundary — the two-process model means a successful injection at the AI layer still cannot transmit externally regardless of kill-switch state.
@@ -110,6 +122,8 @@ Check E (Anthropic spend trend) deferred to Phase 1.5 — architectural choice; 
 ## Check F Retirement + Check H Successor
 
 Check F polls safety@evergreenmirror.com mailbox idle hours as a proxy for Mail.app-rule health. Post-PR-#59, safety_reports is on a polling daemon and writes a heartbeat to ITS_Daemon_Health every 60 seconds. The mailbox-idle proxy is now redundant. Check H (successor) reads ITS_Daemon_Health for every Enabled=true daemon and flags rows where Last Heartbeat is older than 2 × Interval Seconds. Retire Check F when (a) Check H is operational and (b) no remaining workstream depends on Mail.app rules.
+
+**Silent fail-open hazards must become watchdog-detectable signals (v15).** Tier 1 of the successor-maintenance model (§44) only works if faults surface. Any condition that today fails silently and is implicitly "deferred to the operator to notice" — a daemon that dies with no heartbeat (audit F17), or a guard hook / worktree control that disappears or is removed without notice — must be promoted to a signal the watchdog (or daemon-health surface) can detect and push, NOT a condition that depends on a human happening to look. The Check H heartbeat-staleness successor is the first instance of this principle; the guard-layer-disappearance case (a propose-only block-* hook silently absent because its agent symlink dangles, leaving a session ungoverned — see references/worktree-discipline.md) is a second. Each silent fail-open hazard identified during build is either made watchdog-detectable or logged to tech debt (§36) as an explicit, named gap — never left as an unstated reliance on the operator.
 
 ## MAINTENANCE Semantics (carried forward from v10.1)
 
@@ -366,6 +380,8 @@ docs/tech_debt.md is the canonical execution-layer tech debt log. Planning-proje
 39 entries as of 2026-05-22. Mix of closed/open/partially-mitigated. Notable open items: anomaly_logger SUSPICIOUS_FIELD_PATTERNS FP risk, R2 Watchdog Check E (Phase 1.5 deferral), Picklist_Sync_Config config/state mix, Smartsheet MULTI_PICKLIST round-trip gotcha, safety_reports week-folder race condition, Daily Reports schema gap (no Box Link column).
 
 # §37 (NEW) — CC Skills Usage Convention
+
+> **Role scope (v15).** Every operation described in §§37-41 — installing/invoking skills, the block-dangerous-git carve-outs and manual force-delete recovery, the per-customer-fork `gh api` hardening and gitleaks runs, the migration-script dry-run/live-write split, worktree cleanup, GitHub Actions version bumps — is a **Developer-Operator** operation. It requires git/CC/shell fluency and the standing developer-grade override authority the guard hooks assume (§38 "operator shell is unaffected"). The **Successor-Operator** (the non-developer Tier-2 role defined in §44) performs NONE of these; they are out of the Successor-Operator's capability class by definition. Where the unqualified word "operator" appears in §§37-41, read it as Developer-Operator.
 
 mattpocock/skills installed repo-local in every ITS execution repo. Skills physically live at `.agents/skills/` (universal multi-agent location); `.claude/skills/` is a symlink pointing at it. `.agents/skills/` is the source of truth. `skills-lock.json` at repo root pins upstream revisions for reproducible installs.
 
@@ -672,14 +688,103 @@ Landed via `its` PR #88 (merge commit `36932bd`). Session log:
 """
 ```
 
+# §43 (NEW) — Successor-Remediation Documentation Discipline
+
+§42 documents code FOR a code-reader: module docstrings and in-code rationale aimed at future-Seth, future-CC, and a developer maintaining a fork. That audience is the **Developer-Operator**. It is the wrong audience for Tier 2 of the three-tier maintenance model, where the human in the loop is a non-developer **Successor-Operator** who never reads code, never uses git or a terminal, and works entirely from the Smartsheet UI and approval surfaces.
+
+This section is the PARALLEL discipline for that audience. Where §42 answers "why is this code the way it is," §43 answers "what does the Successor-Operator do when this capability misbehaves."
+
+## Document-as-you-build rule
+
+Every capability ships a plain-language **successor-remediation runbook entry written AS the capability is built** — not retrofitted, not deferred. The entry is part of the capability's definition-of-done, the same way the §42 docstring is. A capability without its remediation entry is incomplete. Entries are authored as **Markdown shipped with the capability** in the execution repo (version-controlled alongside the code): Claude loads the relevant entry to drive a Tier-2 repair. The Successor-Operator does not open the Markdown — they see Smartsheet rows and alert emails and approve; Claude reads the entry on their behalf.
+
+## Entry shape
+
+Each entry is written for a reader who can see Smartsheet rows and alert emails but cannot read code, and has four parts:
+
+- **Symptom** — stated in Smartsheet / alert / dashboard terms the Successor-Operator actually sees (e.g., "ITS_Daemon_Health shows `safety_reports.intake_poll` Last Cycle Status = STALE" or "a CRITICAL alert email names category `daemon_health_write_failed`"). NOT a stack trace or exception class.
+- **What the Successor-Operator checks** — the specific sheet/column/value to look at, in UI terms.
+- **The Claude prompt or UI action** — either the exact plain-language request the Successor-Operator gives Claude ("Claude, the intake daemon heartbeat is stale — please re-run it and confirm a fresh heartbeat"), or the direct Smartsheet-UI action ("set ITS_Config row `safety_reports.intake.polling_enabled` to true"). Claude drives any operation that is not a literal UI cell edit; the Successor-Operator approves.
+- **Escalate-to-Seth condition** — the explicit boundary at which this stops being a Tier-2 repair and becomes a Tier-3 escalation to the Developer-Operator, stated in observable terms ("if the heartbeat is still stale after one re-run, or if the alert names the External Send Gate or any secret/auth category, stop and escalate to Seth"). This boundary is the §44 Tier-2/Tier-3 rule expressed for one specific capability.
+
+## Distinction from §42 (do not conflate)
+
+| | §42 | §43 |
+| --- | --- | --- |
+| Audience | code-reader (Developer-Operator, future-CC) | non-developer Successor-Operator |
+| Lives in | module docstrings + in-code comments | plain-language Markdown shipped with the capability (Claude-read; no code) |
+| Answers | "why is this code the way it is" | "what do I do when this misbehaves" |
+| Vocabulary | invariants, exception types, error_log categories | Smartsheet rows, alert subjects, UI actions, Claude prompts |
+
+The two are NOT substitutes. A §42 docstring saying "fail-open on Smartsheet-unreachable" does not tell a non-developer what to do when it fails open; a §43 entry saying "if the sheet shows STALE, ask Claude to re-run" does not tell a developer why the inode-swap lock pattern is load-bearing. Each capability that has a Tier-2-reachable failure mode needs both.
+
+## Inheritance into briefs
+
+Every future workstream brief inherits a **"successor-remediation deliverable"** the same way it inherits the Foundation invariants: F08/F09 (circuit breaker, dedupe hardening), the Safety Portal, and every workstream after them state, in their deliverables, the §43 remediation entries that ship with the capability. CC briefs reference §43 explicitly when scoping any capability whose failure is something a Successor-Operator could plausibly be asked to resolve at Tier 2.
+
+## Enforcement
+
+Initial enforcement is by convention + review, mirroring §42: the operator review at PR time checks that a capability with a Tier-2-reachable failure mode shipped its §43 entry. The Markdown runbook substrate (where the entries collect) and any automated presence check are a build item tracked alongside §44's enforcement-layer gap — see §44.
+
+# §44 (NEW) — Tier-2 Claude-Assisted Repair Path
+
+The successor-maintenance model has three tiers. **Tier 1 — self-healing**: daemons recover, the watchdog catches staleness, no human acts (the self-heal layer is itself a pre-cutover build item — Check H heartbeat-staleness is unimplemented and two of three daemons are heartbeat-retrofit-pending; see §2 and the Handover Plan v7 / V&R v8 pre-cutover conditions). **Tier 2 — Claude-assisted Successor-Operator repair**: a non-developer Successor-Operator APPROVES a repair while Claude DRIVES the diagnosis and the action. **Tier 3 — escalation to the Developer-Operator** (Seth), who is a reachable escalation asset, not the primary operator. This section defines Tier 2 and its boundary with Tier 3.
+
+## Who acts at Tier 2
+
+The Successor-Operator (per §43 / the §37 role-scope note) reads Smartsheet and alerts, approves actions in plain language, and never reads code, uses git/terminal, or touches Keychain. Claude performs the diagnostic and repair work; the Successor-Operator's contribution is judgment and approval, following the §43 remediation entry for the affected capability.
+
+## In-scope: the LOW-capability-class repair set ONLY
+
+Tier 2 is limited to repairs that change no code, touch no secret, and cannot transmit externally. The closed in-scope set is:
+
+- Re-run a stopped or stale daemon (the most common Tier-2 action).
+- Toggle an ITS_Config value within its bounded enum / its `*.polling_enabled` runtime gate (§35 picklist domains).
+- Re-send an already-approved item that failed to send (re-trigger an existing approval — NOT create or alter an approval).
+- Re-seed a missing config or daemon-health row to a known-good value.
+- Clear a stuck lock / stale state file so a daemon can resume.
+
+These are low-class precisely because none of them can cross the External Send Gate, expose a secret, alter doctrine, or require a code edit.
+
+## Structurally forbidden at Tier 2: the HIGH-capability-class set
+
+HIGH-capability-class is defined STRUCTURALLY, not by how well something is documented. Anything that touches ANY of the following is high-class and is forbidden at Tier 2 — it escalates to Tier 3 unconditionally:
+
+- the **External Send Gate** / anything that could cause an external transmission (FM Invariant 1);
+- **secrets / auth** (Keychain, tokens, credentials, approver-principal configuration);
+- **doctrine** (any change to a doctrine doc or an invariant);
+- anything **requiring a code change**.
+
+## The escalation boundary (the "both" rule)
+
+A fault escalates to Tier 3 if it is **NOVEL** (not covered by a §43 runbook entry) **OR HIGH-capability-class**. Equivalently: a fault is Tier-2-eligible only if it is **documented (has a §43 entry) AND low-class**. High-class always escalates regardless of documentation — a perfectly documented secret-rotation is still Tier 3 because the class, not the doc, decides. Novel-but-low-class also escalates, because no vetted §43 path exists yet for Claude and the Successor-Operator to follow safely. Tier 3 resolution by the Developer-Operator that recurs should produce a new §43 entry so the next instance can drop to Tier 2.
+
+## Audit-trail requirement
+
+Every Tier-2 repair is audit-trailed: the symptom, the §43 entry followed, the action Claude took, and the Successor-Operator's approval are recorded to the forensic surfaces (ITS_Errors as the record leg per §3.1, with a Correlation_ID per §3). A Tier-2 repair that cannot be reconstructed after the fact is a process failure even if the repair itself worked.
+
+## The through-line (capability-gating philosophy, extended)
+
+The philosophy that keeps the AI out of the send path is the same philosophy that must keep a Tier-2 repair session out of high-class operations. `tests/test_capability_gating.py` enforces FM Invariant 1's two-process model by static AST import inspection: a generation process structurally CANNOT import a send capability — the boundary holds by construction, not by trusting the actor to stay in bounds. Tier 2 needs the structural analogue: a repair session that CANNOT reach the External Send Gate, secrets/auth, doctrine, or a code edit, enforced by construction rather than by trusting Claude or the Successor-Operator to decline.
+
+## Non-developer-safe enforcement layer — PRE-CUTOVER BUILD GAP (does not exist today)
+
+This enforcement layer DOES NOT YET EXIST, and doctrine must not be read as claiming it does. Verified against ~/its main 585823d: the guard layer that exists today (`.claude/hooks/`: block-codeql-dismiss, block-dangerous-git, block-doc-reconciliation-write, block-doctrine-write) is REAL but **scoped to subagent / developer sessions and explicitly falls open for the operator's own session** — each hook's message tells the human to "run it manually," because the guard architecture assumes the human-in-the-loop is a Developer-Operator who can safely override. That assumption is exactly what Tier 2 violates: the Successor-Operator is a non-developer and must NOT have an override.
+
+Therefore the guarded, capability-gated path for Claude-applied field repair by a non-developer — a guard layer that HOLDS WITHOUT a Developer-Operator present to adjudicate, confining a repair session to the low-class set above — must be built. It composes the `test_capability_gating.py` philosophy (structural, by-construction confinement) onto the repair path.
+
+It is a **hard pre-cutover gate** (Handover Plan v7 Pre-Cutover Conditions; V&R v8 Pre-Cutover Condition 5), alongside the Tier-1 self-heal gap (Check H heartbeat-staleness, §2): cutover does not proceed, and a non-developer Successor-Operator does not take day-to-day operation, until BOTH are built and verified. There is no interim in which a non-developer drives repairs without the enforcement layer. Tracked in execution-layer tech debt (§36). (The "both" rule above — novel OR high-class escalates to Tier 3 — is the steady-state safety default that remains in force after the layer is built.)
+
 # Authority
 
-Operational Standards v14, 2026-05-29. Security-posture honesty correction: §1 kill switch reframed from an implied security control to an operator-convenience suggested pause — explicitly NOT a security boundary — per audit finding F07 (audits/2026-05-25_forensic-audit.md). It is fail-open by design (three modes: sheet unreachable / row missing / invalid value → ACTIVE + WARN); the External Send Gate (FM Invariant 1) is the real boundary. The mechanism, the three fail-open modes, the picklist-hardening forward reference, and the per-daemon runtime gate are unchanged; the deferred fail_closed_until timestamp stays in tech debt and is not implemented. v13 retires on acceptance of v14.
+Operational Standards v15, 2026-05-29. Three-tier successor-maintenance model codified: a Developer-Operator / Successor-Operator role split applied across §§37-44; §43 (Successor-Remediation Documentation Discipline, parallel to §42 but for the non-developer audience); §44 (Tier-2 Claude-assisted repair path, with the LOW-class repair set, the structurally-forbidden HIGH-class set, the NOVEL-OR-HIGH escalation rule, and the non-developer-safe enforcement layer named as a hard PRE-CUTOVER BUILD GAP that does not exist today — verified against ~/its main 585823d, where the existing guard hooks fall open for the operator's own session). No execution-layer mechanism is asserted as built by this bump. The v14 §1 kill-switch reframe (F07: operator-convenience pause, NOT a security boundary; the External Send Gate / FM Invariant 1 is the real boundary) carries forward unchanged. v14 retires on acceptance of v15. Canonical git tag: operational-standards-v15.
 
-v15 trigger: substantive doctrine change, new §, or recharacterization of a mechanism's protective claim. The v13→v14 reframe established that recharacterizing what a mechanism *is* — security control vs. operator convenience — is itself bump-worthy, mirroring FM's v8→v9 layer-recharacterization precedent. v14.x absorbs further status updates without major revision.
+v15 trigger: §43 + §44 added (Successor-Remediation Documentation Discipline; Tier-2 Claude-assisted repair path) and the Developer-Operator / Successor-Operator role split applied across §§37-44. v14 was complete on its own terms; v15 codifies the operator-decided three-tier non-developer-successor maintenance model and names the Tier-2 non-developer-safe enforcement layer as a hard pre-cutover build gap (alongside the Tier-1 Check H self-heal gap). Tag pushed post-merge: `operational-standards-v15`.
+
+v16 trigger: substantive doctrine change, new §, or recharacterization of a mechanism's protective claim. The v13→v14 reframe established that recharacterizing what a mechanism *is* — security control vs. operator convenience — is itself bump-worthy, mirroring FM's v8→v9 layer-recharacterization precedent; the v14→v15 bump established that introducing a doc-wide role abstraction and a new tier of operation is likewise bump-worthy. v15.x absorbs further status updates (e.g., the Tier-2 enforcement layer landing) without major revision.
 
 v14 trigger: §1 kill-switch security-posture reframe (F07). v13 was complete on its own terms; v14 corrects doctrine that over-described a fail-open pause as a security control. Tag pushed post-merge: `operational-standards-v14`.
 
 v13 trigger: code-level self-documentation discipline added (§42). v12 was complete on its own terms; v13 captures a discipline whose absence was surfacing as a recurring "future-reader has to leave the file" cost. Tag pushed post-merge: `operational-standards-v13`.
 
-Companion to FM v9 (Invariant 2 Layer 5 tripwire reframe), V&R v7.2 (Phase 1.5 security-hardening precondition), Handover Plan v6.3, Excellence Roadmap v2.3, FSU v6.5, Memory Archive v5 (extended §G7 in v12 parallel PR), `references/customer-fork-setup-checklist.md` (downstream cascade in v12). v13 parallel companion: `prompts/scaffold/` (PR 2 of this cascade — `shared-module-migration.md`, `manual-smoke.md`, `cc-implementation.md` v1 → v2).
+Companion to FM v10 (Invariant 1 two-process model is the through-line §44 builds on; the Developer-Operator / Successor-Operator role principle), V&R v8 (the ship-and-leave / developer-departure threshold; the Tier-1 self-heal gap and the §44 Tier-2 enforcement-layer gap are companion hard pre-cutover conditions), Handover Plan v7 (the three-tier fault-response model + role definitions + Pre-Cutover Conditions), Excellence Roadmap v3 (R6 successor-maintenance build program; the "Solution Smith remains primary operator" contradiction resolved to the Developer-Operator-as-Tier-3-asset model), Permissions Ask v5 + System+HR Handoff v6 (Successor-Operator vs Developer-Operator access split; the developer-grade-maintainer framing reframed), FSU v6.5, Memory Archive v5 (extended §G7 in v12 parallel PR), `references/customer-fork-setup-checklist.md` (downstream cascade in v12). v13 parallel companion: `prompts/scaffold/` (PR 2 of that cascade — `shared-module-migration.md`, `manual-smoke.md`, `cc-implementation.md` v1 → v2).

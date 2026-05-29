@@ -1,9 +1,11 @@
 ---
 type: reference
+version: 1
 status: canonical
 workstream: null
 last_verified: 2026-05-29
 last_verified_against: 7fbb1cd
+tags: [worktree, symlink-fail-open, successor-operator, watchdog]
 ---
 
 # Worktree Discipline (blueprint)
@@ -93,6 +95,22 @@ built here**. The full residual-risk analysis (clone fail-open, working-tree
 branch coupling, the unguarded `settings.json` copy) is in the
 [2026-05-29 agent/workflow audit](https://github.com/SolutionSmith-debug/its/blob/main/docs/audits/2026-05-29_agent-workflow-audit.md).
 
+**Successor-maintenance note (why this should become a watchdog-detectable
+signal, not stay a doc warning).** This fail-open is invisible to a
+non-developer **Successor-Operator**: when the symlink dangles, the propose-only
+guard hooks vanish *with no error*, and a Tier-2 operator who never opens a
+terminal has no way to notice — the manual `test -d` check above is a
+Developer-Operator step. Under the three-tier successor-maintenance model
+(Op Stds v15 §44) a hazard a non-developer can never detect must not depend on a
+developer happening to be present. The recommended (still-deferred, **not built
+here**) resolution is therefore not just a console notice but a
+**watchdog-detectable signal** — e.g. a daily `ITS_Daemon_Health` /
+Check-H-adjacent assertion that the agent/hook symlink resolves, writing a
+CRITICAL `ITS_Errors` row (which the Successor-Operator *does* see and can
+escalate from) if it dangles. Converting this fail-open into a loud, surfaced
+fault is a **pre-cutover build requirement**, tracked alongside the watchdog
+Check H self-heal gap; it is **not implemented today**.
+
 A second consequence of the symlink: it targets the `~/its` **working tree**,
 not a pinned ref — so the agent registry a blueprint session sees is whatever
 branch `~/its` is currently checked out on. Keep `~/its` on `main` between
@@ -112,9 +130,12 @@ git -C ~/its-blueprint worktree remove ~/its-blueprint-<task> --force \
 squash-merged branch isn't recognized as "merged" by safe-delete `-d`, and the
 worktree may hold a now-empty index. **These commands are blocked by the
 `block-dangerous-git.sh` PreToolUse hook from inside a CC session** — so
-worktree cleanup is an **operator action run in a normal shell**, not something
-a CC session performs. (This is the direct reason stale worktrees accumulate:
-the sessions that created them cannot remove them.)
+worktree cleanup is a **Developer-Operator action run in a normal shell**, not
+something a CC session performs. It is a developer-context operation (git +
+shell): it is **out of scope for the non-developer Successor-Operator** and
+belongs to the Developer-Operator (Seth) by role, not merely by convenience.
+(This is the direct reason stale worktrees accumulate: the sessions that created
+them cannot remove them, and the role authorized to do so is the Developer-Operator.)
 
 ## Serialization fallback
 
