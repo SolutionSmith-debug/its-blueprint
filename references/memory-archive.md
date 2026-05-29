@@ -467,15 +467,31 @@ Landed PRs (all four-part PR-landed verify clean): exec #98 `bf2a94a` (undo), #9
 
 Operational notes for restoration: the portal-marker intake branches (brief §8 Step 4 — Stage 1.5 HMAC gate, Stage 8' JSON parse, Stage 13' rollup) are PLANNED, not built; the legacy PDF-email path is the transition fallback; the legacy ITS_Config `allowed_senders` fallback in `intake.py` must NOT be removed before the trusted-contacts sheet is seeded (would quarantine all real reports). The repo-local `.claude/agents/` were unreachable this session (CC rooted at `/Users/sethsmith`), so this entry + the session logs were authored manually; `claude-code-info-gap.md` §8 snapshot was not refreshed — left for an in-repo `session-close-maintainer` run.
 
-# §G9 — 2026-05-28 `alert_dedupe` → `state_io` migration (Phase 1.4 cluster PR 2)
+## §G9 — 2026-05-28 Doc-reconciliation: Op Stds v13 drift correction + canonical manifest + reconciliation agent
 
-## §G9.1 — Summary
+Parallel session to §G8 (landed second + rebased onto its merges). Three threads:
+
+1. **Doctrine-version drift correction.** Op Stds canonical = **v13** (v12 added §§37-41, v13 added §42 code-level self-documentation); the execution repo trailed at v11. Exec PR #101 (`4b145b8`) bumped all 12 current-doctrine `Op Stds v11` refs in `CLAUDE.md` → v13 (historical refs left), closed the boxsdk `[jwt]` tech-debt entry (fixed by #96, verified `pyproject.toml:18`), §42-retrofitted `shared/untrusted_content.py` (docstring only), and added a §42-compliance inventory — **1/22** `shared/*` compliant, i.e. §42 is effectively un-applied, including the doctrine's own un-landed `state_io.py` example. Blueprint PR #17 (`da6adff`) swept `workstreams/email-triage/` `Op Stds v11`→v13 (mission v5→v6, brief v6→v7; the two `Operational Standards v5` refs left as historical provenance) and refreshed `claude-code-info-gap.md` §8 (the snapshot §G8 noted as unrefreshed) + the stale "5 workstreams" → 6.
+
+2. **Canonical-doctrine manifest** (exec PR #103, `9d6378c`): `~/its/docs/doctrine_manifest.yaml` — machine-readable canonical facts (Op Stds v13, FM v8, §42 headings, the two pinned sheet IDs `SHEET_CONFIG`/`SHEET_DAEMON_HEALTH`, 6 workstream slugs, doc-conventions taxonomy, model strings flagged **verify-required**, never asserted-current). Home = execution-repo-resident + blueprint-derived: CI never checks out the blueprint, so the checker's facts must be self-contained in `~/its`; per-fact `source` + `blueprint_verified_against` point upstream.
+
+3. **doc-reconciliation-auditor agent** (exec PR #106, `feba074`; superseded #105, which GitHub auto-closed when its stacked base #103 merged). Propose-only (opus) — the **heavy half** of the cross-repo drift guard (§G8's `session-close-maintainer` check is the light half; referenced, not duplicated). MECHANICAL tier = `scripts/check_doctrine_drift.py` (deterministic, reads the manifest: version drift / stale tech-debt / §42 coverage / sheet-ID / workstream coverage); SEMANTIC tier = opus judgment. Write-block hook `block-doc-reconciliation-write.sh` (refuses Edit/Write + mutating Bash) + 22-case guard test, mirroring #93's codeql-fp-triager. Registered in `CLAUDE.md` (`## Agents` section + session-close invocation; other 7 agents flagged undocumented-in-CLAUDE.md as a follow-on).
+
+Self-test (run once vs HEAD, at `~/its/docs/audits/2026-05-28_doc-reconciliation.md`): **0 false positives** across 8 adversarially-verified finding-classes. Real drift surfaced beyond this session's scope (operator follow-ons): README.md `Op Stds v11` (3), `.claude/agents/ops-stds-enforcer.md` hardcodes v11/§41 (no §42), blueprint `workstreams/README.md` omits safety-portal. Calibration caught two of the checker's own FPs mid-build (historical `Op Stds v4 … superseded` line; the loose M2 heuristic that flagged the legitimately-deferred Watchdog Check E) — both fixed before merge.
+
+Landed PRs (all four-part verify clean): exec #101 `4b145b8`, #103 `9d6378c`, #106 `feba074`; blueprint #17 `da6adff`. Logs: `~/its/docs/session_logs/2026-05-28_doc-reconciliation.md` + `session-logs/2026-05-28_doc-reconciliation.md` (here).
+
+Restoration notes: repo-local `.claude/agents/` were unreachable (CC rooted at `/Users/sethsmith`) — close-out done manually (lint scripts direct, four-part verify via `gh`, logs + this §G9 by hand), same as §G8. The new `doc-reconciliation-auditor` is itself one of those unreachable-from-here agents; it runs when CC is rooted at `~/its`. Stacked-PR lesson: squash-merging a base PR with `--delete-branch` auto-CLOSES the PR stacked on it (here #105) — rebase the child onto main + open fresh. Concurrency lesson: rapid sequential squash-merges trip `cancel-in-progress` (the LOW-3 config) — the intermediate merge commit's main `ci` is cancelled by the next merge's; re-run the cancelled `ci` on that commit for a clean four-part leg-4 (done for #101 `4b145b8`).
+
+## §G10 — 2026-05-28 `alert_dedupe` → `state_io` migration (Phase 1.4 cluster PR 2)
+
+## §G10.1 — Summary
 
 `shared/alert_dedupe.py`'s five state-file callsites were migrated off the same-FD-flock pattern (`STATE_FILE.open("a+")` + `fcntl.flock` + private `_acquire_lock` / `_load_state(fh)` / `_dump_state(fh)` helpers) onto the `shared/state_io.py` sidecar-lock + atomic-write helpers landed in PR #88 (Phase 1.4 cluster PR 1). This is the second and final PR that closes audit findings F19 + F23 — all three `~/its/state/` consumers (intake_poll, weekly_send_poll, alert_dedupe) are now compliant with the CLAUDE.md "no direct `Path.write_text` under `~/its/state/`" rule.
 
 Landed as PR #104, squash-merge `45be1498afd156e489103228531e69b11de5188e`, mergedAt 2026-05-28T23:58:55Z. Four-part verify clean. Session log: `~/its/docs/session_logs/2026-05-28_alert-dedupe-state-io-migration.md`.
 
-## §G9.2 — Technical decisions that are load-bearing for future work
+## §G10.2 — Technical decisions that are load-bearing for future work
 
 **Lock-free read for `list_expired_summaries` is correct and intentional.** The function does a single `read_text()` call. `atomic_write_json` writes to a temp inode and does `os.replace(tmp, STATE_FILE)` — a `rename(2)` that atomically repoints the directory entry. The reader's fd is bound to whatever inode `STATE_FILE` pointed to at `open()` time; that inode is never truncated, only unlinked when its reference count drops to zero. So the reader always sees one complete file: the pre-replace version or the post-replace version, never a torn half-write. A lock would only serialize reader against writers; with no torn-read window the lock adds latency against CRITICAL-path writers for zero safety gain. Writers still lock because concurrent read-modify-write cycles can lose an update (lost-update problem, distinct from torn reads). The docstring §42 rationale comment carries this justification in-code.
 
@@ -483,7 +499,7 @@ Landed as PR #104, squash-merge `45be1498afd156e489103228531e69b11de5188e`, merg
 
 **Marker text preserved byte-identical.** Lock-failure markers read "could not acquire flock on … after retries" — unchanged from the old `_acquire_lock` phrasing. Existing test assertions pin this; any future refactor that changes the marker text must update those tests.
 
-## §G9.3 — Operational context that surfaced this session
+## §G10.3 — Operational context that surfaced this session
 
 **PR-number prediction trap.** PR was briefed and coded-against as "#103". The actual number was #104 because #103 was an unrelated open PR that advanced the counter. Fixed in a follow-up correction commit before the PR merged. Lesson: never embed a predicted PR number into docs/code before `gh pr create` returns the real number.
 
@@ -493,7 +509,7 @@ Landed as PR #104, squash-merge `45be1498afd156e489103228531e69b11de5188e`, merg
 
 **`check_doctrine_drift.py` is warn-only.** The new `scripts/check_doctrine_drift.py` (PR #106) checks `docs/doctrine_manifest.yaml` against running constants; its pytest tests cover the checker mechanics, not a repo-wide version scan. It is NOT a blocking CI step.
 
-## §G9.4 — Final baseline at session close
+## §G10.4 — Final baseline at session close
 
 - pytest -q (post-merge, main): 1090 passed / 16 deselected
 - mypy: 0 errors / 134 source files

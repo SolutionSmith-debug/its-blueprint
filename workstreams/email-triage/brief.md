@@ -1,14 +1,14 @@
 ---
 type: brief
-version: 6
+version: 7
 status: canonical
 last_verified: 2026-05-28
-last_verified_against: 09f8c02
+last_verified_against: c5cc456
 workstream: email_triage
 tags: [workstream-brief]
 ---
 
-**ITS — Email Triage Brief v6**
+**ITS — Email Triage Brief v7**
 
 *v6 | Defense-layered classifier with mandatory sender allowlist; Layer 6 attachment screening assigned | 2026-05-28*
 
@@ -34,9 +34,9 @@ ITS — Email Triage runs as a set of Claude Code scripts on the production MacB
 
 - **Classifier trigger: **allowlisted mail triggers the classifier script via hot-folder pattern.
 
-**Foundation Invariants implementation. **This workstream inherits two Foundation-level invariants: External Send Gate — no external transmission without explicit human approval; and Adversarial Input Handling — all external content treated as untrusted data. See Foundation Mission v8 for canonical definitions and Operational Standards v11 for implementation patterns.
+**Foundation Invariants implementation. **This workstream inherits two Foundation-level invariants: External Send Gate — no external transmission without explicit human approval; and Adversarial Input Handling — all external content treated as untrusted data. See Foundation Mission v8 for canonical definitions and Operational Standards v13 for implementation patterns.
 
-See ITS Operational Standards v11 for the cross-cutting patterns (kill switch, watchdog, error logging, review queue, structured outputs, sender allowlist, untrusted-content tagging, capability gating, anomaly logging, attachment screening (§34), remote access, hardware lifecycle).
+See ITS Operational Standards v13 for the cross-cutting patterns (kill switch, watchdog, error logging, review queue, structured outputs, sender allowlist, untrusted-content tagging, capability gating, anomaly logging, attachment screening (§34), remote access, hardware lifecycle).
 
 # What Gets Built
 
@@ -48,7 +48,7 @@ Triggered by Mail.app rule on inbound to a designated shared mailbox (allowliste
 
 - **Wraps content in untrusted-content tags: **<untrusted_content source="email-body">...</untrusted_content>, <untrusted_content source="email-subject">...</untrusted_content>, etc.
 
-- **Screens every attachment (Layer 6) BEFORE any AI call or Box upload: **per Foundation Mission v8 Invariant 2 Layer 6 / Operational Standards v11 §34 — (a) static signature checks (magic-number, size sanity, filename pattern); (b) format-aware structural inspection (PDF JS/embedded-file, Office macros, polyglot); (c) ClamAV scan via pyclamd; (d) optional VirusTotal hash (Phase 2+, deferred). Malicious → ITS_Quarantine + CRITICAL triple-fire + sender DISABLED in ITS_Trusted_Contacts pending operator review; suspicious → ITS_Review_Queue; clean → proceed. The declared MIME type is attacker-controlled, so signature checks sniff bytes rather than trust it. (This is the workstream that owns the arbitrary-attachment surface — see Mission "Attachment screening (Layer 6)".)
+- **Screens every attachment (Layer 6) BEFORE any AI call or Box upload: **per Foundation Mission v8 Invariant 2 Layer 6 / Operational Standards v13 §34 — (a) static signature checks (magic-number, size sanity, filename pattern); (b) format-aware structural inspection (PDF JS/embedded-file, Office macros, polyglot); (c) ClamAV scan via pyclamd; (d) optional VirusTotal hash (Phase 2+, deferred). Malicious → ITS_Quarantine + CRITICAL triple-fire + sender DISABLED in ITS_Trusted_Contacts pending operator review; suspicious → ITS_Review_Queue; clean → proceed. The declared MIME type is attacker-controlled, so signature checks sniff bytes rather than trust it. (This is the workstream that owns the arbitrary-attachment surface — see Mission "Attachment screening (Layer 6)".)
 
 - **Applies sensitive-content filter first: **HR/legal/financial categories are excluded entirely or summary-only per owner decision.
 
@@ -183,3 +183,7 @@ Version bumped to reflect the 2026-05-13 cascade: two new Foundation invariants 
 - Added: spoofed-sender residual risk acknowledged.
 
 - Updated: shared helpers list expanded for untrusted_content.py and anomaly_logger.py.
+
+# What Changed in v7
+
+Doctrine-version-reference sweep (2026-05-28 doc-reconciliation pass). The remaining stale Operational Standards citations are swept from **v11** to **v13**; Foundation Mission references were already at v8. Reference currency only — no build-scope change. The **Operational Standards v5** provenance note (ITS_Quarantine sharing with Safety Reports) is historical and left intact. Completes the v6 portal-pivot frontmatter bump, which left these citations behind.

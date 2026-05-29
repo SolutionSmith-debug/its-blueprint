@@ -219,10 +219,17 @@ Applies across all three external systems.
 - CC skills installed (PR #79)
 - Actions version bumps (PR #81)
 - Secret-exposure audit clean (2026-05-24)
-- Safety Portal pivot + HIGH-2 supersession reconciled (PRs #98–#100, 2026-05-28)
+- CC subagents + session-close convention (PRs #90–#94); codeql-fp-triager propose-only + structural dismiss block (#93)
+- 2026-05-28 forensic audit: tag-breakout injection fix in `untrusted_content.wrap()` (#95) + LOW hygiene batch + audit doc (#96)
+- Safety Portal pivot reconciled into exec repo (Task A, #99); HIGH-2 attachment-screening superseded for safety reports → reassigned to Email Triage (#98); NOT-WIRED `attachment_screening.py` stub deleted
+- Cross-repo supersession drift-guard: session-close-maintainer check + doc_conventions note (Tasks B+D, #100)
 - Op Stds v13 drift fix + doctrine manifest + doc-reconciliation agent (PRs #101/#103/#106/#107, 2026-05-28)
 - `shared/state_io.py` atomic-write + sidecar-lock (PR #88, 2026-05-25; Phase 1.4 cluster PR 1)
 - `shared/alert_dedupe.py` migrated onto `state_io` helpers — same-FD-flock pattern retired (PR #104, 2026-05-28; Phase 1.4 cluster PR 2)
+
+### Bradley 1 (BBCHS 1)
+- Template project, six sheets migrated, demo seeding complete.
+- Next: UI work (conditional formatting, forms, filter views — Seth runs UI-only work himself) before cloning template to the other five projects.
 
 ### Open queue
 - Phase 1.4 hardening cluster PRs 3+: F02+F22 (capability-gating network-lib allowlist + `shared/approval_verification.py`), F08+F09 (`shared/circuit_breaker.py`), F16/F17/F18+F03/F04/F10 in parallel-safe order
@@ -231,8 +238,9 @@ Applies across all three external systems.
 - `shared/heartbeat.py` extraction (heartbeat helpers currently copied verbatim across two daemons — 2nd-consumer extraction signal per Op Stds §14, deferred from R3 Session 3)
 
 ### On the horizon
-- Safety Portal build (blueprint `workstreams/safety-portal/` mission v1 + brief; Cloudflare Worker, intake.py portal-marker branches, HMAC-verified shim — all PLANNED, not built)
+- Safety Portal build (blueprint `workstreams/safety-portal/` mission v1 + brief; Cloudflare Worker, intake.py portal-marker branches, HMAC-verified shim — all PLANNED, not built). Replaces PDF-email submission; the portal feeds the existing `intake.py` via the HMAC-verified shim (legacy PDF-email is the documented fallback). Attachment-screening (Invariant 2 Layer 6) is N/A for safety reports and reassigned to Email Triage.
 - Email Triage workstream build — now carries Invariant 2 Layer 6 (attachment screening) per the portal pivot reassignment
+- DFR backfill and Portfolio Rollups Reports continued expansion.
 - **Managed Agents Phase 3 gate** (V&R v7.2 + FM v8 + Op Stds §29): No agents in Phase 0/1/1.5/1.6. Phase 3 gate evaluates 4 candidates against capability-equivalence for Invariants 1 & 2:
   - Closeout Package Assembly
   - Schedule Digest
@@ -250,7 +258,7 @@ If a fresh chat-session needs to reload operational detail, the canonical source
 
 - **`its-blueprint/references/memory-archive.md`** — append-only, loaded on demand. Covers M365 IDs + EXO gotcha, full Smartsheet topology + IDs, wiring history, 23-PR window, Bradley 1 migration + demo seeding, schema decisions, Picklist Sync (PRs #45–51), SDK-vs-Live class-of-bug, polling daemon + heartbeat, 2026-05-22 cascade.
 - **`its-blueprint/doctrine/`** — Foundation Mission, V&R, Op Stds, Handover Plan, Excellence Roadmap. Version in frontmatter, not filename. Git tags mark canonical versions (e.g., `foundation-mission-v8`).
-- **`its-blueprint/workstreams/<slug>/{mission,brief}.md`** — 5 workstreams.
+- **`its-blueprint/workstreams/<slug>/{mission,brief}.md`** — 6 workstreams (safety-portal added 2026-05-25).
 - **`its-blueprint/audits/`** — historical audits.
 
 Linters: `scripts/lint_frontmatter.py` + `scripts/lint_crossrefs.py`, CI on every push.
