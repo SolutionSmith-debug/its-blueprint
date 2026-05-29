@@ -1,14 +1,14 @@
 ---
 type: reference
-version: 4
+version: 5
 status: canonical
 last_verified: 2026-05-24
 last_verified_against: 3b7d56d
 workstream: null
-tags: [permissions, customer-1, m365, box, smartsheet]
+tags: [permissions, customer-1, m365, box, smartsheet, successor-operator]
 ---
 
-**ITS — Permissions Ask v4**
+**ITS — Permissions Ask v5**
 
 *Box section rewritten under OAuth User Authentication. M365 + Smartsheet sections unchanged.*
 
@@ -102,7 +102,7 @@ ITS uses a three-workspace audience-tiered topology to make the operator vs cust
 
 - **ITS — Human Review (customer-employee approvers). **Per-workstream Pending_Review sheets where approvers sign off on AI-generated content. Approvers scoped to their workstream's subfolder only.
 
-- **ITS — System (operator-only). **Config rows, error log, review queue, quarantine, time-off sheet. Solution Smith retains ADMIN here for ongoing maintenance.
+- **ITS — System (system-role-only). **Config rows, error log, review queue, quarantine, time-off sheet. The **Developer-Operator** (Solution Smith / Seth) retains ADMIN here for developer-context operations and as the Tier-3 escalation asset; the non-developer **Successor-Operator** is added at EDITOR for Tier-2 Claude-assisted repair (re-run a daemon, toggle a config value, re-send an approval, re-seed a row, clear a stuck lock). See §3.2 for the role split.
 
 Separating these workspaces makes the access boundary visible and enforceable.
 
@@ -116,7 +116,11 @@ For Evergreen-employee access on the live tenants after cutover:
 
 - **Personnel admins: **EDITOR on ITS — Human Review / 06 — Personnel (for ITS_Time_Off updates). No other Human Review subfolder access required.
 
-- **Trained maintainer at customer (when one exists): **ADMIN on ITS — System workspace. This is a graduation event; not granted at initial cutover. Solution Smith remains primary operator until the customer has a trained maintainer in place.
+- **Successor-Operator at customer (the steady-state operating role): **EDITOR — not ADMIN — on ITS — System workspace. The Successor-Operator is a *non-developer*: they approve, toggle config values, re-run a daemon, re-send an approval, re-seed a row, or clear a stuck lock through the Smartsheet UI, with Claude doing the diagnostic and repair work. They never read code, never use git or a terminal, and never perform the developer-context operations in Operational Standards v15 §§37–41. This is the Tier-2 (Claude-assisted operator repair) tier of the three-tier successor-maintenance model.
+
+- **Developer-Operator (Solution Smith / Seth): **ADMIN on ITS — System workspace, retained for the developer-context operations only the Developer-Operator performs (migrations, secret rotation, code changes, worktree cleanup, the `gh`/`gitleaks`/script work of Op Stds v15 §§37–41). Seth is the **Tier-3 escalation asset, not the standing day-to-day operator** — a fault reaches him only when it is *novel* (no successor-remediation runbook entry covers it) **or** *high-capability-class* (it touches the External Send Gate, secrets/auth, doctrine, or requires a code change). High-class always escalates regardless of documentation. This corrects the prior framing that "Solution Smith remains primary operator"; under the settled model the Successor-Operator is primary at Tier 2 and Seth is the backstop.
+
+  *(Note on enforcement: the guarded, capability-gated repair path that would keep a non-developer Tier-2 session structurally out of high-class operations does **not yet exist** — today's `.claude/` guard hooks are scoped to subagent/developer sessions and fall open for the operator's own session. Building a non-developer-safe enforcement layer is a hard pre-cutover requirement, tracked alongside the watchdog Check H self-heal gap. Until it lands, ITS — System ADMIN must remain Developer-Operator-only.)*
 
 **If you****'****d rather keep me below admin**
 
@@ -206,7 +210,17 @@ Box is now the lowest-friction system under v4 — substantially lower than v3 w
 
 # Authority
 
-Permissions Ask v4, 2026-05-20. Companion to Handover Plan v6.1 (cutover runbook). Supersedes v3 (2026-05-17 evening), which described the Box ask under the now-abandoned JWT / Server Authentication path. v3 retires on acceptance of v4.
+Permissions Ask v5, 2026-05-29. Companion to Handover Plan v7 (cutover runbook). v5 reframes §3.2 and §3.1 to the three-tier successor-maintenance role model (Successor-Operator at EDITOR for Tier-2 Claude-assisted repair; Developer-Operator / Seth at ADMIN, Tier-3 escalation asset), resolving the prior "Solution Smith remains primary operator" framing. The M365 / Box / Smartsheet access asks are unchanged from v4 (no live re-verification this bump). v4 retires on acceptance of v5; the v3→v4 Box JWT→OAuth history carries forward in the changelog below.
+
+# What Changed in v5
+
+- **§3.2 reframed to the Successor-Operator / Developer-Operator role model.** The prior "trained maintainer … Solution Smith remains primary operator" framing is superseded by the three-tier successor-maintenance model (FM v10, Op Stds v15 §44, Handover Plan v7): the non-developer Successor-Operator holds EDITOR for Tier-2 Claude-assisted repair; the Developer-Operator (Seth) holds ADMIN for developer-context operations and is the Tier-3 escalation asset, not the standing day-to-day operator.
+
+- **§3.1 ITS — System note reframed** to name the Developer-Operator (ADMIN) and add the Successor-Operator (EDITOR) grant.
+
+- **Enforcement honesty.** Noted that the non-developer-safe capability-gated repair path does not yet exist (a hard pre-cutover build gap); ITS — System ADMIN stays Developer-Operator-only until it lands.
+
+- M365 / Box / Smartsheet access asks unchanged from v4; the v3→v4 Box JWT→OAuth history below carries forward verbatim.
 
 # What Changed in v4
 
