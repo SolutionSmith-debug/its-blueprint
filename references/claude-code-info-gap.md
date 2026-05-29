@@ -1,8 +1,16 @@
+---
+type: reference
+status: canonical
+workstream: null
+last_verified: 2026-05-29
+last_verified_against: 64526a1
+---
+
 # Claude Code Info Gap
 
 **Purpose:** Context that lives only in chat memory / chat conversation and is NOT reachable from `~/its/` or `~/its-blueprint/` on a fresh Claude Code (CC) session. Drop this in project files so a chat-session can hand it to CC at spin-up, or so a fresh chat-session can re-orient quickly.
 
-**Last refreshed:** 2026-05-28
+**Last refreshed:** 2026-05-29
 **Maintained by:** chat-session at session close (treat as living doc)
 
 ---
@@ -124,8 +132,8 @@ gh pr view <num> --json mergedAt,mergeCommit,state
 ### PR-number prediction drift (2026-05-28)
 Never hard-code a predicted PR number into docs/code before `gh pr create` returns the actual number. The issue/PR counter advances unpredictably — predicted #103 was actually #104 because #103 was an unrelated open PR. Pattern: use a placeholder (`#TBD`) and fill in after creation, or accept a follow-up correction commit. A correction commit is cheap; stale PR citations in docs are not.
 
-### Op Stds is canonically v13 (as of 2026-05-28)
-v12 added §§37–41 (CC Skills / Agent Guardrails / Per-Customer-Fork Security / Migration-Script PII / Actions Version-Bump). v13 added §42 (code-level self-documentation discipline). New content citing `Op Stds §N` should reference v13. Historical v11 references in older tech-debt entries and session logs are grandfathered — the 2026-05-28 drift-fix PR (#101) swept CLAUDE.md; old session-log prose was not swept (correct by policy).
+### Op Stds is canonically v14 (as of 2026-05-29)
+v12 added §§37–41 (CC Skills / Agent Guardrails / Per-Customer-Fork Security / Migration-Script PII / Actions Version-Bump). v13 added §42 (code-level self-documentation discipline). v14 (F07, PR #23, 2026-05-29) reframed §1 kill switch from implied "security control" to "operator-convenience suggested pause, NOT a security boundary" (fail-open by design; External Send Gate = real boundary). New content citing `Op Stds §N` should reference v14. Historical v11/v12/v13 references in older tech-debt entries and session logs are grandfathered.
 
 ### CodeQL false positives (Python + Actions, weekly, since 2026-05-24)
 Dismiss-as-FP unless content shows actual secret/PII value being logged:
@@ -240,22 +248,26 @@ The operator uses per-task git worktrees alongside `~/its` (main). Observed: `~/
 - `shared/state_io.py` atomic-write + sidecar-lock (PR #88, 2026-05-25; Phase 1.4 cluster PR 1)
 - `shared/alert_dedupe.py` migrated onto `state_io` helpers — same-FD-flock pattern retired (PR #104, 2026-05-28; Phase 1.4 cluster PR 2)
 - Phase 1.4 hardening sweep (PR #113, 2026-05-28): F17 (intake_poll watchdog Check C registration — `_write_watchdog_marker` added, live-confirmed on production daemon), F04 (`shared/keychain.set_secret` stdin correctness — `security -w` must be last arg, double-feed `value\nvalue\n`; live create→read→rotate→delete verified), watchdog docstring drift removed from 3 spots
+- Network-capability allowlist + approval-attestation verification (F02+F22, exec PR #118, 2026-05-29)
+- **FM v9 + Op Stds v14 (F07/F13 doctrine reconciliation, blueprint PR #23, 2026-05-29, squash `29000f1`):** Two doctrine reframes reconciling forensic-audit findings where doctrine over-promised security mechanisms. FM v8→v9: Invariant 2 Layer 5 (anomaly logging) reframed from "co-equal defense layer" → "post-hoc detection tripwire." Op Stds v13→v14: §1 kill switch reframed from implied "security control" → "operator-convenience suggested pause, NOT a security boundary" (fail-open by design; External Send Gate = real boundary). Code unchanged in both cases. Tags `foundation-mission-v9` + `operational-standards-v14` pushed on `29000f1`. Both docs' `last_verified_against` = exec-repo HEAD `64526a1`.
 
 ### Bradley 1 (BBCHS 1)
 - Template project, six sheets migrated, demo seeding complete.
 - Next: UI work (conditional formatting, forms, filter views — Seth runs UI-only work himself) before cloning template to the other five projects.
 
 ### Open queue
-- Phase 1.4 hardening cluster PRs 3+: F02+F22 (capability-gating network-lib allowlist + `shared/approval_verification.py`), F08+F09 (`shared/circuit_breaker.py`), remaining: F16, F18, F03, F10 (F17 + F04 landed in PR #113)
+- Phase 1.4 hardening cluster remaining: F08+F09 (`shared/circuit_breaker.py`), F16, F18, F03, F10 (F17+F04 landed PR #113; F02+F22 landed PR #118)
 - `person_tag` regex refinement (138 hits, likely FPs)
 - Three `box_migration` parser tech_debts deferred: V/S vendor-sub parser, ISO date prefix, import-time hygiene wrap
 - `shared/heartbeat.py` extraction (heartbeat helpers now copied verbatim across THREE consumers — intake_poll, weekly_send_poll, and intake_poll._write_watchdog_marker added in F17; 2nd-consumer extraction signal per Op Stds §14 still deferred)
+- Update `docs/doctrine_manifest.yaml` in exec repo to reflect FM v9 + Op Stds v14 (blueprint bump from PR #23)
 
 ### On the horizon
 - Safety Portal build (blueprint `workstreams/safety-portal/` mission v1 + brief; Cloudflare Worker, intake.py portal-marker branches, HMAC-verified shim — all PLANNED, not built). Replaces PDF-email submission; the portal feeds the existing `intake.py` via the HMAC-verified shim (legacy PDF-email is the documented fallback). Attachment-screening (Invariant 2 Layer 6) is N/A for safety reports and reassigned to Email Triage.
 - Email Triage workstream build — now carries Invariant 2 Layer 6 (attachment screening) per the portal pivot reassignment
+- `fail_closed_until` kill-switch mechanism deferred from F07 (Q8 resolution) — currently fail-open by documented design; revisit in Phase 2+ when multi-operator scenario makes a true fail-closed window safe to add.
 - DFR backfill and Portfolio Rollups Reports continued expansion.
-- **Managed Agents Phase 3 gate** (V&R v7.2 + FM v8 + Op Stds §29): No agents in Phase 0/1/1.5/1.6. Phase 3 gate evaluates 4 candidates against capability-equivalence for Invariants 1 & 2:
+- **Managed Agents Phase 3 gate** (V&R v7.2 + FM v9 + Op Stds §29): No agents in Phase 0/1/1.5/1.6. Phase 3 gate evaluates 4 candidates against capability-equivalence for Invariants 1 & 2:
   - Closeout Package Assembly
   - Schedule Digest
   - Dreaming
@@ -271,7 +283,7 @@ The operator uses per-task git worktrees alongside `~/its` (main). Observed: `~/
 If a fresh chat-session needs to reload operational detail, the canonical source is:
 
 - **`its-blueprint/references/memory-archive.md`** — append-only, loaded on demand. Covers M365 IDs + EXO gotcha, full Smartsheet topology + IDs, wiring history, 23-PR window, Bradley 1 migration + demo seeding, schema decisions, Picklist Sync (PRs #45–51), SDK-vs-Live class-of-bug, polling daemon + heartbeat, 2026-05-22 cascade.
-- **`its-blueprint/doctrine/`** — Foundation Mission, V&R, Op Stds, Handover Plan, Excellence Roadmap. Version in frontmatter, not filename. Git tags mark canonical versions (e.g., `foundation-mission-v8`).
+- **`its-blueprint/doctrine/`** — Foundation Mission, V&R, Op Stds, Handover Plan, Excellence Roadmap. Version in frontmatter, not filename. Git tags mark canonical versions (e.g., `foundation-mission-v9`, `operational-standards-v14`).
 - **`its-blueprint/workstreams/<slug>/{mission,brief}.md`** — 6 workstreams (safety-portal added 2026-05-25).
 - **`its-blueprint/audits/`** — historical audits.
 

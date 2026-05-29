@@ -547,6 +547,32 @@ Session log: `~/its/docs/session_logs/2026-05-28_f17-f04-docstring-sweep.md`.
 
 Final baseline (post-PR #113, main): pytest 1097 passed / 16 deselected, mypy 0 errors / 134 source files, ruff clean, main CI on `9ef0a66`: SUCCESS.
 
+## §G12 — 2026-05-29 FM v9 + Op Stds v14: F07/F13 doctrine reconciliation (PR #23)
+
+### What changed and why
+
+Two doctrine bumps from a single Q8 ruling (`session-logs/2026-05-25_safety-portal-grill.md`), reconciling findings from the 2026-05-25 forensic audit where doctrine over-promised security mechanisms that the code does not enforce.
+
+**F13 — Foundation Mission v8 → v9 (Invariant 2 Layer 5):**
+Layer 5 (anomaly logging via `SUSPICIOUS_FIELD_PATTERNS`) was described as a "co-equal defense layer." The forensic audit confirmed that anomaly logging is post-hoc detection — it fires after a suspect value has already been processed, offers no real-time blocking, and cannot prevent a successful injection. Reframed to "post-hoc detection tripwire." The `SUSPICIOUS_FIELD_PATTERNS` reference is preserved; the security posture claim is honest. **Code unchanged** — this was a doctrine-text correction only.
+
+**F07 — Op Stds v13 → v14 (§1 kill switch):**
+§1 described the kill switch in language that implied a security boundary (e.g., "system-wide pause"). The forensic audit's Q8 noted that the kill switch is fail-open by documented design — it cannot enforce a guaranteed halt, and the External Send Gate (Invariant 1) is the real security boundary. §1 reframed to "operator-convenience suggested pause, NOT a security boundary." `fail_closed_until` (a true fail-closed window mechanism) was discussed but deferred to tech debt — the fail-open behavior is correct for a solo-operator system.
+
+Both bumps landed together in blueprint PR #23, squash commit `29000f1` on `origin/main`, 2026-05-29. Tags pushed: `foundation-mission-v9`, `operational-standards-v14`. Both docs' `last_verified_against` = exec-repo HEAD `64526a1`. Planning session log: `session-logs/2026-05-29_f07-f13-doctrine-reconciliation.md`. Four-part verify clean.
+
+### Non-obvious gotchas
+
+**(a) The F07 FM edit was a confirmed no-op.**
+Before editing `foundation-mission.md` for F07, the file was read end-to-end. FM has zero kill-switch text — the kill switch is solely an Op Stds §1 construct. FM v9 is driven entirely by F13 (Layer 5 reframe); F07 touched Op Stds only. Any future brief or audit that says "FM covers the kill switch" is incorrect.
+
+**(b) Doctrine version bumps require symmetric Authority-block + companion-ref updates in BOTH docs.**
+FM's Authority block was edited thoroughly (self-version v8→v9 plus its companion ref to Op Stds updated to v14), but Op Stds's OWN Authority block was forgotten — it still declared the doc "v13", carried a stale "v14 trigger" prediction, and still read "Companion to FM v8", so Op Stds self-contradicted (v14 in frontmatter/title, v13 in Authority). The trap is asymmetry: one doc's Authority block updated, the sibling's left untouched. A four-lens adversarial review of the diff caught it before merge. The pattern:
+- Every doctrine doc has an `Authority` section that states its own version.
+- Companion docs that cross-reference each other (FM ↔ Op Stds, V&R ↔ FM) must have their version refs updated symmetrically.
+- The diff review lens "does the Authority block match the frontmatter `version:`?" catches the self-reference; the lens "do companion-doc cross-refs still resolve?" catches the reciprocal side.
+This is not enforced by `lint_frontmatter.py` — it is a manual diff-review obligation.
+
 # Cross-References
 
 - Memory Archive v4 — operational detail through 2026-05-21 morning. v5 extends, does not supersede.
