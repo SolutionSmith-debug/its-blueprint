@@ -1,9 +1,9 @@
 ---
 type: scaffold
 name: cc-implementation
-version: 2
+version: 3
 audience: chat
-usage_count: 6
+usage_count: 7
 ---
 
 # CC Implementation Prompt
@@ -28,6 +28,17 @@ Three additions absorbed from `its` PR #88 (F19 + F23 atomic-write):
    (`~/its/state/`) or has external-API side effects, include a
    manual-smoke section referencing `manual-smoke.md` scaffold.
    Operator-side, post-CC-completion, pre-merge.
+
+## v2 → v3 changes (2026-05-29)
+
+One addition absorbed from the 2026-05-29 agent/workflow audit (H3):
+
+1. **Route current-state claims through `brief-validator`** — a "How to
+   use" step telling the brief AUTHOR to validate code-shape claims up
+   front, rather than pushing all verification onto CC at execution time.
+   Stale claims (F04 `-w` ordering, F02 importer count, the optimize
+   brief's own symlink premise) recur and are expensive; the agent layer
+   and the scaffold layer were previously disconnected.
 
 ## When to use
 
@@ -54,6 +65,11 @@ Three additions absorbed from `its` PR #88 (F19 + F23 atomic-write):
    have to infer "what does done mean."
 5. If the brief lists specific line numbers or function signatures,
    instruct CC to re-verify at pre-flight.
+6. **Before finalizing**, when the brief names specific files / functions
+   / line-ranges or makes current-state claims ("X is hardcoded", "only N
+   importers", "Y not built yet"), run those claims through the
+   `brief-validator` agent — it catches stale code-shape claims at
+   authoring time, not after a wrong-code commit.
 
 ## Template
 

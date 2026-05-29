@@ -26,3 +26,8 @@ or stable-data rather than normative.
   (M365, Box, Smartsheet) for the Florida → California cutover.
 - [`extended-workstreams.md`](extended-workstreams.md) — Phase 2+
   workstream brief stubs (not yet planning-active).
+- [`worktree-discipline.md`](worktree-discipline.md) — blueprint-side
+  parallel-session worktree discipline: the `~/`-sibling `.claude`
+  symlink fail-open warning (audit H1) and the "never two
+  doctrine-touching sessions on one checkout" rule. Companion to the
+  exec-repo `worktree_discipline.md`.

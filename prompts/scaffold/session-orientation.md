@@ -1,9 +1,9 @@
 ---
 type: scaffold
 name: session-orientation
-version: 1
+version: 2
 audience: chat
-usage_count: 0
+usage_count: 1
 ---
 
 # Session Orientation
@@ -16,6 +16,11 @@ ITS without burning tokens on stale or irrelevant context.
 - First message of a new chat session
 - After memory compaction
 - When the operator references "the project" without recent context loaded
+
+When this session's job is to **author a brief** for CC that names specific
+files / functions / line-ranges or makes current-state claims, route those
+claims through the `brief-validator` agent before CC acts (see
+`cc-implementation.md`) — orientation loaded from memory can be stale.
 
 ## Load order
 

@@ -1,9 +1,9 @@
 ---
 type: scaffold
 name: doctrine-revision
-version: 1
+version: 2
 audience: chat
-usage_count: 0
+usage_count: 1
 ---
 
 # Doctrine Revision
@@ -12,6 +12,15 @@ For chat (planning side) revising a doctrine doc in the its-blueprint
 repo. Doctrine changes have their own discipline because they're
 load-bearing for every downstream decision; this scaffold codifies the
 discipline.
+
+## v1 → v2 changes (2026-05-29)
+
+- **New Procedure step: reconcile in-body version self-references after a
+  bump** (audit H2). Closes the exact gap that let a v13/v14
+  self-contradiction reach canonical doctrine — caught then only by
+  adversarial review.
+- Step 7 now lands via PR + four-part verify instead of a bare "push to
+  main": blueprint `main` is branch-protected (audit C8).
 
 ## When to revise (v-bump) vs. extend (no v-bump)
 
@@ -36,6 +45,18 @@ as cosmetic.
    - Add `supersedes: doctrine/{name}.md@v{N-1}` to frontmatter.
    - Add an entry to the doc's "Change log" section (create if missing
      at the bottom of the doc).
+   - **Reconcile in-body version self-references.** After the bump, run
+     `grep -n "v{N-1}" doctrine/{name}.md` and update every in-body
+     self-reference to `v{N}` — or frame it explicitly as superseded
+     history. Reconcile in order of how-often-missed: (1) the **Authority
+     block** — the #1 miss; it carries a predictive "v{N+1} trigger" line
+     and a self-version line that are easy to leave at the old number;
+     (2) the "What Changed in v{N}" heading and its cross-refs; (3) any
+     companion-doc version pins (`Op Stds vM`, `FM vK`) that *this* bump
+     makes current. A doc whose frontmatter says `v{N}` while its body
+     still asserts `v{N-1}` is internally contradictory and silently
+     authoritative — the exact v13/v14 self-contradiction that reached
+     canonical doctrine and was caught only by adversarial review.
 4. If extending:
    - Don't bump `version`.
    - Update `last_verified` to today's date.
@@ -49,8 +70,9 @@ as cosmetic.
    ```
 
 6. Commit with message `doctrine: {doc} v{N} — {one-line change summary}`.
-7. Push to main.
-8. If revising: tag the canonical commit.
+7. Land via a PR + four-part verify (not a direct push — blueprint `main`
+   is branch-protected; same discipline as code-side `pr-merge-verify.md`).
+8. If revising: tag the canonical (merge) commit.
 
    ```bash
    git tag {doc-slug}-v{N}
