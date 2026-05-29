@@ -2,7 +2,7 @@
 
 **Purpose:** Context that lives only in chat memory / chat conversation and is NOT reachable from `~/its/` or `~/its-blueprint/` on a fresh Claude Code (CC) session. Drop this in project files so a chat-session can hand it to CC at spin-up, or so a fresh chat-session can re-orient quickly.
 
-**Last refreshed:** 2026-05-27
+**Last refreshed:** 2026-05-28
 **Maintained by:** chat-session at session close (treat as living doc)
 
 ---
@@ -121,6 +121,12 @@ gh pr view <num> --json mergedAt,mergeCommit,state
 
 ## 5. Known Traps & FP Patterns
 
+### PR-number prediction drift (2026-05-28)
+Never hard-code a predicted PR number into docs/code before `gh pr create` returns the actual number. The issue/PR counter advances unpredictably — predicted #103 was actually #104 because #103 was an unrelated open PR. Pattern: use a placeholder (`#TBD`) and fill in after creation, or accept a follow-up correction commit. A correction commit is cheap; stale PR citations in docs are not.
+
+### Op Stds is canonically v13 (as of 2026-05-28)
+v12 added §§37–41 (CC Skills / Agent Guardrails / Per-Customer-Fork Security / Migration-Script PII / Actions Version-Bump). v13 added §42 (code-level self-documentation discipline). New content citing `Op Stds §N` should reference v13. Historical v11 references in older tech-debt entries and session logs are grandfathered — the 2026-05-28 drift-fix PR (#101) swept CLAUDE.md; old session-log prose was not swept (correct by policy).
+
 ### CodeQL false positives (Python + Actions, weekly, since 2026-05-24)
 Dismiss-as-FP unless content shows actual secret/PII value being logged:
 1. Logging Keychain **service-name constants** (name, not value).
@@ -213,19 +219,21 @@ Applies across all three external systems.
 - CC skills installed (PR #79)
 - Actions version bumps (PR #81)
 - Secret-exposure audit clean (2026-05-24)
-
-### Bradley 1 (BBCHS 1)
-- Template project, six sheets migrated, demo seeding complete.
-- Next: UI work (conditional formatting, forms, filter views — Seth runs UI-only work himself) before cloning template to the other five projects.
+- Safety Portal pivot + HIGH-2 supersession reconciled (PRs #98–#100, 2026-05-28)
+- Op Stds v13 drift fix + doctrine manifest + doc-reconciliation agent (PRs #101/#103/#106/#107, 2026-05-28)
+- `shared/state_io.py` atomic-write + sidecar-lock (PR #88, 2026-05-25; Phase 1.4 cluster PR 1)
+- `shared/alert_dedupe.py` migrated onto `state_io` helpers — same-FD-flock pattern retired (PR #104, 2026-05-28; Phase 1.4 cluster PR 2)
 
 ### Open queue
+- Phase 1.4 hardening cluster PRs 3+: F02+F22 (capability-gating network-lib allowlist + `shared/approval_verification.py`), F08+F09 (`shared/circuit_breaker.py`), F16/F17/F18+F03/F04/F10 in parallel-safe order
 - `person_tag` regex refinement (138 hits, likely FPs)
 - Three `box_migration` parser tech_debts deferred: V/S vendor-sub parser, ISO date prefix, import-time hygiene wrap
+- `shared/heartbeat.py` extraction (heartbeat helpers currently copied verbatim across two daemons — 2nd-consumer extraction signal per Op Stds §14, deferred from R3 Session 3)
 
 ### On the horizon
-- Safety Reports workstream build (Mission v5, Brief v6) — own dedicated session after shared modules stable.
-- DFR backfill and Portfolio Rollups Reports continued expansion.
-- **Managed Agents Phase 3 gate** (V&R v7.1 + FM v7.1 + Op Stds §29): No agents in Phase 0/1/1.5/1.6. Phase 3 gate evaluates 4 candidates against capability-equivalence for Invariants 1 & 2:
+- Safety Portal build (blueprint `workstreams/safety-portal/` mission v1 + brief; Cloudflare Worker, intake.py portal-marker branches, HMAC-verified shim — all PLANNED, not built)
+- Email Triage workstream build — now carries Invariant 2 Layer 6 (attachment screening) per the portal pivot reassignment
+- **Managed Agents Phase 3 gate** (V&R v7.2 + FM v8 + Op Stds §29): No agents in Phase 0/1/1.5/1.6. Phase 3 gate evaluates 4 candidates against capability-equivalence for Invariants 1 & 2:
   - Closeout Package Assembly
   - Schedule Digest
   - Dreaming

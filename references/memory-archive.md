@@ -467,6 +467,39 @@ Landed PRs (all four-part PR-landed verify clean): exec #98 `bf2a94a` (undo), #9
 
 Operational notes for restoration: the portal-marker intake branches (brief §8 Step 4 — Stage 1.5 HMAC gate, Stage 8' JSON parse, Stage 13' rollup) are PLANNED, not built; the legacy PDF-email path is the transition fallback; the legacy ITS_Config `allowed_senders` fallback in `intake.py` must NOT be removed before the trusted-contacts sheet is seeded (would quarantine all real reports). The repo-local `.claude/agents/` were unreachable this session (CC rooted at `/Users/sethsmith`), so this entry + the session logs were authored manually; `claude-code-info-gap.md` §8 snapshot was not refreshed — left for an in-repo `session-close-maintainer` run.
 
+# §G9 — 2026-05-28 `alert_dedupe` → `state_io` migration (Phase 1.4 cluster PR 2)
+
+## §G9.1 — Summary
+
+`shared/alert_dedupe.py`'s five state-file callsites were migrated off the same-FD-flock pattern (`STATE_FILE.open("a+")` + `fcntl.flock` + private `_acquire_lock` / `_load_state(fh)` / `_dump_state(fh)` helpers) onto the `shared/state_io.py` sidecar-lock + atomic-write helpers landed in PR #88 (Phase 1.4 cluster PR 1). This is the second and final PR that closes audit findings F19 + F23 — all three `~/its/state/` consumers (intake_poll, weekly_send_poll, alert_dedupe) are now compliant with the CLAUDE.md "no direct `Path.write_text` under `~/its/state/`" rule.
+
+Landed as PR #104, squash-merge `45be1498afd156e489103228531e69b11de5188e`, mergedAt 2026-05-28T23:58:55Z. Four-part verify clean. Session log: `~/its/docs/session_logs/2026-05-28_alert-dedupe-state-io-migration.md`.
+
+## §G9.2 — Technical decisions that are load-bearing for future work
+
+**Lock-free read for `list_expired_summaries` is correct and intentional.** The function does a single `read_text()` call. `atomic_write_json` writes to a temp inode and does `os.replace(tmp, STATE_FILE)` — a `rename(2)` that atomically repoints the directory entry. The reader's fd is bound to whatever inode `STATE_FILE` pointed to at `open()` time; that inode is never truncated, only unlinked when its reference count drops to zero. So the reader always sees one complete file: the pre-replace version or the post-replace version, never a torn half-write. A lock would only serialize reader against writers; with no torn-read window the lock adds latency against CRITICAL-path writers for zero safety gain. Writers still lock because concurrent read-modify-write cycles can lose an update (lost-update problem, distinct from torn reads). The docstring §42 rationale comment carries this justification in-code.
+
+**`StateLockTimeoutError` catch ordering is load-bearing.** In each R-M-W function, `except state_io.StateLockTimeoutError` comes BEFORE `except Exception`. This ordering matters: `StateLockTimeoutError` subclasses `Exception`; reversing the order would swallow the timeout in the broad handler, losing the §3.1 rationale comment and the precise fail-open semantics documented for callers.
+
+**Marker text preserved byte-identical.** Lock-failure markers read "could not acquire flock on … after retries" — unchanged from the old `_acquire_lock` phrasing. Existing test assertions pin this; any future refactor that changes the marker text must update those tests.
+
+## §G9.3 — Operational context that surfaced this session
+
+**PR-number prediction trap.** PR was briefed and coded-against as "#103". The actual number was #104 because #103 was an unrelated open PR that advanced the counter. Fixed in a follow-up correction commit before the PR merged. Lesson: never embed a predicted PR number into docs/code before `gh pr create` returns the real number.
+
+**Mid-merge main advance.** Between branch-cut and merge authorization, main advanced +5 commits (PR #101 v11→v13 drift fix; #103 doctrine manifest; #106/#107 doc-reconciliation agent + hook). Resolved by merging `origin/main` into the branch. CLAUDE.md conflict resolved by taking main's v13-corrected `error_log` row (main's change) + keeping the migrated `alert_dedupe` + `state_io` rows (branch's changes). Pre-existing uncommitted CLAUDE.md "Agent skills" hunk + untracked `docs/agents/` (separate operator WIP) were preserved untouched throughout using selective staging (`git apply --cached` on a truncated patch).
+
+**Op Stds is now v13.** PR #101 established v13 as canonical this session. v12 added §§37–41; v13 added §42 (code-level self-documentation). `alert_dedupe.py`'s new §42 docstring cites v13 §3.1 + §42. Historical v11 cites in older docs are grandfathered.
+
+**`check_doctrine_drift.py` is warn-only.** The new `scripts/check_doctrine_drift.py` (PR #106) checks `docs/doctrine_manifest.yaml` against running constants; its pytest tests cover the checker mechanics, not a repo-wide version scan. It is NOT a blocking CI step.
+
+## §G9.4 — Final baseline at session close
+
+- pytest -q (post-merge, main): 1090 passed / 16 deselected
+- mypy: 0 errors / 134 source files
+- ruff: clean
+- main-branch CI on merge commit `45be149`: SUCCESS
+
 # Cross-References
 
 - Memory Archive v4 — operational detail through 2026-05-21 morning. v5 extends, does not supersede.
