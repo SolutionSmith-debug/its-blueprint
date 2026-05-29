@@ -516,6 +516,37 @@ Landed as PR #104, squash-merge `45be1498afd156e489103228531e69b11de5188e`, merg
 - ruff: clean
 - main-branch CI on merge commit `45be149`: SUCCESS
 
+## §G11 — 2026-05-28 Phase 1.4 hardening sweep: F17 + F04 + docstring drift (PR #113)
+
+### F17: intake_poll watchdog Check C registration
+
+`safety_reports/intake_poll.py` was not tracked by Watchdog Check C (missed-job detection) despite being the highest-criticality ITS daemon. Fix: added `_write_watchdog_marker()` to `intake_poll.py` (mirrors `weekly_send_poll`, fail-soft per Op Stds §3.1 — failure does NOT abort the poll cycle). `WATCHDOG_JOB_SLUG = "safety_intake"`. In `scripts/watchdog.py`, `"safety_intake"` was appended to `TRACKED_JOBS` (a `list[str]`) and a per-job window added as `TRACKED_JOB_WINDOWS["safety_intake"] = timedelta(minutes=5)` (5-minute freshness window = ~5× the 60s launchd cadence; jobs absent from the window map fall back to the 24h default).
+
+**Deliberate divergence from weekly_send_poll:** marker is written ONLY after a completed `_poll_inside_lock` cycle — NOT on the disabled-gate or lock-held skip paths. Rationale (§42 docstring comment in code): marker staleness should signal "the poll loop is not running," not "the loop ran but found nothing to do." If it fired on skip paths, the watchdog would stay green even during a lock-starved or polling-disabled outage. Tests lock this contract.
+
+**Live-confirmed:** before PR #113 merged, the production launchd daemon (`org.solutionsmith.its.safety-intake`, running the `~/its` working tree with uncommitted edits) wrote the real `~/its/.watchdog/safety_intake.last_run` on an actual 60s cycle. This also surfaced the live-daemon-runs-working-tree hazard: uncommitted edits in `~/its` go live in ≤60s.
+
+### F04: shared/keychain.set_secret stdin correctness
+
+The brief's prescribed argv shape for `security add-generic-password` (`[... "-w", "-U"]` + `input=value`) was broken against the live `security` CLI. Two bugs:
+
+1. `-w` swallows the next token (`-U`) as the password literal (not a flag), because `-w` reads stdin ONLY when it is the LAST option.
+2. stdin must be `f"{value}\n{value}\n"` — password + retype confirmation. A single newline hangs the process waiting for the second entry.
+
+**Corrected form:** `argv = [... "-U", "-a", account, "-s", service, "-w"]` (flags first, `-w` last); `input = f"{value}\n{value}\n"`. Live create→read→rotate→delete round-trip verified before merge. Classic SDK-vs-Live (Op Stds §30) finding: the brief's description was plausible-looking but wrong against the real CLI.
+
+### Docstring drift
+
+Three locations in `scripts/watchdog.py` contained the prose "TRACKED_JOBS is empty by design" — accurate at original ship (R2 Session 2) but false after the picklist-audit and weekly-send-poll jobs were added. All three removed in PR #113.
+
+### Landed PRs
+- PR #113 (merge commit `9ef0a66a19dc2a89e7192d84358a6d91fcca42f9`, 2026-05-28) — four-part verify clean.
+- PR #115 (merge commit `539792c493fb5097df309cd9431b33b67a86c7cd`, 2026-05-28) — session log, four-part verify clean.
+
+Session log: `~/its/docs/session_logs/2026-05-28_f17-f04-docstring-sweep.md`.
+
+Final baseline (post-PR #113, main): pytest 1097 passed / 16 deselected, mypy 0 errors / 134 source files, ruff clean, main CI on `9ef0a66`: SUCCESS.
+
 # Cross-References
 
 - Memory Archive v4 — operational detail through 2026-05-21 morning. v5 extends, does not supersede.
