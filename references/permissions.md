@@ -1,14 +1,14 @@
 ---
 type: reference
-version: 5
+version: 6
 status: canonical
 last_verified: 2026-05-24
 last_verified_against: 3b7d56d
 workstream: null
-tags: [permissions, customer-1, m365, box, smartsheet, successor-operator]
+tags: [permissions, customer-1, m365, box, smartsheet, successor-operator, training-bounded-co-resolution]
 ---
 
-**ITS — Permissions Ask v5**
+**ITS — Permissions Ask v6**
 
 *Box section rewritten under OAuth User Authentication. M365 + Smartsheet sections unchanged.*
 
@@ -102,7 +102,7 @@ ITS uses a three-workspace audience-tiered topology to make the operator vs cust
 
 - **ITS — Human Review (customer-employee approvers). **Per-workstream Pending_Review sheets where approvers sign off on AI-generated content. Approvers scoped to their workstream's subfolder only.
 
-- **ITS — System (system-role-only). **Config rows, error log, review queue, quarantine, time-off sheet. The **Developer-Operator** (Solution Smith / Seth) retains ADMIN here for developer-context operations and as the Tier-3 escalation asset; the non-developer **Successor-Operator** is added at EDITOR for Tier-2 Claude-assisted repair (re-run a daemon, toggle a config value, re-send an approval, re-seed a row, clear a stuck lock). See §3.2 for the role split.
+- **ITS — System (system-role-only). **Config rows, error log, review queue, quarantine, time-off sheet. The **Developer-Operator** (Solution Smith / Seth) retains ADMIN here for developer-context operations and as the Tier-3 escalation asset; the **Successor-Operator** (a trained operator who runs Claude Code himself) is added at EDITOR for Tier-2 repair (re-run a daemon, toggle a config value, re-send an approval, re-seed a row, clear a stuck lock). See §3.2 for the role split.
 
 Separating these workspaces makes the access boundary visible and enforceable.
 
@@ -116,11 +116,11 @@ For Evergreen-employee access on the live tenants after cutover:
 
 - **Personnel admins: **EDITOR on ITS — Human Review / 06 — Personnel (for ITS_Time_Off updates). No other Human Review subfolder access required.
 
-- **Successor-Operator at customer (the steady-state operating role): **EDITOR — not ADMIN — on ITS — System workspace. The Successor-Operator is a *non-developer*: they approve, toggle config values, re-run a daemon, re-send an approval, re-seed a row, or clear a stuck lock through the Smartsheet UI, with Claude doing the diagnostic and repair work. They never read code, never use git or a terminal, and never perform the developer-context operations in Operational Standards v15 §§37–41. This is the Tier-2 (Claude-assisted operator repair) tier of the three-tier successor-maintenance model.
+- **Successor-Operator at customer (the steady-state operating role): **EDITOR — not ADMIN — on ITS — System workspace. The Successor-Operator is a **trained operator who runs Claude Code himself** and follows the §43 successor-remediation runbooks; he carries out the Tier-2 low-capability-class repair set (re-run a daemon, toggle a config value, re-send an approval, re-seed a row, clear a stuck lock) and escalates the four high-capability-class categories (External Send Gate, secrets/auth, doctrine, code changes) to the Developer-Operator. He is *not a developer* — writes no code, performs none of the Operational Standards v16 §§37–41 developer-context operations — and is *not* a Smartsheet-UI-only approver rubber-stamping Claude-driven actions. EDITOR (not ADMIN) suffices: cell edits need EDITOR, and running Claude Code uses ITS's service token, not his Smartsheet seat. This is the Tier-2 (Claude-assisted operator repair) tier of the three-tier successor-maintenance model.
 
-- **Developer-Operator (Solution Smith / Seth): **ADMIN on ITS — System workspace, retained for the developer-context operations only the Developer-Operator performs (migrations, secret rotation, code changes, worktree cleanup, the `gh`/`gitleaks`/script work of Op Stds v15 §§37–41). Seth is the **Tier-3 escalation asset, not the standing day-to-day operator** — a fault reaches him only when it is *novel* (no successor-remediation runbook entry covers it) **or** *high-capability-class* (it touches the External Send Gate, secrets/auth, doctrine, or requires a code change). High-class always escalates regardless of documentation. This corrects the prior framing that "Solution Smith remains primary operator"; under the settled model the Successor-Operator is primary at Tier 2 and Seth is the backstop.
+- **Developer-Operator (Solution Smith / Seth): **ADMIN on ITS — System workspace, retained for the developer-context operations only the Developer-Operator performs (migrations, secret rotation, code changes, worktree cleanup, the `gh`/`gitleaks`/script work of Op Stds v16 §§37–41). Seth is the **Tier-3 escalation asset, not the standing day-to-day operator** — a fault reaches him only when it is *novel* (no successor-remediation runbook entry covers it) **or** *high-capability-class* (it touches the External Send Gate, secrets/auth, doctrine, or requires a code change). High-class always escalates regardless of documentation. This corrects the prior framing that "Solution Smith remains primary operator"; under the settled model the Successor-Operator is primary at Tier 2 and Seth is the backstop.
 
-  *(Note on enforcement: the guarded, capability-gated repair path that would keep a non-developer Tier-2 session structurally out of high-class operations does **not yet exist** — today's `.claude/` guard hooks are scoped to subagent/developer sessions and fall open for the operator's own session. Building a non-developer-safe enforcement layer is a hard pre-cutover requirement, tracked alongside the watchdog Check H self-heal gap. Until it lands, ITS — System ADMIN must remain Developer-Operator-only.)*
+  *(Note on the boundary: there is **no** structural maintenance enforcement layer, and none is to be built — the Tier-2 boundary is held by the trained operator's judgment, the both-rule, and co-resolution with the Developer-Operator on the four high-class categories until per-category clearance (FM v11 / Op Stds v16). ITS — System ADMIN stays Developer-Operator-only because high-class operations co-resolve with Seth, not because an enforcement layer is pending. Today's `.claude/` guard hooks protect developer/subagent sessions and are not expected to confine the trained Successor-Operator.)*
 
 **If you****'****d rather keep me below admin**
 
@@ -210,7 +210,15 @@ Box is now the lowest-friction system under v4 — substantially lower than v3 w
 
 # Authority
 
-Permissions Ask v5, 2026-05-29. Companion to Handover Plan v7 (cutover runbook). v5 reframes §3.2 and §3.1 to the three-tier successor-maintenance role model (Successor-Operator at EDITOR for Tier-2 Claude-assisted repair; Developer-Operator / Seth at ADMIN, Tier-3 escalation asset), resolving the prior "Solution Smith remains primary operator" framing. The M365 / Box / Smartsheet access asks are unchanged from v4 (no live re-verification this bump). v4 retires on acceptance of v5; the v3→v4 Box JWT→OAuth history carries forward in the changelog below.
+Permissions Ask v6, 2026-06-01. Companion to Handover Plan v8 (cutover runbook). v6 re-aligns §3.1/§3.2 to the de-1b doctrine (FM v11 / Op Stds v16 / Handover v8 / V&R v9): the Successor-Operator is a trained operator who runs Claude Code himself (not a Smartsheet-UI-only approver), and the Tier-2 boundary is training-bounded co-resolution — there is no structural "non-developer-safe enforcement layer" (the v5 enforcement-layer note is removed). EDITOR-not-ADMIN and the Developer-Operator-as-Tier-3-asset framing carry forward from v5. The M365 / Box / Smartsheet access asks are unchanged from v4 (no live re-verification). v5 retires on acceptance of v6; the v3→v4 Box JWT→OAuth history carries forward in the changelog below.
+
+# What Changed in v6
+
+- **§3.2 / §3.1 re-aligned to the de-1b doctrine (FM v11 / Op Stds v16).** v5 described the Successor-Operator as a non-developer who works "Smartsheet-UI only, never a terminal," with Claude driving and the operator approving. v6 corrects this to the de-1b definition: a **trained operator who runs Claude Code himself**, follows the §43 runbooks, and escalates the four high-class categories. Still a non-developer (no code; no §§37-41 developer-context work).
+
+- **Enforcement note removed.** v5's note that a "non-developer-safe enforcement layer" was a pending hard pre-cutover build gap is removed — there is no structural maintenance enforcement layer (FM v11 / Op Stds v16). ITS — System ADMIN stays Developer-Operator-only because high-class ops co-resolve with Seth, not because a layer is pending.
+
+- **Companion pins refreshed:** Handover Plan v7 → v8; doctrine refs FM v10 → v11, Op Stds v15 → v16. Access asks unchanged from v4.
 
 # What Changed in v5
 

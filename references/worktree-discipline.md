@@ -1,11 +1,11 @@
 ---
 type: reference
-version: 1
+version: 2
 status: canonical
 workstream: null
 last_verified: 2026-05-29
 last_verified_against: 7fbb1cd
-tags: [worktree, symlink-fail-open, successor-operator, watchdog]
+tags: [worktree, symlink-fail-open, successor-operator, watchdog, training-bounded-co-resolution]
 ---
 
 # Worktree Discipline (blueprint)
@@ -96,13 +96,14 @@ branch coupling, the unguarded `settings.json` copy) is in the
 [2026-05-29 agent/workflow audit](https://github.com/SolutionSmith-debug/its/blob/main/docs/audits/2026-05-29_agent-workflow-audit.md).
 
 **Successor-maintenance note (why this should become a watchdog-detectable
-signal, not stay a doc warning).** This fail-open is invisible to a
-non-developer **Successor-Operator**: when the symlink dangles, the propose-only
-guard hooks vanish *with no error*, and a Tier-2 operator who never opens a
-terminal has no way to notice — the manual `test -d` check above is a
-Developer-Operator step. Under the three-tier successor-maintenance model
-(Op Stds v15 §44) a hazard a non-developer can never detect must not depend on a
-developer happening to be present. The recommended (still-deferred, **not built
+signal, not stay a doc warning).** This fail-open is invisible to the
+**Successor-Operator**: when the symlink dangles, the propose-only guard hooks
+vanish *with no error*. Although the Successor-Operator runs Claude Code himself
+for Tier-2 low-class repairs, he does no git/worktree work and would not run the
+manual `test -d` check above (a Developer-Operator step), so a dangling
+guard-hook symlink never surfaces to him. Under the three-tier
+successor-maintenance model (Op Stds v16 §44) a hazard the Successor-Operator
+cannot detect must not depend on a developer happening to be present. The recommended (still-deferred, **not built
 here**) resolution is therefore not just a console notice but a
 **watchdog-detectable signal** — e.g. a daily `ITS_Daemon_Health` /
 Check-H-adjacent assertion that the agent/hook symlink resolves, writing a
