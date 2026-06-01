@@ -1,27 +1,27 @@
 ---
 type: doctrine
-version: 10
+version: 11
 status: canonical
-last_verified: 2026-05-29
+last_verified: 2026-06-01
 last_verified_against: 585823d
-supersedes: doctrine/foundation-mission.md@v9
+supersedes: doctrine/foundation-mission.md@v10
 workstream: null
-tags: [invariants, external-send-gate, adversarial-input-handling, maintenance-roles, successor-operator, capability-gating-through-line]
+tags: [invariants, external-send-gate, adversarial-input-handling, maintenance-roles, successor-operator, training-bounded-co-resolution]
 ---
 
-**ITS Foundation Mission v10**
+**ITS Foundation Mission v11**
 
-2026-05-29 — Maintenance-Role Principle Added: Developer-Operator vs Successor-Operator
+2026-06-01 — Tier-2 Maintenance Boundary Reframed: Training-Bounded Co-Resolution (v10 enforcement-layer framing removed)
 
-*Operating Principles gain a named maintenance-role distinction (Developer-Operator vs Successor-Operator) · Invariant 1's two-process capability-gating philosophy is composed into a through-line: a Successor-Operator repair session is structurally barred from high-capability-class operations · the non-developer-safe enforcement layer that would hold this boundary WITHOUT a developer present is named as a pre-cutover build requirement, not a present capability · invariant principles and the six-layer structure unchanged · v9 Layer 5 framing carried forward verbatim*
+*The Developer-Operator / Successor-Operator maintenance-role distinction stays · v11 removes the v10 framing that named a "non-developer-safe enforcement layer" as a pre-cutover build requirement — no structural maintenance enforcement layer exists, is planned, or is required · the capability-gating philosophy still informs how the Tier-2 boundary is DRAWN, but ends at philosophy: the boundary holds by the trained operator's judgment, the both-rule, and co-resolution with the Developer-Operator on the four high-class categories · the Successor-Operator is redefined as a TRAINED operator who runs Claude Code himself (not a Smartsheet-UI-only approver) · invariants, the six-layer structure, and v9 Layer 5 framing unchanged*
 
-# Purpose of v10
+# Purpose of v11
 
-Foundation-level invariants are non-negotiable. Every workstream inherits both. v10 adds an Operating Principle: ITS is maintained under two named roles — a Developer-Operator and a Successor-Operator — and it composes Invariant 1's two-process capability-gating philosophy into a maintenance through-line. v10 changes no invariant and no defense layer; it makes explicit a principle the prior docs left implicit (an undifferentiated "operator") and states honestly that the enforcement layer the through-line depends on does not yet exist.
+Foundation-level invariants are non-negotiable. Every workstream inherits both. v11 corrects the maintenance-side framing v10 introduced. v10 composed Invariant 1's two-process capability-gating philosophy into a maintenance through-line and named a "non-developer-safe enforcement layer" — a structural guard that would confine a Tier-2 repair session without a developer present — as a pre-cutover build requirement. v11 removes that: there is no structural maintenance enforcement layer, and none is to be built. The two-named-role principle stays; the through-line ends at philosophy, not at a built control.
 
-v10 trigger: the planning model for a non-developer successor (a Successor-Operator who approves while Claude does the diagnostic and repair work) needs an invariant-level anchor, and the prior "operator" abstraction conflated a git/shell-fluent maintainer with a Smartsheet-UI-only successor. Promoting the maintenance-role distinction to a principle, and composing the capability-gating philosophy onto it, is a substantive operating-principle change. v9 retires on acceptance of v10.
+v11 trigger: per v10's own Authority ("any change to the maintenance-role principle or the capability-gating through-line"), recharacterizing the through-line from "extends to a built enforcement layer / a pre-cutover gap" to "ends at philosophy; the Tier-2 boundary is training-based" is a through-line change. It is NOT a v10.x status update — v10.x covered "the enforcement layer is now built," which presupposed the layer as a concept; removing the layer as a concept is the bump. v10 retires on acceptance of v11.
 
-The invariant principles themselves are unchanged. Invariant 1 (no external transmission without explicit human approval; two-process model) and Invariant 2 (all content originating outside the operating customer tenant is untrusted data; six-layer defense with v9's Layer 5 tripwire framing) carry forward verbatim. v10 adds a principle that sits beside the invariants and an explicit note that the non-developer-safe maintenance enforcement layer is a pre-cutover build requirement, not a present capability.
+The invariant principles themselves are unchanged. Invariant 1 (no external transmission without explicit human approval; two-process model) and Invariant 2 (all content originating outside the operating customer tenant is untrusted data; six-layer defense with v9's Layer 5 tripwire framing) carry forward verbatim. v11 keeps the Developer-Operator / Successor-Operator principle and the capability-gating philosophy as the source of WHY the four high-class categories are off-limits at Tier 2, but states plainly that the Tier-2 maintenance boundary is enforced by the trained operator's judgment, the both-rule (novel OR high-class → Tier 3), and co-resolution with the Developer-Operator on the four high-class categories until per-category clearance — not by a structural enforcement layer.
 
 # Product Context
 
@@ -37,9 +37,9 @@ Carries forward from v7 verbatim. Audience-based access boundaries (operator vs 
 
 - **Developer-Operator** — git/CC/shell/worktree-fluent. Performs every developer-context operation (code changes, repository and migration work, secrets/Keychain handling, running scripts). Is the Tier-3 escalation asset, not the day-to-day operator of a handed-over system.
 
-- **Successor-Operator** — a non-developer. Interacts only through Smartsheet UI and approval surfaces, with Claude doing the diagnostic and repair work; approves but never reads code, never uses git or a terminal directly. Resolves only the low-capability-class fault set (re-run a daemon, toggle an ITS_Config value, re-send an approval, re-seed a row, clear a stuck lock).
+- **Successor-Operator** — a trained operator (not a developer: writes no code, performs none of the §§37-41 developer-context operations) who **runs Claude Code himself**, follows the §43 remediation runbooks/checklists, and is trained to recognize and escalate the four HIGH-capability-class categories. He is not a Smartsheet-UI-only approver rubber-stamping Claude-driven actions; he operates CC to carry out the low-capability-class fault set (re-run a daemon, toggle an ITS_Config value, re-send an approval, re-seed a row, clear a stuck lock) and co-resolves the four high-class categories with the Developer-Operator until per-category clearance.
 
-Every use of "operator" in any ITS doc must be classifiable to exactly one of these roles. Developer-context operations are Developer-Operator-only by definition; a Successor-Operator cannot perform them. The operational mechanics of the two-role maintenance model — the three-tier fault model, the Tier-2/Tier-3 escalation boundary, and the per-capability successor-remediation runbook discipline — live in Operational Standards v15 (§§43–44) and the Handover Plan v7; this principle only fixes the role vocabulary and asserts that the distinction is load-bearing, not cosmetic.
+Every use of "operator" in any ITS doc must be classifiable to exactly one of these roles. Developer-context operations are Developer-Operator-only by definition; a Successor-Operator cannot perform them. The operational mechanics of the two-role maintenance model — the three-tier fault model, the Tier-2/Tier-3 escalation boundary, and the per-capability successor-remediation runbook discipline — live in Operational Standards v16 (§§43–44) and the Handover Plan v8; this principle only fixes the role vocabulary and asserts that the distinction is load-bearing, not cosmetic.
 
 # Invariants
 
@@ -61,7 +61,7 @@ Invariant 1 keeps the AI out of the send path by structure, not by trust: a gene
 
 High-capability-class is defined structurally, not by who is asking. It is anything that touches the External Send Gate, secrets/auth, doctrine, or that requires a code change. High-capability-class operations are Developer-Operator-only and always escalate to Tier 3. The complementary low-capability-class set (re-run a daemon, toggle an ITS_Config value, re-send an approval, re-seed a row, clear a stuck lock) is the only set in scope for a Tier-2 Successor-Operator repair.
 
-This through-line is a principle, not yet a built control. Invariant 1's gating is real and verified in code (tests/test_capability_gating.py inspects script imports so a generation process literally cannot import send capability). The equivalent boundary for maintenance — a guard layer that keeps a Tier-2 repair session out of high-capability-class operations and that holds WITHOUT a Developer-Operator present to adjudicate an override — DOES NOT YET EXIST. Today's guard hooks are scoped to subagent/developer sessions and fall open for the human's own session, on the assumption that human is a developer who can safely override; that assumption fails for a non-developer Successor-Operator. Building the non-developer-safe enforcement layer is a pre-cutover requirement, tracked alongside the Tier-1 self-heal/watchdog completion gap (forensic-audit Check H). Until it exists, the Tier-2 boundary holds by documented discipline and approval, not by structural enforcement, and doctrine must never describe Tier-2 repair as capability-gated in the present tense.
+This through-line is a philosophical guide to how the boundary is DRAWN, not a built control. The capability-gating philosophy that keeps the AI out of the send path informs WHY the External Send Gate, secrets/auth, doctrine, and code changes are off-limits at Tier 2. But unlike Invariant 1's two-process model — which is real and verified in code (tests/test_capability_gating.py inspects script imports so a generation process literally cannot import send capability) — the maintenance boundary is NOT structurally enforced, and no structural enforcement layer is built or required. It holds by the trained operator's judgment, the both-rule (novel OR high-class → Tier 3), and co-resolution with the Developer-Operator on the four high-class categories until per-category clearance is granted. There is no non-developer-safe enforcement layer; the trained-operator-plus-co-resolution model is the chosen control. (The separate Tier-1 self-heal/watchdog completion gap — forensic-audit Check H — remains a real pre-cutover gate on its own; it is not coupled to any maintenance enforcement layer.) Doctrine must never describe Tier-2 repair as capability-gated in the present tense.
 
 ## Invariant 2 — Adversarial Input Handling (Revised in v8)
 
@@ -149,17 +149,17 @@ v8 implication: trusted-contacts sheet is per-customer (each customer fork has i
 
 # Scope of This Project
 
-- Foundation Mission (this doc, v10) — invariants, principles (including the Developer-Operator / Successor-Operator maintenance-role distinction and the capability-gating maintenance through-line), project-level architecture, per-customer-repo invariant.
+- Foundation Mission (this doc, v11) — invariants, principles (including the Developer-Operator / Successor-Operator maintenance-role distinction and the capability-gating-philosophy framing of the Tier-2 boundary), project-level architecture, per-customer-repo invariant.
 
-- Operational Standards v15 — cross-cutting patterns every workstream uses; §43 successor-remediation discipline + §44 Tier-2 repair path.
+- Operational Standards v16 — cross-cutting patterns every workstream uses; §43 successor-remediation discipline + §44 Tier-2 repair path (training-enforced boundary).
 
-- Vision & Roadmap v8 — phase plan with the ship-and-leave / developer-departure threshold and the Phase 1.5 security-hardening precondition.
+- Vision & Roadmap v9 — phase plan with the ship-and-leave / developer-departure threshold and the Phase 1.5 security-hardening precondition.
 
-- Handover Plan v7 — Phase 1.5 cutover + handover runbook with the three-tier fault-response model and operator-role abstraction.
+- Handover Plan v8 — Phase 1.5 cutover + handover runbook with the three-tier fault-response model and operator-role abstraction.
 
 - Permissions Ask v5 — cutover-phase admin grants; Successor-Operator (EDITOR) vs Developer-Operator (ADMIN) split.
 
-- Excellence Roadmap v3 — R4 + R5 + R6 (successor-maintenance build program) status.
+- Excellence Roadmap v4 — R4 + R5 + R6 (successor-maintenance build program) status.
 
 - Foundation Scaffold Update v6.5 — execution-layer state.
 
@@ -171,8 +171,8 @@ v8 implication: trusted-contacts sheet is per-customer (each customer fork has i
 
 # Authority
 
-Foundation Mission v10, 2026-05-29. Operating-principle addition: maintenance is performed under two named roles — Developer-Operator (git/CC/shell-fluent; Tier-3 escalation asset; sole performer of developer-context operations) and Successor-Operator (non-developer; Smartsheet-UI + approval only; Claude-driven; low-capability-class repairs only). Invariant 1's two-process capability-gating philosophy is composed into a maintenance through-line: a Tier-2 repair session is structurally barred from high-capability-class operations (External Send Gate, secrets/auth, doctrine, or anything requiring a code change). The non-developer-safe enforcement layer that would hold this boundary without a Developer-Operator present is named as a pre-cutover build requirement, NOT a present capability, tracked alongside the Tier-1 self-heal/Check H gap. Invariant principles, the six-layer structure, and Layers 1–4 + 6 are unchanged from v9; v9's Layer 5 tripwire framing carries forward verbatim. v9 retires on acceptance of v10. Canonical git tag: foundation-mission-v10.
+Foundation Mission v11, 2026-06-01. Maintenance-boundary reframe: v11 removes the "non-developer-safe enforcement layer" that v10 named as a pre-cutover build requirement. There is no structural maintenance enforcement layer; none is built or required. The Developer-Operator / Successor-Operator role principle stays, with the Successor-Operator redefined as a trained operator who runs Claude Code himself, follows the §43 runbooks, and escalates the four high-class categories (External Send Gate, secrets/auth, doctrine, code changes) — not a Smartsheet-UI-only approver. Invariant 1's two-process capability-gating philosophy still informs how the Tier-2 boundary is drawn, but the boundary is enforced by training + the both-rule + co-resolution with the Developer-Operator until per-category clearance, NOT by a structural layer. The separate Tier-1 self-heal/Check H gap remains a real pre-cutover gate. Invariant principles, the six-layer structure, and Layers 1–4 + 6 are unchanged from v10; v9's Layer 5 tripwire framing carries forward verbatim. v10's enforcement-layer framing is superseded and removed. v10 retires on acceptance of v11. Canonical git tag: foundation-mission-v11.
 
-v11 trigger: substantive invariant principle change, business-model change, any defense-layer addition/removal/recharacterization, or any change to the maintenance-role principle or the capability-gating through-line. v10.x absorbs status updates (including "the non-developer-safe enforcement layer is now built") without a framing change.
+v12 trigger: substantive invariant principle change, business-model change, any defense-layer addition/removal/recharacterization, or any change to the maintenance-role principle or the capability-gating-philosophy framing of the Tier-2 boundary. v11.x absorbs status updates (e.g., per-category clearances granted to the Successor-Operator, or Tier-1 self-heal completion) without a framing change.
 
-Companion to Op Stds v15, V&R v8, Handover Plan v7, Excellence Roadmap v3, FSU v6.5, Memory Archive v5.
+Companion to Op Stds v16, V&R v9, Handover Plan v8, Excellence Roadmap v4, FSU v6.5, Memory Archive v5.

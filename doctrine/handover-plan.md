@@ -1,51 +1,51 @@
 ---
 type: doctrine
-version: 7
+version: 8
 status: canonical
-last_verified: 2026-05-29
+last_verified: 2026-06-01
 last_verified_against: 585823d
-supersedes: doctrine/handover-plan.md@v6.3
+supersedes: doctrine/handover-plan.md@v7
 workstream: null
-tags: [california-cutover, hardware-handoff, permissions]
+tags: [california-cutover, hardware-handoff, permissions, successor-operator, training-bounded-co-resolution]
 ---
 
-**ITS Handover Plan v7**
+**ITS Handover Plan v8**
 
-2026-05-29 — Three-Tier Fault-Response Model + Operator-Role Abstraction
+2026-06-01 — Tier-2 Enforcement Layer Removed; Successor-Operator = Trained CC Operator
 
-*Major restructure of v6.3 · Three-tier fault-response model named · Developer-Operator / Successor-Operator roles defined · Tier-2/Tier-3 escalation boundary added · Step 8 acceptance + Day-7 routing gate reframed to Successor-Operator · two new hard pre-cutover self-heal / enforcement gates*
+*Modifies the v7 three-tier model · the Tier-2 "non-developer-safe enforcement layer" pre-cutover build gap is REMOVED (no structural maintenance enforcement layer exists or is required) · the Tier-2 boundary is held by training + the both-rule + co-resolution with the Developer-Operator until per-category clearance · the Successor-Operator is redefined as a TRAINED operator who runs Claude Code himself (not a Smartsheet-UI-only approver) · the Tier-1 self-heal pre-cutover gate (Check H) survives unchanged · v7's model, roles, escalation boundary, and Step 8/Day-7 reframes carry forward*
 
-# Purpose of v7
+# Purpose of v8
 
-Major restructure of Handover Plan v6.3. v6.3's security-hardening absorptions (Step 8 customer-admin tests, Phase 1.4 pre-cutover gate, Risk Inventory entries) all carry forward unchanged. What v7 adds is the post-cutover operating model the prior versions left implicit: who runs the system after Solution Smith leaves, and how a fault is routed.
+v8 modifies the three-tier fault-response model that v7 established. v7's model, the Developer-Operator / Successor-Operator role pair, the Tier-2/Tier-3 escalation boundary, the Step 8 and Day-7 reframes, and the Tier-1 self-heal pre-cutover gate all carry forward. v8 makes two changes: it removes the Tier-2 "non-developer-safe enforcement layer" that v7 named as a hard pre-cutover build gap (there is no structural maintenance enforcement layer; none is built or required — see FM v11 / Op Stds v16), and it redefines the Successor-Operator from a Smartsheet-UI-only approver to a trained operator who runs Claude Code himself, follows the §43 runbooks, and escalates the four high-class categories.
 
-Five substantive additions: (1) a named three-tier fault-response model (self-heal -> Claude-assisted operator repair -> escalate to Seth); (2) two named operator roles — Developer-Operator and Successor-Operator — used identically across all companion docs; (3) a Tier-2/Tier-3 escalation boundary (the "both" rule) with a structural definition of the high-capability class that always escalates; (4) reframing of the Step 8 post-handover acceptance and the Day-7 watchdog routing gate so ongoing operation routes to the Successor-Operator with the Developer-Operator (Seth) as a Tier-3 escalation asset, not the primary operator; (5) two new hard pre-cutover conditions — the Tier-1 self-heal layer complete and the Tier-2 non-developer-safe enforcement layer built. The second of these is flagged as a BUILD GAP: it does not exist today.
+The three-tier model as it now stands: (1) Tier 1 self-heal; (2) two named operator roles — Developer-Operator (Seth) and the trained Successor-Operator; (3) the Tier-2/Tier-3 "both" rule over the four high-class categories (External Send Gate, secrets/auth, doctrine, code changes) — the structural *definition* of high-class stands; only the idea of *structurally enforcing* it at Tier 2 is removed, replaced by training + co-resolution; (4) Step 8 acceptance + Day-7 routing to the Successor-Operator with Seth at Tier 3; (5) pre-cutover conditions — the Tier-1 self-heal gate (real) plus a Tier-2 *readiness* gate (the §44 low-class action set implemented + §43 runbooks + trained-operator/demonstrated-repair). The v7 Tier-2 enforcement-layer build gap is removed.
 
-v6.3 retires on acceptance of v7. v7 is the canonical baseline and operative reference (the v6.x minor-overlay scheme is retired; frontmatter version and title now match). v8 trigger: a further structural change to the cutover runbook or the fault-response model (not yet anticipated).
+v7 retires on acceptance of v8. v8 is the canonical baseline and operative reference (frontmatter version and title both read v8). v9 trigger: a further structural change to the cutover runbook or the fault-response model.
 
-# What Changed in v7
+# What Changed in v8
 
-- Fault-Response Model — NEW named section defining the three tiers (Tier 1 self-heal, Tier 2 Claude-assisted Successor-Operator repair, Tier 3 escalate to Developer-Operator) and the Tier-2/Tier-3 escalation boundary.
+v8 removes the Tier-2 "non-developer-safe enforcement layer" that v7 named as a hard pre-cutover build gap and redefines the Successor-Operator. v7's three-tier model, role pair, escalation boundary, Step 8 / Day-7 reframes, and the Tier-1 self-heal pre-cutover gate all carry forward.
 
-- Operator Roles — NEW. Developer-Operator (Seth) and Successor-Operator (non-developer) defined and used identically across companion docs. Resolves the prior "customer maintainer" / "trained maintainer" / "Solution Smith remains primary operator" ambiguity.
+- Tier-2 boundary — reframed from "structurally enforced by a to-be-built non-developer-safe enforcement layer" to "held by the trained operator's judgment + the both-rule + co-resolution with the Developer-Operator until per-category clearance." No structural maintenance enforcement layer exists or is required (FM v11 / Op Stds v16).
 
-- Step 8 — post-handover acceptance reframed: ongoing operation is per the three-tier fault-response model, not an undefined "remote-support model".
+- Successor-Operator — redefined from a Smartsheet-UI-only approver who never touches a terminal to a TRAINED operator who runs Claude Code himself, follows the §43 runbooks, carries out the low-class repair set, and escalates the four high-class categories. Still a non-developer (no code; no §§37-41 developer-context work).
 
-- Risk Inventory — Day-7 routing gate reframed to route to the Successor-Operator (Tier 2) with the Developer-Operator as Tier-3 escalation asset.
+- Pre-Cutover Conditions — the v7 "Tier-2 non-developer-safe enforcement layer built" condition is REMOVED and replaced by a Tier-2 *readiness* condition (low-class action set implemented + §43 runbooks + trained-operator/demonstrated-repair). The Tier-1 self-heal condition (Check H) survives unchanged as a standalone gate; the v7 "both must be built" coupling is gone.
 
-- Pre-Cutover Conditions — two NEW hard conditions: Tier-1 self-heal layer complete (watchdog Check H operational across all daemons), and the Tier-2 non-developer-safe enforcement layer built (flagged as a build gap, not a present capability).
+- The high-capability-class *definition* (External Send Gate / secrets-auth / doctrine / code change) and the "both" escalation rule are unchanged; only the structural *enforcement* of the boundary at Tier 2 is removed.
 
-- Cross-references refreshed: Op Stds v11 → v15, Foundation Mission v8 → v10.
+- Cross-references refreshed: Op Stds v15 → v16, Foundation Mission v10 → v11, V&R v8 → v9, Excellence Roadmap v3 → v4.
 
-- v6.3's Phase 1.4 hardening additions (Step 8 customer-admin tests, Phase 1.4 pre-cutover gate, three Risk Inventory entries) carry forward verbatim. Step 1-7 carry forward verbatim from v6.2.
+- v7's three-tier model, roles, escalation boundary, and Step 8/Day-7 reframes, plus v6.3's Phase 1.4 hardening additions, carry forward. Step 1-7 carry forward verbatim from v6.2.
 
 # Operator Roles (NEW v7)
 
 Post-cutover, two operator roles are named and used identically across this plan and its companion docs. Every "operator" usage elsewhere must be classifiable to exactly one of these.
 
-- **Developer-Operator** (Solution Smith / Seth). git-, Claude-Code-, shell-, and worktree-fluent. Performs ALL developer-context operations: everything in Op Stds v15 §§37-41 (gh api, gitleaks, migrations, worktree cleanup, code changes), Keychain access, and running scripts directly. Post-cutover the Developer-Operator is a reachable Tier-3 escalation ASSET — not the day-to-day operator.
+- **Developer-Operator** (Solution Smith / Seth). git-, Claude-Code-, shell-, and worktree-fluent. Performs ALL developer-context operations: everything in Op Stds v16 §§37-41 (gh api, gitleaks, migrations, worktree cleanup, code changes), Keychain access, and running scripts directly. Post-cutover the Developer-Operator is a reachable Tier-3 escalation ASSET — not the day-to-day operator.
 
-- **Successor-Operator** (the customer-side non-developer who owns the running system day to day). Works through the Smartsheet UI and the approval surfaces only. Never reads code, never uses git or a terminal directly. In Tier-2 repairs the Successor-Operator APPROVES; Claude DRIVES. Developer-context operations are structurally out of reach for this role.
+- **Successor-Operator** (the customer-side trained operator who owns the running system day to day). A non-developer — writes no code, performs none of the Op Stds v16 §§37-41 developer-context operations — but he **runs Claude Code himself**, follows the §43 remediation runbooks/checklists, and carries out the low-capability-class repair set. He is trained to recognize and escalate the four high-class categories (External Send Gate, secrets/auth, doctrine, code changes), which co-resolve with the Developer-Operator until per-category clearance. He is not a Smartsheet-UI-only approver rubber-stamping Claude-driven actions.
 
 This pair replaces the earlier framing in which a "trained maintainer" was assumed to acquire maintainer-level system understanding and in which Solution Smith "remains primary operator" indefinitely (references/system-hr-handoff.md, references/permissions.md §3.2, excellence-roadmap.md). Companion docs are reconciled to these two roles.
 
@@ -55,11 +55,11 @@ After Solution Smith hands the system over, a fault resolves through three tiers
 
 ## Tier 1 — Self-Heal
 
-The system recovers on its own: daemons restart, the watchdog catches a stalled heartbeat, no human is involved. This tier is partly built. Watchdog Check H (heartbeat staleness, successor to Check F per Op Stds v15 §2) is the load-bearing mechanism, and as of 585823d it is an UNMET pre-cutover condition — operational for one daemon's pattern but not yet across all daemons (2 of 3 daemons are heartbeat-pending). Completing the self-heal layer is a pre-cutover requirement (see Pre-Cutover Conditions).
+The system recovers on its own: daemons restart, the watchdog catches a stalled heartbeat, no human is involved. This tier is partly built. Watchdog Check H (heartbeat staleness, successor to Check F per Op Stds v16 §2) is the load-bearing mechanism, and as of 585823d it is an UNMET pre-cutover condition — operational for one daemon's pattern but not yet across all daemons (2 of 3 daemons are heartbeat-pending). Completing the self-heal layer is a pre-cutover requirement (see Pre-Cutover Conditions).
 
 ## Tier 2 — Claude-Assisted Successor-Operator Repair
 
-Where Tier 1 does not recover, a NON-developer Successor-Operator resolves the fault with Claude doing the actual diagnostic and repair work. The Successor-Operator APPROVES; Claude DRIVES. The Successor-Operator never reads code, never touches git or a terminal.
+Where Tier 1 does not recover, the trained Successor-Operator runs Claude Code himself and, following the §43 runbook, carries out a low-capability-class repair — escalating anything novel or high-class to Tier 3. He is a non-developer (writes no code, performs none of the §§37-41 developer-context operations), but he operates CC under the runbook rather than rubber-stamping a Claude-driven action.
 
 In-scope Tier-2 repairs are the LOW-capability-class set ONLY:
 
@@ -69,9 +69,9 @@ In-scope Tier-2 repairs are the LOW-capability-class set ONLY:
 - re-seed a missing reference row;
 - clear a stuck lock.
 
-Each in-scope repair ships with a plain-language successor-remediation runbook entry (symptom in Smartsheet/alert terms -> what the Successor-Operator checks -> the Claude prompt or UI action -> the escalate-to-Seth condition), written as the capability is built and shipped as Markdown alongside the capability that Claude loads to drive the repair. That runbook discipline is a build-time deliverable parallel to — and distinct from — Op Stds v15 §42 code-level self-documentation, whose audience is code-readers, not the non-developer Successor-Operator (see Op Stds v15 §43).
+Each in-scope repair ships with a plain-language successor-remediation runbook entry (symptom in Smartsheet/alert terms -> what the Successor-Operator checks -> the Claude prompt or UI action -> the escalate-to-Seth condition), written as the capability is built and shipped as Markdown alongside the capability that Claude loads to drive the repair. That runbook discipline is a build-time deliverable parallel to — and distinct from — Op Stds v16 §42 code-level self-documentation, whose audience is code-readers, not the Successor-Operator (see Op Stds v16 §43).
 
-Through-line. The same capability-gating philosophy that keeps the AI out of the send path — the two-process External Send Gate (Foundation Mission v10 Invariant 1, the generation process cannot import send capability, enforced by tests/test_capability_gating.py) — is the philosophy a Tier-2 repair session must inherit: a session driven for a non-developer must be structurally unable to reach high-capability-class operations. A guard layer that holds WITHOUT a Developer-Operator present to adjudicate DOES NOT YET EXIST. Today's guard hooks (.claude/hooks/) are scoped to subagent/developer sessions and fall open for the operator's own session, on the assumption that the human in the loop is a developer who can safely override. Building the non-developer-safe enforcement layer is therefore a hard pre-cutover requirement (see Pre-Cutover Conditions); until it exists, Tier 2 is a documented intent, not an enforced capability, and cutover does not proceed.
+Through-line. The capability-gating philosophy that keeps the AI out of the send path — the two-process External Send Gate (Foundation Mission v11 Invariant 1, the generation process cannot import send capability, enforced by tests/test_capability_gating.py) — informs how the Tier-2 maintenance boundary is DRAWN: why the External Send Gate, secrets/auth, doctrine, and code changes are off-limits at Tier 2. But unlike Invariant 1's two-process model, the maintenance boundary is NOT structurally enforced and no structural enforcement layer is built or required. It holds by the trained operator's judgment, the both-rule (novel OR high-class → Tier 3), and co-resolution with the Developer-Operator on the four high-class categories until per-category clearance is granted. There is no non-developer-safe enforcement layer; the trained-operator-plus-co-resolution model is the chosen control. Cutover's Tier-2 readiness gate (see Pre-Cutover Conditions) is the §43 runbooks + the §44 low-class action set + demonstrated supervised repair — not a built enforcement layer.
 
 ## Tier 3 — Escalate to the Developer-Operator
 
@@ -84,12 +84,12 @@ The "both" rule:
 
 HIGH-capability-class ALWAYS escalates, regardless of how well documented it is. It is defined structurally as anything that touches:
 
-- the External Send Gate (the two-process boundary of FM v10 Invariant 1);
+- the External Send Gate (the two-process boundary of FM v11 Invariant 1);
 - secrets or authentication (Keychain, OAuth tokens, ServicePrincipal credentials);
 - doctrine; or
 - a code change.
 
-These map one-to-one to the Developer-Operator's exclusive operations (Op Stds v15 §§37-41). The Successor-Operator cannot perform them; by construction they route to the Developer-Operator at Tier 3.
+These map one-to-one to the Developer-Operator's exclusive operations (Op Stds v16 §§37-41). The Successor-Operator cannot perform them; by construction they route to the Developer-Operator at Tier 3.
 
 # Step 1-7 — Carry Forward From v6.2
 
@@ -137,9 +137,9 @@ After all workstreams cut over and watchdog is stable:
 
 - CLAMAV SIGNATURE DATABASE FRESH — freshclam daemon installed and confirmed updating signature DB at least daily. Watchdog Check H (heartbeat staleness, successor to Check F per Op Stds v11 §2) operational and configured to flag stale clamd state.
 
-- TIER-1 SELF-HEAL LAYER COMPLETE (NEW v7) — watchdog Check H (heartbeat staleness, successor to Check F per Op Stds v15 §2) operational across ALL Enabled daemons, not just one. As of 585823d this is UNMET: 2 of 3 daemons are heartbeat-pending and Check H coverage is partial. This is the Tier-1 leg of the Fault-Response Model. Cutover does not proceed until every Enabled daemon emits a heartbeat that Check H reads and flags on staleness.
+- TIER-1 SELF-HEAL LAYER COMPLETE (NEW v7) — watchdog Check H (heartbeat staleness, successor to Check F per Op Stds v16 §2) operational across ALL Enabled daemons, not just one. As of 585823d this is UNMET: 2 of 3 daemons are heartbeat-pending and Check H coverage is partial. This is the Tier-1 leg of the Fault-Response Model. Cutover does not proceed until every Enabled daemon emits a heartbeat that Check H reads and flags on staleness.
 
-- TIER-2 NON-DEVELOPER-SAFE ENFORCEMENT LAYER BUILT (NEW v7) — a guard layer that structurally prevents a Claude-driven Tier-2 repair session from reaching high-capability-class operations (External Send Gate, secrets/auth, doctrine, code changes) WITHOUT a Developer-Operator present to adjudicate. This DOES NOT YET EXIST and is flagged as a build gap: today's guard hooks (.claude/hooks/) are scoped to subagent/developer sessions and fall open for the operator's own session, assuming a developer can safely override — an assumption that fails for a non-developer Successor-Operator. The layer must be built on the same capability-gating philosophy as the two-process External Send Gate (FM v10 Invariant 1) and verified before cutover. Cutover does not proceed until this layer is built and verified; a non-developer Successor-Operator does not take day-to-day operation while it is open.
+- TIER-2 READINESS (NEW v8 — replaces the v7 "enforcement layer built" condition) — the Tier-2 boundary is held by training + the both-rule + co-resolution, NOT by a structural enforcement layer (that v7 build gap is removed; there is no non-developer-safe enforcement layer — FM v11 / Op Stds v16). Readiness means: the §44 low-capability-class action set (re-run a daemon, toggle an ITS_Config value, re-send an approval, re-seed a row, clear a stuck lock) is implemented as discrete, tested, non-escalating operations; §43 successor-remediation runbooks exist for the top fault classes; and the Successor-Operator (Daniel) is trained to run Claude Code, follow the runbooks, and recognize and escalate the four high-class categories (External Send Gate, secrets/auth, doctrine, code changes), having demonstrated supervised, Claude-assisted low-class repairs. Cutover does not proceed until Tier-2 readiness is met.
 
 # Risk Inventory (EXTENDED v6.3)
 
@@ -155,13 +155,13 @@ After all workstreams cut over and watchdog is stable:
 
 # Companion-Doc References (Refreshed)
 
-- Foundation Mission v10 — Invariant 1 two-process External Send Gate is the capability-gating philosophy the Tier-2 enforcement layer must inherit; the Developer-Operator / Successor-Operator maintenance-role principle and the capability-gating through-line are added in v10; Invariant 2 layers (trusted-contacts + header-forgery, attachment screening) unchanged. Operative invariant reference.
+- Foundation Mission v11 — Invariant 1 two-process External Send Gate is the capability-gating philosophy that informs how the Tier-2 boundary is drawn; the Developer-Operator / Successor-Operator maintenance-role principle (with the Successor-Operator redefined as a trained CC operator); v11 removes the v10 enforcement-layer framing — the through-line ends at philosophy. Invariant 2 layers (trusted-contacts + header-forgery, attachment screening) unchanged. Operative invariant reference.
 
-- Operational Standards v15 — §2 Check H (heartbeat-staleness watchdog) is the Tier-1 self-heal mechanism; §§37-41 enumerate the Developer-Operator-only developer-context operations (skills, local guardrails, per-fork security setup, migration PII asymmetry, Actions version-bump); §42 (code-level self-documentation) is for code-readers and is the WRONG audience for the Tier-2 successor-remediation runbook; §43 (NEW) is the Successor-Remediation Documentation Discipline; §44 (NEW) is the Tier-2 Claude-assisted repair path and the non-developer-safe-enforcement build gap. §§31-36 carry forward (polling-daemon, operator visibility, trusted-contacts, attachment screening, picklist convention, in-repo tech debt).
+- Operational Standards v16 — §2 Check H (heartbeat-staleness watchdog) is the Tier-1 self-heal mechanism; §§37-41 enumerate the Developer-Operator-only developer-context operations; §42 (code-level self-documentation) is for code-readers and is the WRONG audience for the Tier-2 successor-remediation runbook; §43 is the Successor-Remediation Documentation Discipline; §44 is the Tier-2 Claude-assisted repair path whose boundary is training-enforced (the v15 enforcement-layer build gap is removed). §§31-36 carry forward (polling-daemon, operator visibility, trusted-contacts, attachment screening, picklist convention, in-repo tech debt).
 
-- Vision & Roadmap v8 — the ship-and-leave / developer-departure threshold (operated by the Successor-Operator with Seth at Tier 3); Phase 1.4 security hardening as named precondition phase before Phase 1.5; new Pre-Cutover Conditions 4 + 5 (Tier-1 self-heal complete; Tier-2 non-developer-safe enforcement layer built).
+- Vision & Roadmap v9 — the ship-and-leave / developer-departure threshold (operated by the Successor-Operator with Seth at Tier 3); Phase 1.4 security hardening as named precondition phase before Phase 1.5; Pre-Cutover Condition 4 (Tier-1 self-heal complete) and Condition 5 reframed to Tier-2 readiness (no enforcement layer).
 
-- Excellence Roadmap v3 — R6 (successor-maintenance build program) opened as a Track 1 critical-path cluster; R4 closed (polling daemon + operator visibility); R5 (security hardening cluster) open.
+- Excellence Roadmap v4 — R6 (successor-maintenance build program): (a) Tier-1 self-heal + (b) Tier-2 readiness + (c) runbook tooling, opened as a Track 1 critical-path cluster; R4 closed (polling daemon + operator visibility); R5 (security hardening cluster) open.
 
 - Foundation Scaffold Update v6.5 — PR window through #60; first-time enumeration of box_migration/ + smartsheet_migration/.
 
@@ -175,6 +175,6 @@ After all workstreams cut over and watchdog is stable:
 
 # Authority
 
-Handover Plan v7, 2026-05-29. Major restructure of v6.3: introduces the three-tier fault-response model, the Developer-Operator / Successor-Operator role pair, the Tier-2/Tier-3 escalation boundary, and the reframing of Step 8 acceptance and the Day-7 routing gate to the Successor-Operator model; adds the Tier-1 self-heal and Tier-2 non-developer-safe enforcement hard pre-cutover conditions (the latter a build gap that does not exist today). v6.3's Phase 1.4 hardening content carries forward verbatim. v6.3 retires on acceptance of v7; v7 is the canonical baseline and operative reference. The v6.x minor-overlay scheme is retired — frontmatter version and title both read v7. Canonical git tag: handover-plan-v7.
+Handover Plan v8, 2026-06-01. v8 removes the Tier-2 "non-developer-safe enforcement layer" that v7 named as a hard pre-cutover build gap (there is no structural maintenance enforcement layer; none is built or required — FM v11 / Op Stds v16) and redefines the Successor-Operator as a trained operator who runs Claude Code himself, follows the §43 runbooks, and escalates the four high-class categories — not a Smartsheet-UI-only approver. The Tier-2 boundary is held by training + the both-rule + co-resolution with the Developer-Operator until per-category clearance; the v7 Tier-2 pre-cutover condition is replaced by a Tier-2 readiness gate. The Tier-1 self-heal gate (Check H) survives unchanged. v7's three-tier model, roles, escalation boundary, and Step 8/Day-7 reframes, plus v6.3's Phase 1.4 hardening, carry forward. v7 retires on acceptance of v8; v8 is the canonical baseline and operative reference (frontmatter version and title both read v8). Canonical git tag: handover-plan-v8.
 
-v8 trigger criteria: a further structural change to the cutover runbook or to the fault-response model. Status updates that do not change runbook or model structure are absorbed without a major bump.
+v9 trigger criteria: a further structural change to the cutover runbook or to the fault-response model. Status updates that do not change runbook or model structure are absorbed without a major bump.
