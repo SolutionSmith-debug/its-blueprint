@@ -1,29 +1,27 @@
 ---
 type: doctrine
-version: 3
+version: 4
 status: canonical
-last_verified: 2026-05-29
+last_verified: 2026-06-01
 last_verified_against: 585823d
-supersedes: doctrine/excellence-roadmap.md@v2.3
+supersedes: doctrine/excellence-roadmap.md@v3
 workstream: null
-tags: [quality-bar, tooling, observability, successor-maintenance]
+tags: [quality-bar, tooling, observability, successor-maintenance, training-bounded-co-resolution]
 ---
 
-**ITS Excellence Roadmap v3**
+**ITS Excellence Roadmap v4**
 
-2026-05-29 — R6 Opened (Successor-Maintenance Build Program) · maintenance model reframed: Developer-Operator (Seth) = Tier-3 escalation asset, not standing operator
+2026-06-01 — R6 Sub-Deliverable (b) Reframed: Tier-2 Readiness, Not an Enforcement Layer
 
-*Major bump from v2.3 · Track 1 reliability completion extended through R6 (successor-maintenance build program) · Tracks 2 + 3 carry forward, Track 3 remote-support exclusion reframed*
+*The Tier-2 "non-developer-safe enforcement layer" R6 sub-deliverable is removed (no structural maintenance enforcement layer exists or is required — FM v11 / Op Stds v16); R6 (b) becomes Tier-2 readiness work (the §44 low-class action set + §43 runbooks + training). R6 (a) Tier-1 self-heal + (c) runbook tooling carry forward. The v3 Track-3 maintenance-model reframe (Developer-Operator = Tier-3 escalation asset) stands; Tracks 2 + 3 otherwise unchanged from v3.*
 
-# Purpose of v3
+# Purpose of v4
 
-Major bump from Excellence Roadmap v2.3 (2026-05-22). v3 (a) adds R6 — the successor-maintenance build program — as a new Track 1 critical-path cluster, and (b) reframes the post-handover maintenance model in the Track 3 scope-exclusions to align with the three-tier successor-maintenance model: the Developer-Operator (Seth) is a Tier-3 escalation asset, not the standing daily operator.
+v4 corrects R6. v3 added R6 (the successor-maintenance build program) with three sub-deliverables, one of which — (b) the Tier-2 "non-developer-safe enforcement layer" — has been removed from doctrine (FM v11 / Op Stds v16 / Handover v8 / V&R v9): there is no structural maintenance enforcement layer, and none is to be built. v4 replaces R6 (b) with the Tier-2 *readiness* work (implement the §44 low-capability-class action set as discrete tested operations + author §43 runbooks + train and demonstrate). R6 (a) Tier-1 self-heal completion and (c) successor-remediation runbook tooling carry forward unchanged.
 
-v3 also reconciles this doc's frontmatter integer and title to a single bare-integer version (G7), retiring the v2.x minor-overlay scheme.
+The Track-3 maintenance-model reframe v3 made (Developer-Operator = Tier-3 escalation asset, not standing operator) stands; the Successor-Operator is now further specified as a trained operator who runs Claude Code himself.
 
-The R4/R5 closeout and security-hardening additions carried by v2.3 stand verbatim. Tracks 2 (Quality bar enforcement) and Track 3 (Per-customer customization discipline) carry forward from v2.3 except for the remote-support / operator-driven-runbook reframes called out below. Grade snapshot carries forward.
-
-v2.3 retires on acceptance of v3; v2.1 remains canonical baseline; v3 is operative reference.
+Tracks 2 (Quality bar enforcement) and Track 3 (Per-customer customization discipline) otherwise carry forward from v3. Grade snapshot carries forward. v3 retires on acceptance of v4; v2.1 remains canonical baseline; v4 is operative reference.
 
 # Track 1 — Reliability Completion (REFRESHED in v2.3)
 
@@ -42,7 +40,7 @@ Test count trajectory: 137 → 779 (+642, +469% from v2.1 baseline). Ruff clean 
 | R3 — First workstream consumer integration | PARTIALLY CLOSED 2026-05-21 via PR #57 (Session 1: intake.py end-to-end) | Session 2 (weekly_generate.py) and Session 3 (weekly_send.py) remaining. R3 Session 2 has zero prereqs; next critical-path target. |
 | R4 — Polling-daemon doctrine + operator-visibility surface (NEW v2.3) | CLOSED 2026-05-21 via PRs #59 + #60 | safety_reports/intake_poll.py + ITS_Daemon_Health sheet + heartbeat write contract. Codifies emergent pattern (watchdog + picklist_sync were already this shape). Op Stds v11 §31 + §32 hold the doctrine. |
 | R5 — Pre-Customer-1 Security Hardening Cluster (NEW v2.3) | OPEN | Three deliverables per V&R v7.2 Phase 1.4: picklist-hardening (~30 min UI + 1 hr audit); ITS_Trusted_Contacts sheet + intake refactor + header-forgery (~half-day); attachment screening Layers 1-3 (~half-day to one-day). Total ~1.5 dedicated day-sessions. Blocks Phase 1.5 cutover. |
-| R6 — Successor-Maintenance Build Program (NEW v3) | OPEN | The build work the three-tier successor-maintenance model requires before the Developer-Operator can step back to a Tier-3-only role. Three sub-deliverables, all pre-Phase-1.5-cutover (hard gates per Handover Plan v7 + V&R v8): (a) **Tier-1 self-heal completion** — the watchdog heartbeat-staleness floor must see all daemons (Check H is an UNMET pre-cutover condition; `watchdog` + `picklist_sync` are retrofit-pending, only `intake_poll` writes a heartbeat today); (b) **Tier-2 non-developer-safe enforcement layer** — a guarded, capability-gated path that lets Claude drive a Successor-Operator-approved field repair (the LOW-capability-class set only: re-run a daemon, toggle an ITS_Config value, re-send an approval, re-seed a row, clear a stuck lock) while STRUCTURALLY forbidding HIGH-capability-class operations (External Send Gate, secrets/auth, doctrine, anything requiring a code change). **This enforcement layer does not exist today** — the real capability-gating (`tests/test_capability_gating.py`) and the four guard hooks are scoped to subagent/developer sessions and fall open for the operator's own session, assuming a developer-in-loop who can safely override. Building a guard layer that holds WITHOUT a Developer-Operator present to adjudicate is the open work; (c) **Successor-remediation runbook tooling** — the build-time discipline (Op Stds v15 §43) and authoring substrate for plain-language remediation entries shipped as Markdown with the capability (Claude-read; Smartsheet/alert-keyed in content), aimed at the non-developer Successor-Operator (parallel to, and distinct from, Op Stds §42 code-docstrings). Through-line: the same capability-gating philosophy that keeps the AI out of the send path (Foundation Mission Invariant 1 two-process model) is the philosophy this Tier-2 layer extends to keep a repair session out of high-class operations. Cross-referenced as a pre-cutover gap alongside the Check H self-heal condition. Blocks Phase 1.5 cutover. |
+| R6 — Successor-Maintenance Build Program (NEW v3; (b) revised v4) | OPEN | The build work the three-tier successor-maintenance model requires before the Developer-Operator can step back to a Tier-3-only role. Three sub-deliverables, all pre-Phase-1.5-cutover (hard gates per Handover Plan v8 + V&R v9): (a) **Tier-1 self-heal completion** — the watchdog heartbeat-staleness floor must see all daemons (Check H is an UNMET pre-cutover condition; `watchdog` + `picklist_sync` are retrofit-pending, only `intake_poll` writes a heartbeat today); (b) **Tier-2 readiness** (revised v4 — replaces the removed "Tier-2 non-developer-safe enforcement layer") — implement the §44 low-capability-class action set (re-run a daemon, toggle an ITS_Config value, re-send an approval, re-seed a row, clear a stuck lock) as discrete, tested, non-escalating operations; author §43 runbooks for the top fault classes; and train the Successor-Operator to run Claude Code, follow the runbooks, and recognize and escalate the four high-class categories (External Send Gate, secrets/auth, doctrine, code changes), with demonstrated supervised repairs. **There is no structural "non-developer-safe enforcement layer" and none is to be built** — the Tier-2 boundary is held by training + the both-rule + co-resolution with the Developer-Operator until per-category clearance (FM v11 / Op Stds v16); (c) **Successor-remediation runbook tooling** — the build-time discipline (Op Stds v16 §43) and authoring substrate for plain-language remediation entries shipped as Markdown with the capability (Claude-read; Smartsheet/alert-keyed in content), aimed at the Successor-Operator (parallel to, and distinct from, Op Stds §42 code-docstrings). Through-line: the capability-gating philosophy that keeps the AI out of the send path (Foundation Mission Invariant 1 two-process model) informs how the Tier-2 boundary is drawn, but does not become a built control. Cross-referenced as a pre-cutover gate alongside the Check H self-heal condition. Blocks Phase 1.5 cutover. |
 
 # Track 2 — Quality Bar Enforcement (carries forward verbatim from v2.2)
 
@@ -70,7 +68,7 @@ Concrete scope exclusions carry forward from v2.3, except the maintenance-model 
 
 - Per-customer-repo invariant means no 'current customer' parameter, no tenant-keyed sheet-ID lookup.
 
-- Blueprint Fork Runbook (3.3) is **Developer-Operator-driven** (git / CC / shell / `gh api` / migration / worktree work — see Op Stds v15 §§37-41); the customer participates at hand-off. The non-developer Successor-Operator does not run fork-setup steps; those are Developer-Operator-only by capability class.
+- Blueprint Fork Runbook (3.3) is **Developer-Operator-driven** (git / CC / shell / `gh api` / migration / worktree work — see Op Stds v16 §§37-41); the customer participates at hand-off. The Successor-Operator does not run fork-setup steps; those are Developer-Operator-only by capability class.
 
 - Each customer engagement is a separate contract, separate handover, separate maintenance arrangement. The intended steady-state maintenance arrangement is the three-tier successor-maintenance model: Tier 1 self-heal, Tier 2 Successor-Operator + Claude repair within the low-capability-class set, Tier 3 escalation to the Developer-Operator (Seth) as a reachable asset.
 
@@ -83,14 +81,16 @@ Concrete scope exclusions carry forward from v2.3, except the maintenance-model 
 | Architecture & invariant clarity | A | A | Foundation Mission v8 absorbs Invariant 2 6th layer + Layer 1 expansion. Substantive invariant evolution without disturbing the principle. |
 | Execution against plan | A | A | 26-PR window now extended to 35-PR window. R1 + R2 + R3 Session 1 + R4 all closed. Test count 137 → 779. |
 | Productization readiness (Per-customer customization) | B+ | B+ | Unchanged. Tracks 3.2 + 3.3 unchanged. |
-| Reliability completion (Phase 0 closeout) | A | A | R1 + R2 + R4 closed. R3 Session 1 closed (intake.py); Sessions 2+3, R5, and R6 (successor-maintenance build program — incl. the not-yet-built Tier-2 non-developer-safe enforcement layer and Tier-1 self-heal completion) are remaining critical-path items before Phase 1.5 cutover. |
+| Reliability completion (Phase 0 closeout) | A | A | R1 + R2 + R4 closed. R3 Session 1 closed (intake.py); Sessions 2+3, R5, and R6 (successor-maintenance build program — Tier-1 self-heal completion + Tier-2 readiness work: the §44 low-class action set + §43 runbooks + training) are remaining critical-path items before Phase 1.5 cutover. |
 | Documentation discipline | A | A | 8-doc cascade landing 2026-05-22 against verified-from-repo state. Cascade Verification Audit predecessor sets new bar for cascade quality. |
 | Quality bar enforcement | B- | B- | Track 2.2 unchanged (8 sections enforced); Track 2.1 (test_doc_pointers) un-built; Track 2.3 self-organizing. §35 picklist convention is a new candidate for 2.2. |
 
 # Authority
 
-Excellence Roadmap v3, 2026-05-29. Major bump from v2.3, adding R6 (successor-maintenance build program) as a new Track 1 critical-path cluster and reframing the post-handover maintenance model in the Track 3 scope-exclusions: remote support is a Tier-3 escalation channel for the Developer-Operator (Seth), not the primary ongoing-operation model. Frontmatter integer and title reconciled to a single bare-integer version (v3) per Gap G7; the v2.x minor-overlay scheme is retired. v2.3 retires on acceptance of v3; v2.1 remains canonical baseline; v3 is operative reference. Canonical git tag: `excellence-roadmap-v3`.
+Excellence Roadmap v4, 2026-06-01. v4 reframes R6 sub-deliverable (b): the Tier-2 "non-developer-safe enforcement layer" is removed (there is no structural maintenance enforcement layer; none is built or required — FM v11 / Op Stds v16 / Handover v8 / V&R v9) and replaced by Tier-2 readiness work (the §44 low-capability-class action set implemented + §43 runbooks + trained-operator / demonstrated-repair). R6 (a) Tier-1 self-heal completion and (c) runbook tooling carry forward; the v3 Track-3 maintenance-model reframe (Developer-Operator = Tier-3 escalation asset) stands. v3 retires on acceptance of v4; v2.1 remains canonical baseline; v4 is operative reference. Canonical git tag: `excellence-roadmap-v4`.
 
-v4 trigger criteria: substantive track restructuring or addition of a fundamentally new track. Status updates without track-structure changes are absorbed in-place at v3 (no minor-overlay; frontmatter and title stay equal per G7).
+v4 trigger (met): R6's Tier-2 sub-deliverable recharacterized from a structural enforcement layer to Tier-2 readiness work — a track-item restructuring driven by the FM v11 / Op Stds v16 de-1b reframe. Tag pushed post-merge: `excellence-roadmap-v4`.
 
-Companion to FM v10, Op Stds v15, V&R v8, Handover Plan v7, FSU v6.5, Memory Archive v5, Successor-Maintenance Model Audit 2026-05-29.
+v5 trigger criteria: substantive track restructuring or addition of a fundamentally new track. Status updates without track-structure changes are absorbed in-place at v4 (no minor-overlay; frontmatter and title stay equal per G7).
+
+Companion to FM v11, Op Stds v16, V&R v9, Handover Plan v8, FSU v6.5, Memory Archive v5, Successor-Maintenance Model Audit 2026-05-29.
