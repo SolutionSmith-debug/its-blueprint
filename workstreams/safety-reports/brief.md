@@ -136,7 +136,7 @@ Reads approved WPR rows from WPR_Pending_Review where Approved for Send=true. Se
 
 # Risks (REFRESHED in v6.1)
 
-- MacBook off / sleeping: launchd doesn't fire. Watchdog Check H (heartbeat staleness, successor to Check F per Op Stds v11 §2) catches stale daemon state. Tailscale-managed remote wake-up possible.
+- MacBook off / sleeping: launchd doesn't fire. The watchdog Check C marker-file staleness floor (the staleness detector earlier called "Check H", successor to Check F per Op Stds v16 §2) plus the external UptimeRobot heartbeat ping (audit F16) catch stale-daemon / dead-host state. Tailscale-managed remote wake-up possible.
 
 - Classification accuracy on three real intake types: unknown until benchmarked. Plan: pull 50-100 historical samples per type, run classifier, manually verify, tune.
 

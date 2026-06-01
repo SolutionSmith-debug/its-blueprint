@@ -106,11 +106,14 @@ successor-maintenance model (Op Stds v16 §44) a hazard the Successor-Operator
 cannot detect must not depend on a developer happening to be present. The recommended (still-deferred, **not built
 here**) resolution is therefore not just a console notice but a
 **watchdog-detectable signal** — e.g. a daily `ITS_Daemon_Health` /
-Check-H-adjacent assertion that the agent/hook symlink resolves, writing a
+watchdog-Check-C-adjacent assertion that the agent/hook symlink resolves, writing a
 CRITICAL `ITS_Errors` row (which the Successor-Operator *does* see and can
 escalate from) if it dangles. Converting this fail-open into a loud, surfaced
-fault is a **pre-cutover build requirement**, tracked alongside the watchdog
-Check H self-heal gap; it is **not implemented today**.
+fault is a **pre-cutover build requirement**, tracked alongside the Tier-1
+self-heal gap (the watchdog Check C marker-file staleness floor — earlier
+mis-named "Check H" — which covers all four tracked daemons, plus the live
+UptimeRobot F16 ping; the residual is the weekly_generate Friday-crash
+catch-up); it is **not implemented today**.
 
 A second consequence of the symlink: it targets the `~/its` **working tree**,
 not a pinned ref — so the agent registry a blueprint session sees is whatever
