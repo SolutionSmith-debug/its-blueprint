@@ -1,16 +1,16 @@
 ---
 type: reference
-version: 6
+version: 7
 status: canonical
 last_verified: 2026-05-24
 last_verified_against: 3b7d56d
 workstream: null
-tags: [smartsheet, system-workspace, human-review, successor-operator]
+tags: [smartsheet, system-workspace, human-review, successor-operator, training-bounded-co-resolution]
 ---
 
-ITS — Smartsheet System & Human Review Handoff v6
+ITS — Smartsheet System & Human Review Handoff v7
 
-# ITS — Smartsheet System & Human Review Handoff v6
+# ITS — Smartsheet System & Human Review Handoff v7
 
 ITS — System and ITS — Human Review workspaces, schemas, bootstrap, API constraints, operational patterns
 
@@ -22,9 +22,9 @@ Generated 2026-05-17 evening; **schemas corrected 2026-05-18 morning against liv
 
 **Smartsheet Handoff v4 remains canonical** for the customer-facing **Forefront Portfolio — ITS Demo** workspace — its 5 top-level folders, 12-sheet flat-per-project model, Bradley 1 source-of-truth template, FL flat-ledger design, Schedule and Closeout K-1 schemas, Vendor DB / Sub DB / Equipment DB seeding, and the production attachment plan. **Do not retire v4** when this document is filed; the two are sibling docs covering parallel workspaces.
 
-A future cascade event may merge the customer-portfolio handoff (v4) and this System + Human Review handoff into a single unified Smartsheet Handoff. That merge requires v4 in front of the author to faithfully carry the customer-portfolio detail. This document does not attempt that merge. (Note: this doc's own version line advanced to v6 in the 2026-05-29 successor-model reconciliation, so the unified merge will take the next integer available at merge time, not "v6".)
+A future cascade event may merge the customer-portfolio handoff (v4) and this System + Human Review handoff into a single unified Smartsheet Handoff. That merge requires v4 in front of the author to faithfully carry the customer-portfolio detail. This document does not attempt that merge. (Note: this doc's version line advanced to v6 (2026-05-29 successor-model cascade) then v7 (2026-06-01 de-1b reconciliation); the unified merge will take the next integer available at merge time.)
 
-**Authority chain.** Foundation Mission v10 (operator-vs-customer-employee audience-separation principle, originated v6; plus the Developer-Operator / Successor-Operator maintenance-role distinction added in v10) → Operational Standards v15 (workspace topology, sheet-ID bootstrap, MCP-gap REST-fallback, API constraints — originated v8; plus §§43-44 successor-maintenance discipline) → this document.
+**Authority chain.** Foundation Mission v11 (operator-vs-customer-employee audience-separation principle, originated v6; plus the Developer-Operator / Successor-Operator maintenance-role distinction added in v10 and refined in v11 — Successor-Operator = trained CC operator) → Operational Standards v16 (workspace topology, sheet-ID bootstrap, MCP-gap REST-fallback, API constraints — originated v8; plus §§43-44 successor-maintenance discipline) → this document.
 
 **Correction note.** The original 2026-05-17 evening cut drafted ITS_Time_Off, ITS_Config, and ITS_Errors schemas from the Cascade Unification Update’s seed-row tables rather than from live get_columns against the provisioned sheets. The Session Wrap Inventory (late evening 2026-05-17) caught the divergence. Schemas below match live state as of 2026-05-18 morning.
 
@@ -36,9 +36,9 @@ Three workspaces, separated by audience, not by data type:
 | --- | --- | --- | --- |
 | Forefront Portfolio — ITS Demo | 4129485730670468 | Evergreen day-to-day (PMs, admins, field) | **Handoff v4** |
 | ITS — Human Review | 8561891980142468 | Evergreen day-to-day (approvers, personnel admins) | This doc |
-| ITS — System | 680592632244100 | System-role-only (Developer-Operator = Seth at ADMIN; non-developer Successor-Operator at EDITOR for Tier-2 repair) | This doc |
+| ITS — System | 680592632244100 | System-role-only (Developer-Operator = Seth at ADMIN; trained Successor-Operator at EDITOR for Tier-2 repair) | This doc |
 
-The split exists because the people who handle each surface play different roles in the three-tier successor-maintenance model. ITS — System surfaces (ITS_Review_Queue anomalies, security flags, low-confidence extractions, sender-allowlist violations) are worked by the **Successor-Operator** — a *non-developer* who acts through the Smartsheet UI with Claude doing the diagnosis and repair, escalating to the **Developer-Operator** (Seth) only when a fault is novel or high-capability-class. This is a Tier-2 role, not a developer role: the Successor-Operator does **not** need maintainer-level system understanding and does **not** read code. Day-to-day reviewers handle WPR_Pending_Review and future per-workstream approval queues and need no system role at all. Separating these workspaces makes the role boundary visible and enforceable.
+The split exists because the people who handle each surface play different roles in the three-tier successor-maintenance model. ITS — System surfaces (ITS_Review_Queue anomalies, security flags, low-confidence extractions, sender-allowlist violations) are worked by the **Successor-Operator** — a trained operator who **runs Claude Code himself** and follows the §43 runbooks, escalating to the **Developer-Operator** (Seth) when a fault is novel or high-capability-class. This is a Tier-2 role, not a developer role: the Successor-Operator does **not** need maintainer-level system understanding and is not a code-reader (writes no code; does no §§37-41 developer-context work). Day-to-day reviewers handle WPR_Pending_Review and future per-workstream approval queues and need no system role at all. Separating these workspaces makes the role boundary visible and enforceable.
 
 The pattern generalizes to multi-tenancy: the System workspace stays singular across all customers. Each customer gets their own portfolio workspace and either their own Human Review workspace or shares a cross-customer one — that decision is deferred to Customer 2 onboarding.
 
@@ -46,7 +46,7 @@ The pattern generalizes to multi-tenancy: the System workspace stays singular ac
 
 **Workspace ID:** 680592632244100
 
-**Audience:** System-role-only. Seth (the **Developer-Operator**) holds ADMIN in Phase 0 and retains it for developer-context operations. At cutover a non-developer **Successor-Operator** is added at EDITOR for Tier-2 Claude-assisted repair (re-run a daemon, toggle an ITS_Config value, re-send an approval, re-seed a row, clear a stuck lock) — see permissions.md §3.2. ADMIN stays Developer-Operator-only; the Successor-Operator never performs developer-context operations.
+**Audience:** System-role-only. Seth (the **Developer-Operator**) holds ADMIN in Phase 0 and retains it for developer-context operations. At cutover a **Successor-Operator** (a trained operator who runs Claude Code himself) is added at EDITOR for Tier-2 repair (re-run a daemon, toggle an ITS_Config value, re-send an approval, re-seed a row, clear a stuck lock) — see permissions.md §3.2. ADMIN stays Developer-Operator-only; the Successor-Operator never performs §§37-41 developer-context operations.
 
 **Folder structure (3 subfolders, 4 sheets):**
 
@@ -103,7 +103,7 @@ get_setting() lives in shared/smartsheet_client.py and reads from SHEET_CONFIG (
 
 ## ITS_Errors (27291433258884)
 
-**Purpose.** Append-only error log. Every exception caught by shared/error_log.py (or its tested replacement) appends a row here. Sentry remains the primary observability surface for stack traces. ITS_Errors is the morning-check surface: the **Successor-Operator** scans it for new CRITICAL/ERROR rows and, for any they do not already have a runbook entry for, hands the row to **Claude**, which reads the Traceback and either drives a Tier-2 low-class repair or escalates to the **Developer-Operator** (Seth) when the fault is novel or high-capability-class. The Successor-Operator does **not** read tracebacks themselves; the Traceback column exists for Claude and for Seth on escalation.
+**Purpose.** Append-only error log. Every exception caught by shared/error_log.py (or its tested replacement) appends a row here. Sentry remains the primary observability surface for stack traces. ITS_Errors is the morning-check surface: the **Successor-Operator** scans it for new CRITICAL/ERROR rows and, following the §43 runbook, **runs Claude Code** on the row — Claude reads the Traceback and carries out a Tier-2 low-class repair, or the Successor-Operator escalates to the **Developer-Operator** (Seth) when the fault is novel or high-capability-class. The Successor-Operator does **not** read tracebacks himself; the Traceback column is for Claude and for Seth on escalation.
 
 | Column | Type | Notes |
 | --- | --- | --- |
