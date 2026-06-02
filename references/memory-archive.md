@@ -607,6 +607,46 @@ When the session is rooted in a git worktree (here `~/its-f02-f22` on branch `f0
 - ruff: clean
 - main-branch CI on merge commit `a3efca7`: SUCCESS
 
+## §G14 — 2026-06-02 F08+F09: Smartsheet circuit breaker + alerts-per-hour cap (PRs #137+#138)
+
+### Summary
+
+F08 and F09 landed together across two PRs on exec `origin/main` (both four-part-verify clean). Deployed live same session: pulled `~/its` to `699015b`, confirmed CLOSED/healthy on the new `first_opened_at` schema.
+
+**F08 — `shared/circuit_breaker.py`:** Domain-agnostic `guard(open_exc, count, ignore, ...)` decorator. A single global breaker persisted to `~/its/state/circuit_breaker.json` (launchd daemons are fresh-process-per-cycle — the consecutive-failure count and OPEN deadline MUST outlive the process; in-process state would reset on every invocation and never trip). State machine: CLOSED → OPEN → HALF_OPEN (single probe) → CLOSED/OPEN. Lock-free hot path; locked transition-writes. Fail-open everywhere: missing/corrupt JSON → CLOSED; lock timeout → CLOSED; `enabled=False` in ITS_Config → `is_open()` returns False. `bypass()` context manager for control/forensic-plane operations. 16 `smartsheet_client.py` network methods decorated; `SmartsheetCircuitOpenError(SmartsheetError)` subtype so existing `except SmartsheetError` catch blocks handle it unchanged. `_smartsheet_log` (ITS_Errors write in `error_log.py`) wrapped in `bypass()` so error recording survives an open breaker. Daemons (`intake_poll`, `weekly_send_poll`) gained `CIRCUIT_OPEN` heartbeat status. §43 runbook at `docs/runbooks/circuit_breaker.md`. ITS_Config seed rows in `scripts/seed_its_config.py`. §30 integration coverage at `tests/test_circuit_breaker_integration.py` (CI-skipped).
+
+**F09 — alerts-per-hour cap:** `ALERTING_MAX_ALERTS_PER_HOUR=15` (ITS_Config `alerting.max_alerts_per_hour`, fallback `defaults.ALERTING_MAX_ALERTS_PER_HOUR`) added as a second gate inside `error_log._fire_resend_leg`, using a reserved `_alerts_per_hour_window` key in `alert_dedupe.py`. **Fail-CLOSED at the ceiling** — only the Resend PUSH leg is capped. The ITS_Errors RECORD leg and Sentry leg always fire regardless of the cap (Op Stds §3.1 push-vs-record separation). The watchdog Check K (`_check_alert_rate_cap_window`) sweeps expired cap-window state on a schedule so the suppress window resets cleanly.
+
+**PR 2 additions (PR #138):** Added `first_opened_at` (monotonic episode start, PRESERVED across probe-failure re-opens) + `seconds_open()` lock-free reader. Watchdog Check J (`_check_circuit_breaker_prolonged_open`) — inline `_alert_critical` wrapped in `bypass()`, stable error_code `circuit_breaker_prolonged_open`, MAINTENANCE-defer. `resend_client.send_alert` recipient fallback chain: `system.operator_email` (guarded) → `defaults.OPERATOR_EMAIL_FALLBACK` → raise — so the prolonged-open page still delivers when the breaker short-circuits the config read during the very outage it's paging about. Check K (`_check_alert_rate_cap_window`) — cap-window summary sweep (guaranteed delivery of a summary when the cap was hit).
+
+### §G14.1 — Three bugs caught by mandatory live smoke (the lesson)
+
+All unit-test mocks passed for all three bugs. All three were caught only by running the actual daemons against the live sandbox before merge.
+
+1. **`intake_poll` crashed on `polling_enabled` config read when breaker was OPEN.** `_read_str_setting` called `get_rows(SHEET_CONFIG, ...)` which is decorated with `@_breaker_guard`. When the breaker tripped during the smoke, the config read raised `SmartsheetCircuitOpenError`. `intake_poll._poll_inside_lock` didn't catch it → uncaught exception → daemon crash. Fix: added `SmartsheetCircuitOpenError` to the `except (SmartsheetError, SmartsheetCircuitOpenError)` catch in the `polling_enabled` read path, with a fail-open fallback to `DEFAULT_POLLING_ENABLED`.
+
+2. **`weekly_send_poll` wrote bare `ERROR` heartbeat on scan failure instead of `CIRCUIT_OPEN`.** The scan-failure branch deep in `_poll_inside_lock` had a hardcoded `HeartbeatStatus.ERROR` write. In the mocks, the breaker never opened so the branch was never hit. Fix: check `isinstance(exc, SmartsheetCircuitOpenError)` and write `CIRCUIT_OPEN` status.
+
+3. **`circuit_breaker.is_open()` ignored the `enabled` flag.** The `is_open()` method read the persisted state file and returned `True` if it found an OPEN state, without checking whether the circuit breaker was globally enabled. A freshly-seeded sandbox had no `circuit_breaker.enabled` ITS_Config row, so `enabled` resolved False — but `is_open()` still returned True, blocking all Smartsheet calls on the first probe cycle. Fix: `is_open()` checks `_is_enabled()` first; disabled → return False regardless of file state.
+
+**The operational lesson:** new cross-cutting infrastructure (a breaker, a rate cap, a new exception subtype) is almost never fully exercised by existing unit-test mocks — the mocks were written before the cross-cutting module existed. The operator's practice is mandatory manual live smoke on the actual daemons before merge for any new shared infrastructure that changes how existing callsites behave. This is the third multi-instance case of this pattern (also: SDK-vs-Live §30, `security` CLI stdin shape F04). Consider it a class rule, not a per-PR decision.
+
+### §G14.2 — Deploy: clearing the hung intake_poll daemon
+
+The F08/F09 deploy revealed a pre-existing hung `intake_poll` daemon (PID 292, visible in `ps aux | grep intake_poll`). The daemon had been running for ~88 minutes, well past its normal 60s cycle. It was holding the `fcntl` file lock at `~/its/state/safety_intake.lock`, which prevented new launchd-invoked cycles from proceeding (they see the lock and exit, writing no heartbeat). The watchdog's Check C marker-file floor would have caught this on the next watchdog run — the staleness window for `safety_intake` is 5 minutes.
+
+**Clearance procedure used:** `launchctl kickstart -k org.solutionsmith.its.safety-intake` (the `-k` flag kills the existing instance before relaunching). This is the standard operator intervention for a hung daemon — `kickstart -k` is safe here because the daemon is single-shot-per-invocation (stateless beyond the lock file and heartbeat state) and the fcntl lock is automatically released when the process exits. Post-kickstart: fresh cycle completed on the new code within seconds; heartbeat advanced (`17:23 → 18:53:57 | Status OK | Cycles 11056`), breaker CLOSED/healthy, imports clean.
+
+**Why the daemon hung:** the old code (pre-F08) had no timeout on Graph API calls. An indefinite network wait in `graph_client.list_inbox` or similar would hold the lock until the OS reclaimed the process (launchd's `ThrottleInterval` eventually does this, but the window is long). This is tracked in `docs/tech_debt.md` as an open item — `graph_client` needs request timeouts.
+
+### §G14.3 — Final baseline
+
+- PR #135: CLAUDE.md trim (b428d8c), four-part verify clean.
+- PR #137: F08+F09 core (fc5d14f), four-part verify clean.
+- PR #138: F08+F09 watchdog (699015b), four-part verify clean.
+- pytest: not re-run at this session close (the PR-2 CI run is the ground truth).
+- Live deployment: intake_poll on new code, CLOSED/healthy, Cycles 11056.
+
 # Cross-References
 
 - Memory Archive v4 — operational detail through 2026-05-21 morning. v5 extends, does not supersede.
