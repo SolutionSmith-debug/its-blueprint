@@ -2,15 +2,15 @@
 type: reference
 status: canonical
 workstream: null
-last_verified: 2026-05-29
-last_verified_against: df83713
+last_verified: 2026-06-02
+last_verified_against: 699015b
 ---
 
 # Claude Code Info Gap
 
 **Purpose:** Context that lives only in chat memory / chat conversation and is NOT reachable from `~/its/` or `~/its-blueprint/` on a fresh Claude Code (CC) session. Drop this in project files so a chat-session can hand it to CC at spin-up, or so a fresh chat-session can re-orient quickly.
 
-**Last refreshed:** 2026-05-29
+**Last refreshed:** 2026-06-02
 **Maintained by:** chat-session at session close (treat as living doc)
 
 ---
@@ -132,8 +132,8 @@ gh pr view <num> --json mergedAt,mergeCommit,state
 ### PR-number prediction drift (2026-05-28)
 Never hard-code a predicted PR number into docs/code before `gh pr create` returns the actual number. The issue/PR counter advances unpredictably — predicted #103 was actually #104 because #103 was an unrelated open PR. Pattern: use a placeholder (`#TBD`) and fill in after creation, or accept a follow-up correction commit. A correction commit is cheap; stale PR citations in docs are not.
 
-### Op Stds is canonically v14 (as of 2026-05-29)
-v12 added §§37–41 (CC Skills / Agent Guardrails / Per-Customer-Fork Security / Migration-Script PII / Actions Version-Bump). v13 added §42 (code-level self-documentation discipline). v14 (F07, PR #23, 2026-05-29) reframed §1 kill switch from implied "security control" to "operator-convenience suggested pause, NOT a security boundary" (fail-open by design; External Send Gate = real boundary). New content citing `Op Stds §N` should reference v14. Historical v11/v12/v13 references in older tech-debt entries and session logs are grandfathered. **Cross-repo drift:** `~/its/CLAUDE.md` still says "Operational Standards v13" / "canonically at v13" throughout (the F02/F22 session deliberately scoped doctrine reconciliation out); tracked in `~/its/docs/tech_debt.md` as the v14 citation-lag entry.
+### Op Stds is canonically v16 (as of 2026-06-02)
+v12 added §§37–41 (CC Skills / Agent Guardrails / Per-Customer-Fork Security / Migration-Script PII / Actions Version-Bump). v13 added §42 (code-level self-documentation discipline). v14 (F07, PR #23, 2026-05-29) reframed §1 kill switch from implied "security control" to "operator-convenience suggested pause, NOT a security boundary" (fail-open by design; External Send Gate = real boundary). v15 added §43/§44 (successor-remediation documentation discipline + Tier-2 Claude-assisted repair path) with the Developer-Operator / Successor-Operator role split. v16 reframed §44's Tier-2 boundary as training-bounded co-resolution — no structural maintenance enforcement layer built or required. New content citing `Op Stds §N` should reference v16. Historical version references in older tech-debt entries and session logs are grandfathered.
 
 ### CodeQL false positives (Python + Actions, weekly, since 2026-05-24)
 Dismiss-as-FP unless content shows actual secret/PII value being logged:
@@ -165,6 +165,23 @@ When the session is rooted in a git worktree (e.g., `~/its-f02-f22` on branch `f
 
 ### Smartsheet cell-history `modifiedBy` has name+email only — no user ID (F22, 2026-05-29)
 `get_cell_history` returns `CellHistoryEvent.modified_by` with `name` and `email` fields; there is no stable user-ID field. `shared/approval_verification.py` therefore matches on email address (compared against the `safety_reports.authorized_approvers` ITS_Config row, which stores a comma-separated email list). This means: (a) approver identity is only as reliable as the email claim, (b) if an approver's email changes, the ITS_Config row must be updated, (c) there is no cross-tenant user-object comparison available. Documented as a deliberate limitation in `shared/approval_verification.py` §42 docstring.
+
+### Mocks pass but live fails — mandatory live smoke required before merge (2026-06-02)
+Three distinct live failures surfaced during the F08/F09 manual smoke that all unit-test mocks passed cleanly:
+
+1. `intake_poll` crashed on its `polling_enabled` config read when the breaker was OPEN — `_read_str_setting` didn't propagate `SmartsheetCircuitOpenError`; mocks never trip the breaker path.
+2. `weekly_send_poll` scan-failure path wrote `ERROR` heartbeat status instead of `CIRCUIT_OPEN` — dead path in unit tests.
+3. `circuit_breaker.is_open()` ignored the `enabled` flag — mock returned True regardless.
+
+Pattern: new cross-cutting behavior (a breaker, a rate cap, a new exception subtype) is almost never fully exercised by existing unit-test mocks because the mocks were written before the cross-cutting module existed. The operator's rule is **mandatory manual live smoke on the actual daemons before merge** for any new shared infrastructure. All three bugs above were caught this way; all three would have gone to production had the smoke been skipped. SDK-vs-Live (Op Stds §30) applies to daemon integration, not just SDK wrappers.
+
+### Circuit-breaker control-plane vs data-plane distinction (F08, 2026-06-02)
+`shared/circuit_breaker.py` wraps the 16 Smartsheet network methods with a `guard` decorator. Two patterns a fresh CC session must know:
+
+- **`circuit_breaker.bypass()` context manager:** wraps operations that MUST proceed even when the breaker is OPEN — specifically the ITS_Errors row write (`_smartsheet_log` in `error_log.py`) and the watchdog's own CRITICAL alert for a prolonged-open breaker. These are the control/forensic plane; bypassing them preserves observability during an outage. Pattern: `with circuit_breaker.bypass(): <smartsheet write>`.
+- **Fail-OPEN everywhere (data-plane calls):** if the breaker JSON is missing, corrupt, or the lock times out, the breaker defaults to CLOSED. If the `enabled` flag is False in ITS_Config, `is_open()` returns False regardless of state. The circuit breaker is an **availability hardening** tool, NOT a security control.
+- **F09 cap is fail-CLOSED at the ceiling:** `ALERTING_MAX_ALERTS_PER_HOUR` (default 15) blocks ONLY the Resend push leg — the ITS_Errors RECORD leg and Sentry leg always fire (Op Stds §3.1 push-vs-record separation). The cap is implemented as a reserved `_alerts_per_hour_window` key in `alert_dedupe.py`.
+- **`first_opened_at` vs `opened_at`:** the breaker persists two timestamps. `opened_at` resets on every HALF_OPEN→OPEN re-trip. `first_opened_at` is PRESERVED across probe-failure re-opens, giving a monotonic "episode start" clock used by watchdog Check J (`_check_circuit_breaker_prolonged_open`) to page when the outage exceeds the prolonged-open threshold.
 
 ---
 
@@ -256,18 +273,23 @@ The operator uses per-task git worktrees alongside `~/its` (main). Observed: `~/
 - Phase 1.4 hardening sweep (PR #113, 2026-05-28): F17 (intake_poll watchdog Check C registration — `_write_watchdog_marker` added, live-confirmed on production daemon), F04 (`shared/keychain.set_secret` stdin correctness — `security -w` must be last arg, double-feed `value\nvalue\n`; live create→read→rotate→delete verified), watchdog docstring drift removed from 3 spots
 - Network-capability allowlist + approval-attestation verification (F02+F22, exec PR #118, 2026-05-29)
 - **FM v9 + Op Stds v14 (F07/F13 doctrine reconciliation, blueprint PR #23, 2026-05-29, squash `29000f1`):** Two doctrine reframes reconciling forensic-audit findings where doctrine over-promised security mechanisms. FM v8→v9: Invariant 2 Layer 5 (anomaly logging) reframed from "co-equal defense layer" → "post-hoc detection tripwire." Op Stds v13→v14: §1 kill switch reframed from implied "security control" → "operator-convenience suggested pause, NOT a security boundary" (fail-open by design; External Send Gate = real boundary). Code unchanged in both cases. Tags `foundation-mission-v9` + `operational-standards-v14` pushed on `29000f1`. Both docs' `last_verified_against` = exec-repo HEAD `64526a1`.
+- CLAUDE.md trim 42.9KB→33.9KB (-21%) (exec PR #135, `b428d8c`, 2026-06-02) — removed stale/redundant prose under the size warning; content-reducing, not superseding.
+- **Smartsheet circuit breaker + alerts-per-hour cap — F08+F09 (exec PRs #137+#138, `fc5d14f`/`699015b`, 2026-06-02):** `shared/circuit_breaker.py`: domain-agnostic `guard` decorator, single global persisted breaker (`~/its/state/circuit_breaker.json`), CLOSED→OPEN→HALF_OPEN→CLOSED/OPEN state machine, lock-free hot path with locked transition-writes, fail-open everywhere, `bypass()` for control/forensic-plane operations. 16 `smartsheet_client.py` network methods decorated; `SmartsheetCircuitOpenError(SmartsheetError)` subtype so existing catch blocks handle it unchanged. F09: `ALERTING_MAX_ALERTS_PER_HOUR=15` cap on the Resend push leg only (RECORD legs ITS_Errors+Sentry unaffected, per Op Stds §3.1). ITS_Errors bypass-wrapped so error recording survives open breaker. Daemons gained `CIRCUIT_OPEN` heartbeat status. §43 runbook at `docs/runbooks/circuit_breaker.md`. Watchdog Check J (prolonged-open alert, bypass-wrapped, MAINTENANCE-defer) + Check K (cap-window summary sweep). `first_opened_at` monotonic episode clock preserved across probe-failure re-opens. Deployed live 2026-06-02: imports clean, breaker CLOSED on new schema, hung intake_poll daemon (PID 292, ~88 min) cleared via `launchctl kickstart -k`, fresh cycle confirmed on new code. Three bugs caught by mandatory live smoke before merge (see §5 "Mocks pass but live fails").
 
 ### Bradley 1 (BBCHS 1)
 - Template project, six sheets migrated, demo seeding complete.
 - Next: UI work (conditional formatting, forms, filter views — Seth runs UI-only work himself) before cloning template to the other five projects.
 
 ### Open queue
-- Phase 1.4 hardening cluster remaining: F08+F09 (`shared/circuit_breaker.py`), F16, F18, F03, F10 (F17+F04 landed PR #113; F02+F22 landed PR #118)
+- Phase 1.4 hardening cluster remaining: F16, F18, F03, F10 (F08+F09 landed PRs #137+#138; F17+F04 landed PR #113; F02+F22 landed PR #118)
 - `person_tag` regex refinement (138 hits, likely FPs)
 - Three `box_migration` parser tech_debts deferred: V/S vendor-sub parser, ISO date prefix, import-time hygiene wrap
 - `shared/heartbeat.py` extraction (heartbeat helpers now copied verbatim across THREE consumers — intake_poll, weekly_send_poll, and intake_poll._write_watchdog_marker added in F17; 2nd-consumer extraction signal per Op Stds §14 still deferred)
-- Update `docs/doctrine_manifest.yaml` in exec repo to reflect FM v9 + Op Stds v14 (blueprint bump from PR #23)
-- `~/its/CLAUDE.md` v14 citation lag: all "Operational Standards v13" / "canonically at v13" strings need updating; deferred from F02/F22 session scope (tracked `docs/tech_debt.md`)
+- Graph API calls have no timeout — indefinite daemon hang possible during a Graph outage (surfaced by F08/F09 hung-daemon incident; tracked `docs/tech_debt.md`)
+- `weekly_send_poll` has no `ITS_Daemon_Health` row — heartbeat writes are silently inert (tracked `docs/tech_debt.md`)
+- `error_log.log(Severity.CRITICAL, …)` does not fire the triple-fire alert path — no Resend or Sentry (tracked `docs/tech_debt.md`)
+- Update `docs/doctrine_manifest.yaml` in exec repo to reflect FM v9 + Op Stds v16 (blueprint bumps)
+- Inline doctrine-pin normalization across `shared/*` + `safety_reports/*` (~50 sites, tracked `docs/tech_debt.md`)
 - Remote branch `origin/f02-f22` not auto-deleted (worktree `gh pr merge --delete-branch` quirk); needs `gh api -X DELETE repos/SolutionSmith-debug/its/git/refs/heads/f02-f22`
 
 ### On the horizon
