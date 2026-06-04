@@ -2,15 +2,15 @@
 type: reference
 status: canonical
 workstream: null
-last_verified: 2026-06-02
-last_verified_against: 699015b
+last_verified: 2026-06-03
+last_verified_against: 5d25b47
 ---
 
 # Claude Code Info Gap
 
 **Purpose:** Context that lives only in chat memory / chat conversation and is NOT reachable from `~/its/` or `~/its-blueprint/` on a fresh Claude Code (CC) session. Drop this in project files so a chat-session can hand it to CC at spin-up, or so a fresh chat-session can re-orient quickly.
 
-**Last refreshed:** 2026-06-02
+**Last refreshed:** 2026-06-03
 **Maintained by:** chat-session at session close (treat as living doc)
 
 ---
@@ -175,6 +175,9 @@ Three distinct live failures surfaced during the F08/F09 manual smoke that all u
 
 Pattern: new cross-cutting behavior (a breaker, a rate cap, a new exception subtype) is almost never fully exercised by existing unit-test mocks because the mocks were written before the cross-cutting module existed. The operator's rule is **mandatory manual live smoke on the actual daemons before merge** for any new shared infrastructure. All three bugs above were caught this way; all three would have gone to production had the smoke been skipped. SDK-vs-Live (Op Stds §30) applies to daemon integration, not just SDK wrappers.
 
+### Worktree review subagent reads wrong tree (2026-06-03)
+When running a review subagent (e.g., `code-review`) over a git worktree, the synthesizer subagent may re-verify findings by reading files from `~/its` (the main checkout) instead of the worktree absolute path. This produces false "phantom diff" reports — the subagent declares that committed changes do not exist in the file it read, because it read the wrong tree. **Pattern:** always pin ALL reads in a review subagent invocation to the worktree absolute path (e.g., `~/its-3b/`) and explicitly instruct the synthesizer that the committed branch diff is ground truth. The same session's Phase-3a review correctly caught a real blocker (title-only idempotency that would silently skip a wrong-typed column) — the Phase-3b review faltered on this tree-read issue. The fix is instruction discipline, not a code change.
+
 ### Circuit-breaker control-plane vs data-plane distinction (F08, 2026-06-02)
 `shared/circuit_breaker.py` wraps the 16 Smartsheet network methods with a `guard` decorator. Two patterns a fresh CC session must know:
 
@@ -228,6 +231,9 @@ The operator uses per-task git worktrees alongside `~/its` (main). Observed: `~/
 - **Branch-name collision:** a fresh session starting in `~/its` that tries to create a branch a reserved worktree already holds will fail. Check `git worktree list` before branching.
 - **Live daemon runs `~/its` working tree:** `org.solutionsmith.its.safety-intake` executes `~/its/safety_reports/intake_poll.py` from disk every ~60s. Uncommitted edits in `~/its` go live on the next cycle. Do daemon/intake feature edits in a worktree, not the `~/its` main checkout.
 
+### Editable-install + PYTHONPATH worktree import resolution (confirmed 2026-06-03)
+With `its` installed editable (`__editable__.its-0.1.0.pth`), setting `PYTHONPATH=<worktree>` DOES win over the editable finder. Worktree code and tests run correctly via `PYTHONPATH=<worktree> ~/its/.venv/bin/python -m pytest ...`. This resolves the open question in `docs/operations/worktree_discipline.md` about whether PYTHONPATH wins. It does — confirmed across three parallel worktrees (~/its-3a, ~/its-e1, ~/its-3b) in the 2026-06-03 session.
+
 ### CC skills installed (PR #79, mattpocock/skills)
 14 skills in `.agents/skills/` + `.claude/skills/` symlinks, pinned via `skills-lock.json`:
 
@@ -275,6 +281,8 @@ The operator uses per-task git worktrees alongside `~/its` (main). Observed: `~/
 - **FM v9 + Op Stds v14 (F07/F13 doctrine reconciliation, blueprint PR #23, 2026-05-29, squash `29000f1`):** Two doctrine reframes reconciling forensic-audit findings where doctrine over-promised security mechanisms. FM v8→v9: Invariant 2 Layer 5 (anomaly logging) reframed from "co-equal defense layer" → "post-hoc detection tripwire." Op Stds v13→v14: §1 kill switch reframed from implied "security control" → "operator-convenience suggested pause, NOT a security boundary" (fail-open by design; External Send Gate = real boundary). Code unchanged in both cases. Tags `foundation-mission-v9` + `operational-standards-v14` pushed on `29000f1`. Both docs' `last_verified_against` = exec-repo HEAD `64526a1`.
 - CLAUDE.md trim 42.9KB→33.9KB (-21%) (exec PR #135, `b428d8c`, 2026-06-02) — removed stale/redundant prose under the size warning; content-reducing, not superseding.
 - **Smartsheet circuit breaker + alerts-per-hour cap — F08+F09 (exec PRs #137+#138, `fc5d14f`/`699015b`, 2026-06-02):** `shared/circuit_breaker.py`: domain-agnostic `guard` decorator, single global persisted breaker (`~/its/state/circuit_breaker.json`), CLOSED→OPEN→HALF_OPEN→CLOSED/OPEN state machine, lock-free hot path with locked transition-writes, fail-open everywhere, `bypass()` for control/forensic-plane operations. 16 `smartsheet_client.py` network methods decorated; `SmartsheetCircuitOpenError(SmartsheetError)` subtype so existing catch blocks handle it unchanged. F09: `ALERTING_MAX_ALERTS_PER_HOUR=15` cap on the Resend push leg only (RECORD legs ITS_Errors+Sentry unaffected, per Op Stds §3.1). ITS_Errors bypass-wrapped so error recording survives open breaker. Daemons gained `CIRCUIT_OPEN` heartbeat status. §43 runbook at `docs/runbooks/circuit_breaker.md`. Watchdog Check J (prolonged-open alert, bypass-wrapped, MAINTENANCE-defer) + Check K (cap-window summary sweep). `first_opened_at` monotonic episode clock preserved across probe-failure re-opens. Deployed live 2026-06-02: imports clean, breaker CLOSED on new schema, hung intake_poll daemon (PID 292, ~88 min) cleared via `launchctl kickstart -k`, fresh cycle confirmed on new code. Three bugs caught by mandatory live smoke before merge (see §5 "Mocks pass but live fails").
+- **2026-06-02/03 batch — PRs #139–#150 (exec, all four-part-verify clean):** Graph-call timeout/weekly_send_poll health-row gaps registered (#139); Tier-A watchdog+reliability cluster: daemon-health self-provision A1 + graph timeouts A2 (#140), CI doctrine-drift + gitleaks C1+C2 (#142), A3 log-CRITICAL-pages full fix (#141), B1 F21 numeric bounds + anomaly-logger range check (#144), B2 startup token write-capability probe watchdog Check L (#145), C3 blueprint guard-symlink + C4 picklist-marker wiring (#146), launchd install.sh placeholder substitution fix (#147), D2 Invariant-2 Layer-5 reframe + F21 tech-debt close (#148), E1 BOX_PROJECT_FOLDERS → ITS_Project_Routing cutover (shared/project_routing.py + build/seed/flip order corrected) (#149), picklist-drift classify + additive ensure_picklist_options + Reason-drift live-fix (#150). Baseline after #150: pytest ~1200+ passed, mypy 0, ruff clean.
+- **2026-06-03 session — PRs #151+#152+#153 open, pending merge (all local gates + branch CI green):** Phase 3a ADD — new `shared/smartsheet_client.create_picklist_column` helper + idempotent `scripts/migrations/add_dormant_picklist_columns.py`; ITS_Errors·Workstream + ITS_Quarantine·Disposition created live (#151). E1 flip — `SHEET_PROJECT_ROUTING = 3500842291253124` live in `shared/sheet_ids.py`; ITS_Project_Routing built + seeded; `get_folder_id` verified reading from sheet (#152). Phase 3b AUTOMATE — `--apply`/`--apply --commit` mode added to `scripts/audit_picklist_drift.py`; `audit --apply` ran 0/0 on clean registry (#153).
 
 ### Bradley 1 (BBCHS 1)
 - Template project, six sheets migrated, demo seeding complete.
@@ -287,10 +295,12 @@ The operator uses per-task git worktrees alongside `~/its` (main). Observed: `~/
 - `shared/heartbeat.py` extraction (heartbeat helpers now copied verbatim across THREE consumers — intake_poll, weekly_send_poll, and intake_poll._write_watchdog_marker added in F17; 2nd-consumer extraction signal per Op Stds §14 still deferred)
 - Graph API calls have no timeout — indefinite daemon hang possible during a Graph outage (surfaced by F08/F09 hung-daemon incident; tracked `docs/tech_debt.md`)
 - `weekly_send_poll` has no `ITS_Daemon_Health` row — heartbeat writes are silently inert (tracked `docs/tech_debt.md`)
-- `error_log.log(Severity.CRITICAL, …)` does not fire the triple-fire alert path — no Resend or Sentry (tracked `docs/tech_debt.md`)
 - Update `docs/doctrine_manifest.yaml` in exec repo to reflect FM v9 + Op Stds v16 (blueprint bumps)
 - Inline doctrine-pin normalization across `shared/*` + `safety_reports/*` (~50 sites, tracked `docs/tech_debt.md`)
 - Remote branch `origin/f02-f22` not auto-deleted (worktree `gh pr merge --delete-branch` quirk); needs `gh api -X DELETE repos/SolutionSmith-debug/its/git/refs/heads/f02-f22`
+- **Unloaded daemons (operator deploy step):** picklist-sync, watchdog, weekly-generate, weekly-send plists are on disk in `scripts/launchd/` but NOT installed via `install.sh load` on the production MacBook. Only `safety-intake` + `weekly-send-poll` are actively running. Operator must: `git -C ~/its pull` (deploy #151-#153 once merged), then `scripts/launchd/install.sh load` for each unloaded plist. Until then, picklist-sync + watchdog run only on demand.
+- **~14 stale worktrees** from the 2026-06-02/03 batch remain on disk (~/its-3a, ~/its-e1, ~/its-3b, plus earlier batch). Operator cleanup after merge + deploy.
+- Picklist drift Phase 3a RESOLVED (columns added live, #151 pending merge); Phase 3b RESOLVED (--apply mode built, #153 pending merge); E1 RESOLVED (sheet live + seeded, flip pending deploy via #152 merge + pull).
 
 ### On the horizon
 - Safety Portal build (blueprint `workstreams/safety-portal/` mission v1 + brief; Cloudflare Worker, intake.py portal-marker branches, HMAC-verified shim — all PLANNED, not built). Replaces PDF-email submission; the portal feeds the existing `intake.py` via the HMAC-verified shim (legacy PDF-email is the documented fallback). Attachment-screening (Invariant 2 Layer 6) is N/A for safety reports and reassigned to Email Triage.

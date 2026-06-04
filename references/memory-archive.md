@@ -647,6 +647,56 @@ The F08/F09 deploy revealed a pre-existing hung `intake_poll` daemon (PID 292, v
 - pytest: not re-run at this session close (the PR-2 CI run is the ground truth).
 - Live deployment: intake_poll on new code, CLOSED/healthy, Cycles 11056.
 
+## §G15 — 2026-06-03 Phase 3a/3b/E1 decisions + live side effects + two worktree gotchas (PRs #151–#153)
+
+### Summary
+
+Three feature branches built and CI-green (pending operator merge), with live Smartsheet side effects already applied this session. This was the "finish the 2026-06-02 work" session — all three decisions resolved in the prior session's planning were executed here.
+
+**Phase 3a — Decision D1=ADD (`feat/phase3a-add-dormant-columns`, PR #151):** Two DORMANT picklist columns that `picklist_validation.REGISTRY` declared but the live sheets lacked were added via a new `shared/smartsheet_client.create_picklist_column` helper (additive column-create, §42 docstring, `@_breaker_guard`). An idempotent `scripts/migrations/add_dormant_picklist_columns.py` (preview-default, `--commit`, title+type idempotency) seeded them with the registry options. **Live side effects applied this session:** ITS_Errors·Workstream (column ID `368377473568644`) + ITS_Quarantine·Disposition (column ID `8535753050328964`) created as PICKLIST with all registry options populated. `audit_picklist_drift --no-emit` now runs clean (0 findings). Phase 3a tech_debt entry flipped to RESOLVED inside PR #151.
+
+**E1 project-routing cutover — Decision D3=NOW (`feat/e1-project-routing-cutover`, PR #152):** `shared/sheet_ids.py` line 85 flipped `SHEET_PROJECT_ROUTING = 3500842291253124` (was 0 / pre-cutover sentinel). **Live side effects applied this session:** ITS_Project_Routing sheet built via `build_its_project_routing_sheet.py` + seeded with 6 BOX_PROJECT_FOLDERS rows via `seed_its_project_routing.py`. `get_folder_id` verified reading from the sheet (not the hardcoded dict). The flip+merge deploys the live cutover — `BOX_PROJECT_FOLDERS` remains as the warn-not-crash fallback. A real doc bug was found and fixed: build/seed/project_routing docstrings described order as build→seed→flip, but seed READS `SHEET_PROJECT_ROUTING`, so the correct order is build→**flip**→seed→verify; all three docstrings corrected. A `sheet_unwired` fixture was added to isolate the pre-cutover-fallback unit test so it simulates the unwired state correctly.
+
+**Phase 3b — Decision D2=AUTOMATE (`feat/phase3b-apply-automation`, PR #153):** Added `--apply` (dry-run by default) and `--apply --commit` flags to `scripts/audit_picklist_drift.py`, built on `ensure_picklist_options`. The `--apply` path is additive + option-only: if the column doesn't exist in the live sheet it logs and skips (no crash). Prune is out of scope for v1. A live smoke ran `audit_picklist_drift --apply` (no `--commit`) on the clean registry: 0 missing columns, 0 missing options — confirms the Phase 3a live side effects landed correctly. Phase 3b tech_debt entry flipped to RESOLVED inside PR #153.
+
+### §G15.1 — Decisions resolved (chat-side planning)
+
+These decisions were made in the planning session and are now implemented:
+
+| Decision | Outcome | PR |
+|---|---|---|
+| D1 — Phase 3a: dormant columns | ADD (create ITS_Errors·Workstream + ITS_Quarantine·Disposition) | #151 |
+| D2 — Phase 3b: automation | AUTOMATE (--apply mode in audit_picklist_drift.py) | #153 |
+| D3 — E1 cutover timing | NOW (flip SHEET_PROJECT_ROUTING, deploy on merge+pull) | #152 |
+
+### §G15.2 — Two worktree-workflow gotchas (new lessons)
+
+**(a) Worktree review subagent reads wrong tree — "phantom diff" false report.**
+When a `code-review` subagent was run over the `~/its-3b` worktree, the synthesizer sub-step re-verified findings by reading files from `~/its` (the main checkout, where the branch changes are not present). It declared the committed diff "phantom" — code that was clearly in the worktree and in `git diff` was reported as absent. The identically-shaped Phase-3a review in `~/its-3a` worked correctly (and caught a real blocker: title-only idempotency in `add_dormant_picklist_columns.py` that would silently skip a wrong-typed column — the guard was extended to check column type as well). The Phase-3b review was unaffected on correctness because the diff was also verified via `git diff HEAD` and unit tests; the phantom report was caught before acting on it.
+
+**Prevention:** when running any review subagent over a worktree, (1) pin ALL file reads to the worktree absolute path in the invocation prompt, (2) explicitly instruct the synthesizer that the committed branch diff (`git show HEAD` or `git diff <base>..HEAD`) is ground truth — it takes precedence over any file-existence re-check. This is an instruction-discipline fix, not a code change.
+
+**(b) Editable-install + PYTHONPATH import resolution confirmed.**
+`PYTHONPATH=<worktree>` wins over the `__editable__.its-0.1.0.pth` editable finder. Tests and scripts in a worktree run against worktree code correctly via `PYTHONPATH=<worktree> ~/its/.venv/bin/python -m pytest ...`. This was confirmed across three parallel worktrees (`~/its-3a`, `~/its-e1`, `~/its-3b`). The open question in `docs/operations/worktree_discipline.md` is resolved: PYTHONPATH wins.
+
+### §G15.3 — Operator deploy checklist (post-session)
+
+1. Merge PRs #151, #152, #153 (any order — `git merge-tree` verified clean cross-merge).
+2. `git -C ~/its pull` to deploy to the production MacBook tree.
+3. Run `pr-landed-verifier` four-part verify on each PR after merge.
+4. The `#152` merge + pull is the live E1 cutover — `get_folder_id` will start routing to the ITS_Project_Routing sheet on the next daemon cycle.
+5. Load unloaded daemons: `scripts/launchd/install.sh load org.solutionsmith.its.picklist-sync`, `...watchdog`, `...weekly-generate`, `...weekly-send`. Only `safety-intake` + `weekly-send-poll` are currently active on the production MacBook.
+6. Clean ~14 stale worktrees (~/its-3a, ~/its-e1, ~/its-3b, plus the 2026-06-02 batch).
+
+### §G15.4 — Final baseline (per-branch, pre-merge)
+
+All three branches: pytest green, mypy 0, ruff clean, branch CI green. Main-branch CI on merge commits: PENDING operator merge.
+
+- `feat/phase3a-add-dormant-columns` (PR #151): pytest passed, mypy 0, ruff clean, branch CI green.
+- `feat/e1-project-routing-cutover` (PR #152): pytest passed, mypy 0, ruff clean, branch CI green.
+- `feat/phase3b-apply-automation` (PR #153): pytest passed, mypy 0, ruff clean, branch CI green.
+- Last verified main baseline: `5d25b47` (exec PR #150 merge commit).
+
 # Cross-References
 
 - Memory Archive v4 — operational detail through 2026-05-21 morning. v5 extends, does not supersede.
