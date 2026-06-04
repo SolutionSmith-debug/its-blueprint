@@ -697,6 +697,52 @@ All three branches: pytest green, mypy 0, ruff clean, branch CI green. Main-bran
 - `feat/phase3b-apply-automation` (PR #153): pytest passed, mypy 0, ruff clean, branch CI green.
 - Last verified main baseline: `5d25b47` (exec PR #150 merge commit).
 
+## §G16 — 2026-06-03 Safety Portal config sheets + unifying alignment audit (PRs #155–#156)
+
+### Summary
+
+Two more exec PRs landed this session after the Phase 3a/3b/E1 cluster (§G15), both four-part-verify clean.
+
+**PR #155 — `feat(safety-portal): build ITS_Active_Jobs + ITS_Forms_Catalog config sheets` (merge `141a573`):** Built the two Smartsheet read-only config sheets the Safety Portal Cloudflare Worker will query. Live side effects applied same session:
+
+- New folder "Safety Portal" in Operations workspace (folder id `6663869084002180`).
+- **ITS_Active_Jobs** (sheet id `6223950341164932`): 6 rows seeded — `bradley-1`, `bradley-2`, `evergreen-hq`, `poa`, `rockford-s1`, `rockford-s2`. Columns: Job ID (text/primary), Job Name, Client, Project Type (PICKLIST), Status (PICKLIST, Active/Inactive), Box Folder ID (text), Address (text), Created At (date). **Address cells seeded BLANK** — §4 forbids inventing real addresses and no structured live source exists. Office PM fills manually before Work Location auto-fill can serve values.
+- **ITS_Forms_Catalog** (sheet id `423274885369732`): 4 rows seeded — `jha-v1`, `daily-site-safety-v1`, `equipment-preinspection-v1`, `toolbox-talk-v1`. Columns: Form ID (text/primary), Form Name, Form Type (PICKLIST), Version (text), Status (PICKLIST, Active/Inactive), Description (text), Created At (date).
+- Two new `smartsheet_client` primitives: `find_folder_by_name_in_workspace(workspace_id, name)` + `create_folder_in_workspace(workspace_id, name)` — direct REST via `_rest_post`/`_rest_get`, decorated with `@_breaker_guard`, full §42 docstrings.
+- §30 live integration test: `tests/test_safety_portal_config_sheets_integration.py` (2 tests, CI-skipped, run against live sandbox this session — passed).
+- §43 successor-remediation runbook: `docs/runbooks/safety_portal_config_sheets.md`.
+- Both build (`scripts/migrations/build_safety_portal_config_sheets.py`) and seed (`scripts/migrations/seed_safety_portal_config_sheets.py`) scripts are live-default; `--dry-run` flag for safe preview. Idempotent find-or-create on folder and sheets.
+- Guarded `picklist_validation.REGISTRY` entries added for `ITS_Active_Jobs` Project Type / Status and `ITS_Forms_Catalog` Form Type / Status.
+
+**PR #156 — `docs(audit): unifying forensic alignment & drift audit` (merge `9e4b51b1`):** Propose-only meta-audit at `docs/audits/2026-06-03_unifying-alignment-audit.md` (status: draft). No code changes. Purpose: single consolidated view of doctrine/code alignment for a funder (Ben) presentation. Key findings and corrections:
+
+- Per-axis verdicts A–F; ranked drift register — **NO Critical findings; no surviving High findings** after adversarial verification (earlier audits' High findings either already resolved or reclassified).
+- Consolidated open-findings register replacing four prior-audit fragmented lists.
+- **Corrections to live claims (CLAUDE.md stale):**
+  - Watchdog check count: CLAUDE.md says "6 of 7 checks operational" — actual is **11 operational** (A, B, C, D, F, G, I, J, K, L, M), only E (Anthropic spend) deferred.
+  - Subagent/hook sourcing: 9 subagents + 4 hooks are RELATIVE symlinks from `~/its-blueprint/.claude/` into `~/its/.claude/` (single source of truth); they are NOT copies.
+  - CI: gitleaks + doctrine-drift checks ARE in CI (landed PRs #142, #143); CLAUDE.md implied they were not.
+- **Open findings surfaced (not fixed this session):**
+  - **DR-D1 / H1:** Guard hooks fail-open if the `~/its/.claude` symlink to blueprint dangles. Watchdog Check M only detects post-hoc (after a missed cycle). No preventive mechanism.
+  - **DR-C2:** Invariant 2 Layer 6 (attachment screening) is entirely unbuilt for legacy PDF-email to `safety@`. Attachments upload to Box unscanned. The Portal pivot makes this N/A for portal-submitted safety reports, but the legacy email path remains open. Email Triage workstream carries this.
+  - **DR-E1 / OPEN-1:** `ops-stds-enforcer` agent's system prompt pins "Op Stds v13" — 3 major versions behind v16. It is blind to §43 (successor-remediation documentation), §44 (Tier-2 repair model), and the F07/F13 kill-switch + anomaly-logging reframes. Agent-file update needed.
+
+### §G16.1 — Safety Portal ITS sheet IDs
+
+For a fresh CC session wiring portal logic:
+
+| Sheet / Folder | ID |
+|---|---|
+| Safety Portal folder (Operations workspace) | `6663869084002180` |
+| ITS_Active_Jobs | `6223950341164932` |
+| ITS_Forms_Catalog | `423274885369732` |
+
+These are sandbox (evergreenmirror.com) IDs. Live-tenant IDs will differ at Phase 1.5 cutover.
+
+### §G16.2 — Alignment audit key verdicts (for rapid re-orientation)
+
+The audit's per-axis verdicts confirm the architecture is sound. Drift is in lower-authority layers (planning docs, agent prompts, CLAUDE.md table, memory files) lagging the de-1b doctrine cascade. The code/doctrine core is well-aligned. The three open findings (DR-D1, DR-C2, DR-E1) are known, tracked in `docs/tech_debt.md`, and non-blocking for the current build phase.
+
 # Cross-References
 
 - Memory Archive v4 — operational detail through 2026-05-21 morning. v5 extends, does not supersede.
