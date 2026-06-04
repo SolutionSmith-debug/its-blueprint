@@ -697,6 +697,52 @@ All three branches: pytest green, mypy 0, ruff clean, branch CI green. Main-bran
 - `feat/phase3b-apply-automation` (PR #153): pytest passed, mypy 0, ruff clean, branch CI green.
 - Last verified main baseline: `5d25b47` (exec PR #150 merge commit).
 
+## §G16 — 2026-06-03 Safety Portal config sheets + unifying alignment audit (PRs #155–#156)
+
+### Summary
+
+Two more exec PRs landed this session after the Phase 3a/3b/E1 cluster (§G15), both four-part-verify clean.
+
+**PR #155 — `feat(safety-portal): build ITS_Active_Jobs + ITS_Forms_Catalog config sheets` (merge `141a573`):** Built the two Smartsheet config sheets the Safety Portal reads (its only two Smartsheet inputs). Live side effects applied same session:
+
+- New folder "Safety Portal" in the ITS — Operations workspace (folder id `6663869084002180`).
+- **ITS_Active_Jobs** (sheet id `6223950341164932`): 6 rows seeded — `bradley-1`, `bradley-2`, `brimfield-1`, `brimfield-2`, `huntley`, `rockford`. Columns: Project Name (TEXT_NUMBER, primary — display name matching ITS_Project_Routing), Job ID (TEXT_NUMBER, kebab-case stable key), Address (TEXT_NUMBER), Active (PICKLIST: Active/Inactive/Archived), Notes (TEXT_NUMBER), Last Modified (system MODIFIED_DATE), Modified By (system MODIFIED_BY). **Address cells seeded BLANK** — §4 forbids inventing real addresses and no structured live source exists; the office PM fills them before Work Location auto-fill can serve values.
+- **ITS_Forms_Catalog** (sheet id `423274885369732`): 4 rows seeded — `jha-v1`, `daily-site-safety-v1`, `equipment-preinspection-v1`, `toolbox-talk-v1` (no `jha-bradley-v1` variant — that's a meeting decision). Columns: Form Name (TEXT_NUMBER, primary), Form Code (TEXT_NUMBER, == code form.ts directory), Active (PICKLIST: Active/Inactive/Archived), Description (TEXT_NUMBER), Display Order (TEXT_NUMBER), Available For Jobs (TEXT_NUMBER, CSV of Job IDs or empty=all), Last Modified (system MODIFIED_DATE), Modified By (system MODIFIED_BY).
+- Two new `smartsheet_client` primitives: `find_folder_by_name_in_workspace(workspace_id, name)` + `create_folder_in_workspace(workspace_id, name)` — direct REST (`requests.get`/`requests.post` on `/workspaces/{id}[/folders]`), `@_breaker_guard`, full §42 docstrings (only folder-in-folder existed before).
+- §30 live integration test: `tests/test_safety_portal_config_sheets_integration.py` (2 tests, integration-marked / CI-skipped, run live this session — 2 passed; verifies columns, system-column types, Active picklist options, and seeded rows).
+- §43 successor-remediation runbook: `docs/runbooks/safety_portal_config_sheets.md`.
+- Per-sheet build + seed migrations (`build_its_active_jobs_sheet.py` / `build_its_forms_catalog_sheet.py` / `seed_its_active_jobs.py` / `seed_its_forms_catalog.py`), live-default with a `--dry-run` preview, idempotent (find-or-create folder/sheet; seeds key on Job ID / Form Code).
+- Guarded `picklist_validation.REGISTRY` entries added for the `Active` column on BOTH sheets (Active/Inactive/Archived), gated on non-zero sheet IDs (Trusted-Contacts placeholder precedent).
+
+**PR #156 — `docs(audit): unifying forensic alignment & drift audit` (merge `9e4b51b1`):** Propose-only meta-audit at `docs/audits/2026-06-03_unifying-alignment-audit.md` (status: draft). No code changes. Purpose: single consolidated view of doctrine/code alignment for a funder (Ben) presentation. Key findings and corrections:
+
+- Per-axis verdicts A–F; ranked drift register — **NO Critical findings; no surviving High findings** after adversarial verification (earlier audits' High findings either already resolved or reclassified).
+- Consolidated open-findings register replacing four prior-audit fragmented lists.
+- **Corrections to live claims (CLAUDE.md stale):**
+  - Watchdog check count: CLAUDE.md says "6 of 7 checks operational" — actual is **11 operational** (A, B, C, D, F, G, I, J, K, L, M), only E (Anthropic spend) deferred.
+  - Subagent/hook sourcing: 9 subagents + 4 hooks are RELATIVE symlinks from `~/its-blueprint/.claude/` into `~/its/.claude/` (single source of truth); they are NOT copies.
+  - CI: gitleaks + doctrine-drift checks ARE in CI (landed PRs #142, #143); CLAUDE.md implied they were not.
+- **Open findings surfaced (not fixed this session):**
+  - **DR-D1 / H1:** Guard hooks fail-open if the `~/its/.claude` symlink to blueprint dangles. Watchdog Check M only detects post-hoc (after a missed cycle). No preventive mechanism.
+  - **DR-C2:** Invariant 2 Layer 6 (attachment screening) is entirely unbuilt for legacy PDF-email to `safety@`. Attachments upload to Box unscanned. The Portal pivot makes this N/A for portal-submitted safety reports, but the legacy email path remains open. Email Triage workstream carries this.
+  - **DR-E1 / OPEN-1:** `ops-stds-enforcer` agent's system prompt pins "Op Stds v13" — 3 major versions behind v16. It is blind to §43 (successor-remediation documentation), §44 (Tier-2 repair model), and the F07/F13 kill-switch + anomaly-logging reframes. Agent-file update needed.
+
+### §G16.1 — Safety Portal ITS sheet IDs
+
+For a fresh CC session wiring portal logic:
+
+| Sheet / Folder | ID |
+|---|---|
+| Safety Portal folder (Operations workspace) | `6663869084002180` |
+| ITS_Active_Jobs | `6223950341164932` |
+| ITS_Forms_Catalog | `423274885369732` |
+
+These are sandbox (evergreenmirror.com) IDs. Live-tenant IDs will differ at Phase 1.5 cutover.
+
+### §G16.2 — Alignment audit key verdicts (for rapid re-orientation)
+
+The audit's per-axis verdicts confirm the architecture is sound. Drift is in lower-authority layers (planning docs, agent prompts, CLAUDE.md table, memory files) lagging the de-1b doctrine cascade. The code/doctrine core is well-aligned. The three open findings (DR-D1, DR-C2, DR-E1) are known, tracked in `docs/tech_debt.md`, and non-blocking for the current build phase.
+
 # Cross-References
 
 - Memory Archive v4 — operational detail through 2026-05-21 morning. v5 extends, does not supersede.
