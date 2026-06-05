@@ -981,4 +981,82 @@ Behavior breakdown by column type and contact kind:
 - **Phase 5 `weekly_send` wiring:** `send_one_row` must resolve TO + CC from `ActiveJob.safety_reports_contact_email` + `ActiveJob.cc_emails`; log the full resolved TO+CC list at send. Tech-debt entry filed (accepted-risk — addresses are operator-entered, not allowlist-validated).
 - **CC recipient allowlist validation:** currently none. Accepted risk documented in `docs/tech_debt.md`. Revisit at Phase 5 `weekly_send` build.
 - **ITS_Active_Jobs Address cells still BLANK** — PM fills manually; unchanged from Phase 3 baseline.
+
+## §G20 — 2026-06-05 Safety Portal Phase 4 PR 1: form definitions foundation (PR #164)
+
+### Summary
+
+PR #164 (squash `940999e`, four-part-verify clean) landed the form definitions foundation for Phase 4. No Python daemons or Smartsheet wiring changed — this PR is entirely within `safety_portal/forms/` + tests + the ITS_Forms_Catalog live migration. Session log: `docs/session_logs/2026-06-05_safety-portal-phase4-pr1-forms-foundation.md`.
+
+### §G20.1 — meta-schema.json: section archetype contract
+
+`safety_portal/forms/meta-schema.json` is the JSON-Schema contract that governs every form definition. It is the single source of truth for BOTH the Phase 4 PR 2 TS display renderer and the Phase 4 PR 3 Python reportlab PDF renderer. Render = Option B (definitions drive renderers; no renderer-specific schema forks).
+
+Top-level fields:
+- `formId` (string, kebab-case stable key matching the filename stem)
+- `title`, `description`, `version`
+- `variantOf` (optional, string — points to the parent `formId` for the parent/variant model)
+- `sections[]` — ordered list of section objects
+
+Section object fields:
+- `id`, `title`
+- `type` — one of 3 archetypes: `rows_with_signatures`, `grouped_checklist`, `sectioned_assessment`
+- Archetype-specific fields (rows, groups, subsections) carry their own required shapes per the meta-schema
+
+The 3 archetypes map directly to the 3 renderer components that Phase 4 PR 2 must implement. A fresh CC session building the TS renderer should load `meta-schema.json` to understand the exact shape before writing rendering logic.
+
+### §G20.2 — The 11 form definitions
+
+| File | formId | Archetype(s) | Notes |
+|---|---|---|---|
+| `jha.json` | `jha` | rows_with_signatures | JHA hazard-item rows + multi-row sig section |
+| `equipment-preinspection.json` | `equipment-preinspection` | grouped_checklist | Telehandler; 64 checklist items across groups |
+| `equipment-preinspection-crane.json` | `equipment-preinspection-crane` | grouped_checklist | Crane variant; `variantOf: equipment-preinspection` |
+| `visitor.json` | `visitor` | sectioned_assessment | Visitor sign-in + content sections |
+| `hsse.json` | `hsse` | grouped_checklist | 11 category groups (HSS&E combined) |
+| `toolbox-talk-general.json` | `toolbox-talk-general` | sectioned_assessment | General TBT; sign-in rows |
+| `toolbox-talk-fire.json` | `toolbox-talk-fire` | sectioned_assessment | Fire safety TBT |
+| `toolbox-talk-ppe.json` | `toolbox-talk-ppe` | sectioned_assessment | PPE TBT |
+| `toolbox-talk-excavation.json` | `toolbox-talk-excavation` | sectioned_assessment | Excavation TBT |
+| `toolbox-talk-ladders.json` | `toolbox-talk-ladders` | sectioned_assessment | Ladders/fall-protection TBT |
+
+All were transcribed faithfully from the 10 reference PDFs in `safety_portal/worker/public/forms/`. Note: the source TBT PDFs have no Presenter/Date-on-page header fields — the digital record gets job + work-date from the submission envelope. If a header field is wanted, it must be added explicitly (tech-debt entry filed).
+
+### §G20.3 — ITS_Forms_Catalog parent/variant migration
+
+PR #164 migrated ITS_Forms_Catalog (sheet id `423274885369732`) from the original 4 flat rows to the parent/variant model. New schema adds two columns: `Parent Form` (TEXT_NUMBER — points to the parent's `formId`, blank for parents) and `Variant Tag` (TEXT_NUMBER — short discriminator, blank for parents).
+
+**V1 catalog after PR #164 (12 rows):**
+
+| Form Code | Parent Form | Variant Tag | Notes |
+|---|---|---|---|
+| `jha` | — | — | Parent |
+| `equipment-preinspection` | — | — | Parent |
+| `equipment-preinspection-crane` | `equipment-preinspection` | crane | Variant |
+| `visitor` | — | — | Parent (new; was absent from v0) |
+| `hsse` | — | — | Parent (new; was absent from v0) |
+| `toolbox-talk-general` | `toolbox-talk` | general | Variant |
+| `toolbox-talk-fire` | `toolbox-talk` | fire | Variant |
+| `toolbox-talk-ppe` | `toolbox-talk` | ppe | Variant |
+| `toolbox-talk-excavation` | `toolbox-talk` | excavation | Variant |
+| `toolbox-talk-ladders` | `toolbox-talk` | ladders | Variant |
+| `toolbox-talk` | — | — | Parent (virtual; no standalone definition file) |
+| ~~`daily-site-safety-v1`~~ | removed | — | Not a form-fill candidate |
+
+Migration ran via `scripts/migrations/migrate_forms_catalog_parent_variant.py` (idempotent; preview-default; `--commit` for live). Live migration applied this session: 2 columns added, 5 rows updated (parents), 5 variant rows added, 1 row deactivated (daily-site-safety). Verified live: all 12 rows present with correct column values.
+
+### §G20.4 — Test baseline (PR #164)
+
+- `tests/test_forms_validation.py`: 49 tests — one test per (definition file × validation check), including: each definition validates against the meta-schema, `formId` matches filename stem, `version` is semver-shaped, `variantOf` references a known `formId` when set. All 49 passed; mypy 0; ruff clean; branch CI green; main-branch CI on merge commit SUCCESS.
+- `jsonschema` added to `pyproject.toml` runtime deps (not dev-only; the renderer will also use it at runtime for submission validation).
+
+### §G20.5 — Phase 4 remaining work
+
+Two PRs remain before Phase 5:
+
+**PR 2 — TS display runtime:** generic definition-driven renderer in `safety_portal/spa/src/` for the 3 archetypes. Must implement: form-type + variant dropdowns (ITS_Forms_Catalog parent/variant); multi-row SVG signature capture via `signature_pad`; amend/prefill from a prior submission; structured-data emit to the HMAC shim. Replaces hard-coded `JhaStubPage.tsx`. Tech-debt: `docs/tech_debt.md` "Safety Portal Phase 4 PR 2".
+
+**PR 3 — Python reportlab PDF renderer:** reads `safety_portal/forms/*.json` + structured submission → print-parity PDF (Evergreen header, table/checklist/section layout, legal invariants in code, embedded SVG signatures). Deterministic, no AI. Per-form parity tests. Invoked by Phase 5 intake (Option B path); PDFs land in Box. Add `reportlab` dep (one-line `pyproject.toml` edit). Tech-debt: `docs/tech_debt.md` "Safety Portal Phase 4 PR 3".
+
+**Build approach used for PR #164:** each form definition was built by loading the reference PDF in `safety_portal/worker/public/forms/` and manually transcribing the structure (section titles, item labels, signature-block positions) into JSON per the meta-schema. This required iterative meta-schema refinement as edge cases surfaced (e.g., the TBT sign-in model needed a `content_then_signin` subtype of `sectioned_assessment`). No AI extraction was used — deterministic transcription is load-bearing for legal-invariant preservation.
 - **New Job form (UI-only):** Smartsheet form on ITS_Active_Jobs for office PM. Fields: Project Name, Address, Stakeholder Name/Email/Phone, Safety Reports Contact Email, Active.

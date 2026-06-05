@@ -3,14 +3,14 @@ type: reference
 status: canonical
 workstream: null
 last_verified: 2026-06-05
-last_verified_against: 9e1ff9c
+last_verified_against: 940999e
 ---
 
 # Claude Code Info Gap
 
 **Purpose:** Context that lives only in chat memory / chat conversation and is NOT reachable from `~/its/` or `~/its-blueprint/` on a fresh Claude Code (CC) session. Drop this in project files so a chat-session can hand it to CC at spin-up, or so a fresh chat-session can re-orient quickly.
 
-**Last refreshed:** 2026-06-05 (contacts amendment)
+**Last refreshed:** 2026-06-05 (Phase 4 PR 1 forms foundation)
 **Maintained by:** chat-session at session close (treat as living doc)
 
 ---
@@ -256,6 +256,18 @@ With `its` installed editable (`__editable__.its-0.1.0.pth`), setting `PYTHONPAT
 - Gated: `improve-codebase-architecture` (§14 preservation-over-refactor).
 - `git-guardrails` planned as follow-up PR.
 
+### Safety Portal form definitions architecture (PR #164, 2026-06-05)
+
+`safety_portal/forms/` is the single source of truth for the 11 form definitions. Structure:
+
+- **`meta-schema.json`** — JSON-Schema contract that every form definition must validate against. Defines: `formId`, `title`, `description`, `version`, `variantOf` (for variant-parent relationship), and `sections[]`. Each section carries a `type` from one of 3 archetypes: `rows_with_signatures`, `grouped_checklist`, `sectioned_assessment`. All form definitions are validated against this at test time (`tests/test_forms_validation.py`, 49 tests).
+- **11 form definitions:** `jha.json`, `equipment-preinspection.json`, `equipment-preinspection-crane.json`, `visitor.json`, `hsse.json`, `toolbox-talk-general.json`, `toolbox-talk-fire.json`, `toolbox-talk-ppe.json`, `toolbox-talk-excavation.json`, `toolbox-talk-ladders.json`. Faithfully transcribed from the 10 reference PDFs in `safety_portal/worker/public/forms/`.
+- **Key item counts:** telehandler (`equipment-preinspection-crane.json`) has 64 checklist items; HSSE (`hsse.json`) has 11 categories; 5 toolbox-talk variants.
+- **render = Option B** — the meta-schema + definitions are the single source of truth for BOTH the TS display renderer (Phase 4 PR 2) and the Python reportlab PDF renderer (Phase 4 PR 3). No AI step in either renderer.
+- **Parent/variant model:** `variantOf` field on a definition + `Parent Form`/`Variant Tag` columns on ITS_Forms_Catalog. Variant resolution is data-driven; no code change needed to add a new variant.
+- **ITS_Forms_Catalog v1 after PR #164:** 5 parents + 7 variants = 12 rows. Parents: jha, equipment-preinspection, hsse, visitor, toolbox-talk. Daily Site Safety removed (not a form-fill candidate); Visitor + HSS&E added. All marked Active.
+- **Adding a Python dep note:** `reportlab` (Phase 4 PR 3) is a one-line `pyproject.toml` edit; CI installs via `pip install -e .[dev]`, no lockfile.
+
 ### Cloudflare / Safety Portal TS tree (PR #158, 2026-06-04)
 `safety_portal/` is the TypeScript/Cloudflare workstream — a separate execution tree from the Python `safety_reports/` workstream. Key tooling facts:
 
@@ -312,6 +324,7 @@ With `its` installed editable (`__editable__.its-0.1.0.pth`), setting `PYTHONPAT
 - **2026-06-04 Safety Portal Phase 2 — PR #158 (exec, four-part-verify clean, merge `fe615db`):** New `safety_portal/` tree — Cloudflare Worker (Hono router + TypeScript), Vite/React SPA (BRG/gold design system), Cloudflare D1 SQLite DB (users + form-submissions), bcryptjs auth, HMAC session-cookie middleware, SVG-vector signature pad (`signature_pad` library), 10 PDF reference forms committed to `public/forms/`. Locally validated end-to-end (wrangler dev --local + Playwright). Deploy deferred to operator Cloudflare token step (D1 create, remote migrations, secret put, wrangler deploy, custom domain). Zero Python touched. See §6 "Cloudflare / Safety Portal TS tree" for tooling notes.
 - **Safety Portal Phase 3 — PR #160 (exec, four-part-verify clean, merge `827c374`):** Live Job-ID resolution replacing intake's legacy name-matching. New `shared/active_jobs.py` (Job-ID lookup against ITS_Active_Jobs, read-only, mirrors `project_routing` pattern) + `shared/safety_week.py` (Sat-to-Fri week rule, canonical Saturday-date key, Dec→Jan boundary correct). `resolve_project()` rewritten to key on portal payload `Job ID`; returns `ProjectResolution(project, reason)` typed tuple; `reason` in {`job_id_match`, `not_found`, `inactive`, `sheet_error`}. Legacy fuzzy-match RETIRED. Live additive migration on ITS_Active_Jobs: 4 contact columns (Stakeholder Name/Email/Phone, Safety Reports Contact Email) + rename `Job ID`→`Job Slug` (freeing title for the future AUTO_NUMBER column). AUTO_NUMBER `Job ID` column pending operator UI step (`errorCode 1008` blocks API creation — see §6 Smartsheet API constraint). §43 runbook shipped. D1 dropdown sync, portal forms, and submission pipeline deferred to Phase 4/5.
 - **Safety Portal Phase 3 contacts amendment — PR #162 (exec, four-part-verify clean, merge `9e1ff9c`):** Added 6 TEXT columns to ITS_Active_Jobs — `Safety Reports Contact Name` + `CC 1`–`CC 5`. Augmented `shared/active_jobs.ActiveJob` dataclass with `cc_emails: list[str]` + `safety_reports_contact_name: str`. `_flatten_cc()` helper: comma-splits each CC 1–5 cell, deduplicates, skips malformed addresses with a WARN log. Email routing model: TO = Safety Reports Contact Email, CC = all flattened CC 1–5, greeting = Contact Name, Stakeholder = reference-only in packet body. Sending is Phase 5. CONTACT_LIST/MULTI_CONTACT_LIST columns NOT used for CC slots — external email read-back failure (see §6 "MULTI_CONTACT_LIST loses external emails" — this session's key live finding). Tech-debt entry added: CC recipients are operator-entered, not allowlist-validated (accepted risk; External Send Gate still required before any send).
+- **Safety Portal Phase 4 PR 1 — form definitions foundation (PR #164, exec, four-part-verify clean, merge `940999e`):** `safety_portal/forms/meta-schema.json` (JSON-Schema contract, single source of truth for both renderers) + 11 form definitions (`jha`, `equipment-preinspection`, `equipment-preinspection-crane`, `visitor`, `hsse`, `toolbox-talk-*` ×5) faithfully transcribed from the 10 reference PDFs. Live ITS_Forms_Catalog parent/variant migration: 5 parents + 7 variants = 12 rows (Daily Site Safety OUT; Visitor + HSS&E IN). `jsonschema` Python dep added. `tests/test_forms_validation.py` (49 tests). §43 forms runbook at `docs/runbooks/safety_portal_forms.md`. See §6 "Safety Portal form definitions architecture" for the full architecture note.
 
 ### Bradley 1 (BBCHS 1)
 - Template project, six sheets migrated, demo seeding complete.
@@ -338,11 +351,12 @@ With `its` installed editable (`__editable__.its-0.1.0.pth`), setting `PYTHONPAT
 - **Safety Portal intake.py portal-marker branches** — PLANNED, not built. Legacy PDF-email is the documented fallback. HMAC-verified shim (`portal-noreply@` → `safety@`) not implemented.
 - **Safety Portal deploy deferred** — Cloudflare provisioning (D1/R2/Pages-or-Workers, secret put, deploy, custom domain `safety.evergreenmirror.com`) blocked on operator CLOUDFLARE_API_TOKEN. Code validated locally. See `docs/tech_debt.md` "Safety Portal deploy + provisioning deferred".
 - **Safety Portal topology TBD** — Workers Static Assets vs Pages; decide at deploy time. Blueprint mission §11 assumed Pages — needs update after decision. See `docs/tech_debt.md`.
-- **Safety Portal form-catalog mismatch** — committed 10-PDF corpus ≠ ITS_Forms_Catalog 4 forms. Confirm v1 catalog with PM before Phase 4. See `docs/tech_debt.md`.
+- **Safety Portal form-catalog mismatch RESOLVED** — PR #164 migrated ITS_Forms_Catalog to 5 parents + 7 variants (12 rows); Daily Site Safety removed, Visitor + HSS&E added. v1 catalog is now aligned with the 11 form definitions. Original 4-form mismatch entry closed.
 - **Safety Portal frontend CI gap** — no `tsc --noEmit` / `npm run build` CI step for the TS tree. See `docs/tech_debt.md`.
+- **Safety Portal Phase 4 PR 2 (TS display runtime) + PR 3 (Python reportlab renderer)** — Phase 4 PR 1 landed; PR 2 (generic definition-driven renderer, 3 archetypes) + PR 3 (reportlab PDF render-parity) are the remaining Phase 4 work. See `docs/tech_debt.md`.
 
 ### On the horizon
-- **Safety Portal Phase 4+** — Form rendering Phase 4; HMAC-verified email shim to `safety@` + intake.py portal-marker branches Phase 5; Worker-side capability-gate for TS Phase 5; session revocation table Phase 7. **Phase 3 LANDED (PR #160, `827c374`):** `shared/active_jobs.py` (Job-ID lookup, read-only) + `shared/safety_week.py` (Sat-to-Fri week rule, Saturday-date canonical key); `resolve_project()` rewritten — keys on portal payload `Job ID`, `ProjectResolution(project, reason)` typed return; legacy name-match RETIRED; §43 runbook. ITS_Active_Jobs: 4 contact columns + `Job ID`→`Job Slug` rename LIVE; AUTO_NUMBER `Job ID` column PENDING operator UI step. **Cloudflare deploy still deferred (D1 create, secret put, wrangler deploy).** Legacy PDF-email documented fallback. D1 dropdown sync (populate job list in portal form) deferred to deploy session.
+- **Safety Portal Phase 4** — Form rendering: **Phase 4 PR 1 LANDED (PR #164, `940999e`):** meta-schema + 11 definitions + ITS_Forms_Catalog parent/variant catalog + jsonschema validation. **Remaining Phase 4:** PR 2 (TS generic definition-driven renderer, 3 archetypes — rows+signatures, grouped-checklist, sectioned-assessment; form-type/variant dropdowns; multi-row SVG signatures; amend prefill; structured-data emit) + PR 3 (Python reportlab PDF renderer, deterministic, per-form parity tests). After Phase 4: Phase 5 = HMAC-verified email shim to `safety@` + intake.py portal-marker branches + Worker-side capability-gate; Phase 7 = session revocation table. **Phase 3 LANDED (PR #160 + PR #162):** `shared/active_jobs.py` + `shared/safety_week.py`; Job-ID resolution live; CC routing columns live. **Cloudflare deploy still deferred.** Legacy PDF-email documented fallback. D1 dropdown sync deferred to deploy session.
 - Email Triage workstream build — now carries Invariant 2 Layer 6 (attachment screening) per the portal pivot reassignment
 - `fail_closed_until` kill-switch mechanism deferred from F07 (Q8 resolution) — currently fail-open by documented design; revisit in Phase 2+ when multi-operator scenario makes a true fail-closed window safe to add.
 - DFR backfill and Portfolio Rollups Reports continued expansion.
