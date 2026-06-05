@@ -2,17 +2,17 @@
 type: mission
 version: 5
 status: canonical
-last_verified: 2026-05-24
-last_verified_against: 3b7d56d
+last_verified: 2026-06-05
+last_verified_against: 753f12f
 workstream: safety_reports
 tags: [workstream-mission]
 ---
 
-**ITS Safety Reports Mission v5.1**
+**ITS Safety Reports Mission v5.2**
 
-2026-05-22 — Status Overlay Refreshing v5
+2026-06-05 — Safety Portal clean-break overlay (was v5.1, 2026-05-22)
 
-*R3 Session 1 shipped + polling daemon + trusted-contacts cluster · Q4-Q8 resolved · Substance unchanged*
+*v5.2 (2026-06-05, exec `753f12f`): the customer-facing weekly safety report is now reviewed/approved/sent through `WSR_human_review` (standalone ITS — Safety Portal workspace), **not** `WPR_Pending_Review`; safety intake is **portal-only at launch** (the Safety Portal's Python pull transport), the email-PDF path **retired as the safety input** (`intake_poll.py` is tombstoned in exec PR #171; the `weekly_generate`/`weekly_send` WSR rewire is in-flight, so `WPR_Pending_Review` is **decommissioned-by-doc** in code until then); email infrastructure (`graph_client`/`untrusted_content`/`header_forgery`) is **preserved** for the committed [Email Triage](../email-triage/mission.md) workstream. See [Safety Portal brief §8.1](../safety-portal/brief.md#81-clean-break-safety-intake-is-portal-only-at-launch). · v5.1 (2026-05-22): R3 Session 1 shipped + polling daemon + trusted-contacts cluster · Q4-Q8 resolved · Substance otherwise unchanged*
 
 # Purpose of v5.1
 
@@ -44,7 +44,7 @@ Why this is Phase 1: simplest of the workstreams in workflow shape (read inbox �
 
 # Foundation Invariants Inherited (Refreshed for FM v8)
 
-External Send Gate — implementation: WPR_Pending_Review Smartsheet with Approved for Send (checkbox), Approved By, Approved At, Sent At, Send Status columns. Two-process model: weekly-summary script (calls Anthropic, no send capability) writes drafts to the sheet; weekly-send script (no AI step) reads only approved rows and sends. Permanent rule, not time-bounded. Implemented end-to-end at the module level via shared/graph_client.py — capability gating verified by tests/test_capability_gating.py.
+External Send Gate — implementation: `WSR_human_review` Smartsheet (in the standalone ITS — Safety Portal workspace; supersedes the legacy `WPR_Pending_Review` under the Safety Portal clean-break) with `Approve for Scheduled Send` + `Send Now` checkboxes, auto-stamped Approved By/At, and an editable Email Body column as the send's source of truth. Two-process model: weekly-generate script (calls Anthropic, no send capability) writes drafts to the sheet; weekly-send script (no AI step) reads only approved rows and sends. Permanent rule, not time-bounded. Capability gating verified by tests/test_capability_gating.py.
 
 Adversarial Input Handling — implementation (6-layer per FM v8):
 

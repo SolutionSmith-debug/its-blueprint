@@ -3,14 +3,14 @@ type: reference
 status: canonical
 workstream: null
 last_verified: 2026-06-05
-last_verified_against: fc034eb
+last_verified_against: 753f12f
 ---
 
 # Claude Code Info Gap
 
 **Purpose:** Context that lives only in chat memory / chat conversation and is NOT reachable from `~/its/` or `~/its-blueprint/` on a fresh Claude Code (CC) session. Drop this in project files so a chat-session can hand it to CC at spin-up, or so a fresh chat-session can re-orient quickly.
 
-**Last refreshed:** 2026-06-05 (Phase 4 complete — PRs #164/#166/#167; Phase 5 PRs 1+2 landed — PRs #168/#169; pull-model transport decided; deploy prerequisites enumerated)
+**Last refreshed:** 2026-06-05 (Phase 4 complete — PRs #164/#166/#167; Phase 5 PRs 1+2 — PRs #168/#169/#170; **`intake_poll.py` retired/tombstoned — PR #171, `753f12f`**; pull-model transport + **clean-break** (portal-only safety intake) ratified; production-cutover DNS facts enumerated; **Op Stds bumped v16→v17** for the 6th workspace)
 **Maintained by:** chat-session at session close (treat as living doc)
 
 ---
@@ -291,6 +291,12 @@ The portal→intake transport is a **Python pull model** (operator-ratified 2026
 - **bcryptjs cost-10 CPU cap:** on Workers Free plan (10ms CPU/request), a bcrypt compare triggers Error 1102. Deploy on Paid plan OR swap to Web-Crypto PBKDF2-SHA-256. See `docs/tech_debt.md`.
 - **CI gap:** no frontend typecheck/build CI step yet. `tsc --noEmit` + `npm run build` are manual-only. See `docs/tech_debt.md`.
 
+### Safety Portal clean break + production cutover (2026-06-05)
+
+- **Clean break — safety intake is portal-only at launch.** Evergreen cuts over all-at-once with **no integration of the legacy email-PDF system**; no Evergreen safety data flows the old path. `intake_poll.py` (the safety mailbox poller) is **retired/tombstoned** (PR #171 — raises `NotImplementedError`) and superseded by `portal_poll.py` (PLANNED) for safety; `WPR_Pending_Review` is **decommissioned** in favor of `WSR_human_review` (by-doc in code — the `weekly_*` scripts still reference it until the WSR rewire lands). **NOT an email teardown:** the shared email infra (`graph_client` / `untrusted_content` / `header_forgery`) and `intake.py`'s Graph `process_message` path are **preserved** for the committed Email Triage workstream.
+- **Production cutover DNS (applicable at cutover, not now):** Evergreen's site is **GoDaddy-hosted WordPress + Elementor**; the apex `evergreenrenewables.com` DNS + M365 email live on GoDaddy. **Evergreen has no Cloudflare account** — one is created fresh at cutover, **Evergreen-owned** (Daniel creates it). Do **not** migrate the apex zone; attach **only** `safety.evergreenrenewables.com` to Cloudflare, **likely via subdomain NS-delegation** at GoDaddy (delegate that label's NS records to Cloudflare), leaving WordPress + M365 email untouched. Exact subdomain-attach mechanism resolved at deploy prep — **likely path, not locked.**
+- **Doctrine:** Op Stds bumped **v16 → v17** (§23/§24 now acknowledge the standalone `ITS — Safety Portal` workspace as a 6th, approval-gated workspace; tag `operational-standards-v17`). Blueprint mission/brief carry the transport + clean-break delta; see memory-archive §G22.
+
 ---
 
 ## 7. Orchestration Model
@@ -360,7 +366,7 @@ The portal→intake transport is a **Python pull model** (operator-ratified 2026
 - **`ops-stds-enforcer` agent pinned at "Op Stds v13"** (DR-E1/OPEN-1) — 3 majors behind v16, blind to §43/§44 successor-remediation discipline. Needs agent-file update. Tracked `docs/tech_debt.md`.
 - **DR-D1/H1 guard-hook self-presence** — `.claude` hooks fail-open if the blueprint `.claude` symlink dangles; watchdog Check M only detects post-hoc, not preventively. No code change made this session; flagged in PR #156 audit.
 - **DR-C2 Layer 6 attachment screening entirely unbuilt** — legacy PDF-email attachments to safety@ upload to Box unscanned. Documented as planned Phase 1.4; now surfaced explicitly in the alignment audit. Email Triage workstream carries this.
-- **Safety Portal intake.py portal-marker branches** — PLANNED, not built. Transport is pull model (Worker D1 queue → `portal_poll.py` → `intake.py`; see §6); the earlier email-shim design is superseded. Legacy PDF-email remains the documented fallback during transition.
+- **Safety Portal intake.py portal-marker branches** — PLANNED, not built. Transport is pull model (Worker D1 queue → `portal_poll.py` → `intake.py`; see §6); the earlier email-shim design is superseded. Under the **clean break**, safety intake is portal-only at launch — **no** legacy email-PDF integration for Evergreen (the email infra is preserved for Email Triage, not used as a safety fallback; see §6 clean-break note).
 - **Safety Portal deploy deferred** — Cloudflare provisioning (**Workers + Static Assets**, D1, secret put, deploy, custom domain `safety.evergreenmirror.com`) blocked on operator CLOUDFLARE_API_TOKEN (a short-lived provisioning credential, revoked after — never Keychain). **Requires Workers Paid (~$5/mo)** for bcrypt login. Code validated locally. See `docs/tech_debt.md` "Safety Portal deploy + provisioning deferred".
 - **Safety Portal topology RESOLVED** — Cloudflare **Workers + Static Assets** (NOT Pages; Pages in maintenance mode). Blueprint `brief.md` §11 updated to v2. (Closes the prior "topology TBD / mission §11 assumed Pages" item.)
 - **Safety Portal form-catalog mismatch RESOLVED** — PR #164 migrated ITS_Forms_Catalog to 5 parents + 7 variants (12 rows); Daily Site Safety removed, Visitor + HSS&E added. v1 catalog is now aligned with the 11 form definitions. Original 4-form mismatch entry closed.

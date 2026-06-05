@@ -2,8 +2,8 @@
 type: mission
 version: 6
 status: canonical
-last_verified: 2026-05-28
-last_verified_against: c5cc456
+last_verified: 2026-06-05
+last_verified_against: 753f12f
 workstream: email_triage
 tags: [workstream-mission]
 ---
@@ -142,7 +142,9 @@ The classifier has no capability to send external email. Downstream workstreams 
 
 - **Inbound supplier quote responses **must route to the POs workstream's quote-comparison view. The schema for inbound-quote intake should be defined jointly with the POs workstream before either picks up real work.
 
-- **Inbound safety reports **from field PMs must route to the Safety Reports workstream's intake. Coordination with Safety Reports' intake mechanism decision required. Safety Reports already enforces its own sender allowlist; Email Triage's allowlist is a superset for shared inboxes.
+- **Inbound safety reports **from field PMs now arrive via the **Safety Portal** (portal-only at launch — the Safety Portal clean-break retired the email-PDF safety intake), so Email Triage does **not** route safety reports into the safety pipeline. Any safety mail still landing in a shared inbox post-cutover routes to a human queue.
+
+- **Preserved email infrastructure (inherited by this workstream): **the Safety Portal clean-break retired the *email-PDF safety intake* but deliberately **preserved** the shared email infrastructure — `shared/graph_client.py` (list_inbox / mark_read / MSAL), `shared/untrusted_content.py`, `shared/header_forgery.py` — precisely because Email Triage depends on it. This workstream is the committed consumer of that infra; `intake.py`'s Graph-driven `process_message` path also remains in-tree for reuse here. See [Safety Portal brief §8.1](../safety-portal/brief.md#81-clean-break-safety-intake-is-portal-only-at-launch).
 
 - **Executed contracts **returning from subs route to Subcontracts' executed_intake.
 

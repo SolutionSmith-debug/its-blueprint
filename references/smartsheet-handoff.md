@@ -28,7 +28,7 @@ Per Op Stds v9.3 §23. Full inventory:
 | ITS — Archive | 5528280611743620 | Closed Projects (empty by design) |
 | ITS — System | 680592632244100 | 01 — Config (incl. Picklist_Sync_Config from PR #46), plus existing system sheets |
 
-> **Update 2026-06-04/05 — sixth workspace:** A standalone `ITS — Safety Portal` workspace was added (`WORKSPACE_SAFETY_PORTAL = 194283417429892` in `shared/sheet_ids.py`, captured by PR #168). The `Safety Portal` folder (`6663869084002180`: `ITS_Active_Jobs`, `ITS_Forms_Catalog`) was **moved there from `ITS — Operations`, IDs preserved**; per-job week sheets and the `WSR_human_review` approval sheet live there too. It is approval-gated (workspace access = approval authority) and deliberately outside the five-workspace audience-separated model — Op Stds §23/§24 doctrine bump flagged (see [memory-archive §G21.3](memory-archive.md)).
+> **Update 2026-06-04/05 — sixth workspace:** A standalone `ITS — Safety Portal` workspace was added (`WORKSPACE_SAFETY_PORTAL = 194283417429892` in `shared/sheet_ids.py`, captured by PR #168). The `Safety Portal` folder (`6663869084002180`: `ITS_Active_Jobs`, `ITS_Forms_Catalog`) was **moved there from `ITS — Operations`, IDs preserved**; per-job week sheets and the `WSR_human_review` approval sheet live there too. It is approval-gated (workspace access = approval authority) and deliberately outside the five-workspace audience-separated model — acknowledged in **Op Stds v17** (2026-06-05; §23/§24; see [memory-archive §G23.3](memory-archive.md)).
 
 ## Active Projects folder inventory
 

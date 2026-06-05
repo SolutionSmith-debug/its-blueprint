@@ -125,7 +125,7 @@ Five-workspace audience-separated topology per Op Stds v11 §23 (refreshed from 
 
 - ITS — System (680592632244100) — operator-only config/errors/queues/daemons. Includes folder 04 — Daemons (2130046845511556) housing ITS_Daemon_Health (PR #60).
 
-- ITS — Safety Portal (`WORKSPACE_SAFETY_PORTAL = 194283417429892` in `shared/sheet_ids.py`, captured by PR #168) — operator-only, **standalone + approval-gated**: the Safety Portal folder (`6663869084002180`: ITS_Active_Jobs, ITS_Forms_Catalog), per-job week sheets, and `WSR_human_review`. Moved from ITS — Operations with IDs preserved. Workspace access = approval authority; deliberately **outside** the five-workspace audience-separated model. **Doctrine-update flagged:** Op Stds §23/§24 need a v17 bump to acknowledge it (see [memory-archive §G21.3](memory-archive.md) and the [2026-06-05 session log](../session-logs/2026-06-05_safety-portal-blueprint-update.md)).
+- ITS — Safety Portal (`WORKSPACE_SAFETY_PORTAL = 194283417429892` in `shared/sheet_ids.py`, captured by PR #168) — operator-only, **standalone + approval-gated**: the Safety Portal folder (`6663869084002180`: ITS_Active_Jobs, ITS_Forms_Catalog), per-job week sheets, and `WSR_human_review`. Moved from ITS — Operations with IDs preserved. Workspace access = approval authority; deliberately **outside** the five-workspace audience-separated model. **Doctrine — acknowledged in Op Stds v17** (2026-06-05; §23/§24; see [memory-archive §G23.3](memory-archive.md)).
 
 # Authority
 

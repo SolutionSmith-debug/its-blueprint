@@ -3,7 +3,7 @@ type: reference
 version: 5
 status: canonical
 last_verified: 2026-06-05
-last_verified_against: ffad86b
+last_verified_against: 753f12f
 supersedes: references/memory-archive.md@v4
 workstream: null
 tags: [restoration, operational-detail, post-compaction-recovery]
@@ -1087,7 +1087,7 @@ Doctrine consequence: **workspace access = approval authority** (sharing the wor
 
 ### §G21.3 — Topology is now 6 workspaces (doctrine-update FLAGGED)
 
-The canonical model (Op Stds §23) is the **five-workspace audience-separated** topology. The standalone `ITS — Safety Portal` is a **sixth** workspace, deliberately **outside** that audience-separation model (approval-gated, self-contained). **DOCTRINE-UPDATE FLAGGED** (not edited — version-gated): Op Stds **§23** ("Carries forward… No change", 5-workspace) and **§24** (sheet-ID bootstrap, 5 workspaces) need a v17 bump to acknowledge the sixth workspace. Active-memory entry #15 and §G1's 5-workspace list remain as historical records; the **live count is 6**. The reference topology tables (`foundation-scaffold.md`, `project-organization.md`, `smartsheet-handoff.md`) were updated to add the sixth workspace pending the §23 bump.
+The canonical model (Op Stds §23) is the **five-workspace audience-separated** topology. The standalone `ITS — Safety Portal` is a **sixth** workspace, deliberately **outside** that audience-separation model (approval-gated, self-contained). **DOCTRINE-UPDATE FLAGGED** (not edited — version-gated): Op Stds **§23** ("Carries forward… No change", 5-workspace) and **§24** (sheet-ID bootstrap, 5 workspaces) need a v17 bump to acknowledge the sixth workspace. Active-memory entry #15 and §G1's 5-workspace list remain as historical records; the **live count is 6**. The reference topology tables (`foundation-scaffold.md`, `project-organization.md`, `smartsheet-handoff.md`) were updated to add the sixth workspace pending the §23 bump. **[RESOLVED 2026-06-05 — Op Stds bumped to v17; §23/§24 now acknowledge the sixth workspace. See §G23.3.]**
 
 ### §G21.4 — Deploy resolved: Cloudflare Workers + Static Assets
 
@@ -1201,3 +1201,37 @@ In dependency order:
 6. **D1 dropdown sync** (deferred to deploy session) — push ITS_Active_Jobs active jobs → Worker D1 `active_jobs` table so the portal's Job dropdown stays current. Mechanism TBD: Worker `/api/sync` (POST, HMAC-authed) vs Cloudflare D1 HTTP API from Python.
 
 Phase 7: server-side session revocation table (D1 `sessions` with `revoked_at`).
+
+## §G23 — 2026-06-05 Safety Portal blueprint delta: clean-break + production-cutover DNS + Op Stds v17 (6th workspace)
+
+### Summary
+
+Blueprint-side reconciliation (no exec code) bringing doctrine current with the transport decision (§G22.3) plus two **new operator decisions** this session — the **clean break** (portal-only safety intake) and the **production-cutover DNS plan** — and applying the **operator-approved Op Stds v16 → v17** workspace-topology bump. Verified against exec HEAD `753f12f` (PR #171; the repo advanced `0cff5f9` → `753f12f` during this blueprint session). Companion blueprint session log: `session-logs/2026-06-05_safety-portal-transport-cleanbreak.md`.
+
+### §G23.1 — Clean break: safety intake is portal-only at launch
+
+Evergreen cuts over all-at-once with **no integration of the legacy email-PDF system** — no Evergreen safety data flows the old path. Decisions:
+
+- `intake_poll.py` (the Microsoft Graph safety mailbox poller) is **superseded by `portal_poll.py`** as the safety input.
+- `WPR_Pending_Review` is **decommissioned**; the safety pipeline unifies on `WSR_human_review`. This closes the §G21.5 WPR→WSR drift flag — `safety-reports` mission (v5.2) + brief (v6.2) reconciled this session.
+- **Scope boundary — NOT an email teardown.** The shared email infrastructure (`shared/graph_client.py`, `shared/untrusted_content.py`, `shared/header_forgery.py`) and `intake.py`'s Graph `process_message` path are **preserved** for the committed **Email Triage** workstream (its mission updated with the inherited-infra note).
+- **Code-state (verify-before-fix, exec `753f12f` / PR #171):** a ratified decision, actively landing. **`intake_poll.py` is now retired/tombstoned** (PR #171 — raises `NotImplementedError`; the shared Graph infra is explicitly preserved for Email Triage). Still **in-flight (not on main):** `portal_poll.py`, the `intake.py` portal-marker branch, and the `weekly_generate`/`weekly_send` WSR rewire — so the `weekly_*` scripts still reference `WPR_Pending_Review` (**decommissioned-by-doc** until the rewire lands). The blueprint encodes the decided architecture and records this landed/in-flight boundary.
+
+### §G23.2 — Production cutover DNS plan (applicable at cutover, NOT now)
+
+- Evergreen's site is **GoDaddy-hosted WordPress + Elementor**; the apex `evergreenrenewables.com` DNS and M365 email live on GoDaddy.
+- **Evergreen has no Cloudflare account** — one is created fresh at cutover, **Evergreen-owned** (Daniel creates the Evergreen account).
+- Do **not** migrate the apex zone. Attach **only** `safety.evergreenrenewables.com` to Cloudflare — **likely via subdomain NS-delegation** at GoDaddy (delegate that label's NS records to Cloudflare), leaving WordPress + M365 email untouched. Exact subdomain-attach mechanism resolved at deploy prep — **likely path, not locked.**
+
+### §G23.3 — DOCTRINE: Op Stds v16 → v17 (sixth, standalone workspace)
+
+Operator-approved doctrine bump. §23/§24 now acknowledge **`ITS — Safety Portal`** as a **6th, standalone, approval-gated workspace** — governing principle **workspace-membership = approval authority**; self-contained subsystem; an additive, deliberately-scoped exception to the five-workspace audience-separation model (otherwise unchanged). Tag `operational-standards-v17`. This **clears the topology doctrine drift** the §G21.3 flag raised — doctrine now matches the 6-workspace reality already recorded in the reference tables + `sheet_ids.py`. Active-memory entry #15 + §G1's "5-workspace" text remain historical; the **canonical count is now 6** per Op Stds v17 §23/§24.
+
+### §G23.4 — Blueprint docs reconciled this session
+
+`workstreams/safety-portal/{mission,brief}.md` (transport pull-model + clean-break + cutover delta; kept at v2 per the operator's "delta on v2" framing; `last_verified_against 753f12f`) · `workstreams/safety-reports/mission.md` v5.2 + `brief.md` v6.2 (WSR surface, email-PDF safety intake retired, preserved-infra note) · `workstreams/email-triage/mission.md` (inherited shared-email-infra note) · `references/claude-code-info-gap.md` (clean-break + cutover + v17 + SHA) · `doctrine/operational-standards.md` **v17** (the doctrine edit) · `session-logs/2026-06-05_safety-portal-transport-cleanbreak.md`.
+
+### §G23.5 — Flags handed to the execution layer (out of scope this session)
+
+- **`ops-stds-enforcer` agent is pinned at Op Stds v13.** The v17 bump **widens** that gap; the agent-file update (Op Stds version + §43/§44 awareness + the §23 6th-workspace acknowledgement) is an exec-repo task. Until then the agent is blind to §23's v17 change.
+- **`check_doctrine_drift` scan-scope** widening (to recognize the topology acknowledgement) is exec-side — not touched from this blueprint session.

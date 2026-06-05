@@ -1,19 +1,19 @@
 ---
 type: doctrine
-version: 16
+version: 17
 status: canonical
-last_verified: 2026-06-01
-last_verified_against: 585823d
-supersedes: doctrine/operational-standards.md@v15
+last_verified: 2026-06-05
+last_verified_against: 753f12f
+supersedes: doctrine/operational-standards.md@v16
 workstream: null
-tags: [push-vs-record, picklist-hardening, attachment-screening, polling-daemon, sdk-vs-live, cc-tooling, fork-security, pii-logging, actions-version-discipline, code-self-documentation, successor-operator, tier-2-repair, successor-remediation, training-bounded-co-resolution]
+tags: [push-vs-record, picklist-hardening, attachment-screening, polling-daemon, sdk-vs-live, cc-tooling, fork-security, pii-logging, actions-version-discipline, code-self-documentation, successor-operator, tier-2-repair, successor-remediation, training-bounded-co-resolution, workspace-topology, standalone-workspace]
 ---
 
-**ITS Operational Standards v16**
+**ITS Operational Standards v17**
 
-2026-06-01 — Tier-2 Boundary Reframed: Training-Bounded Co-Resolution (v15 enforcement-layer framing removed)
+2026-06-05 — §23/§24 Workspace Topology: sixth standalone workspace (ITS — Safety Portal) acknowledged
 
-*The Developer-Operator / Successor-Operator role split, §43, §44's repair-path/escalation structure, and the kill-switch reframe all carry forward. v16 removes the §44 "non-developer-safe enforcement layer" that v15 named as a hard pre-cutover BUILD GAP — there is no structural maintenance enforcement layer and none is built or required. The Tier-2 boundary holds by the trained operator's judgment, the both-rule, and co-resolution with the Developer-Operator until per-category clearance. The Successor-Operator is redefined as a trained operator who runs Claude Code himself (not a Smartsheet-UI-only approver). The Tier-1 self-heal gap survives as a standalone pre-cutover gate (its stale "Check H" status corrected to the implemented Check C marker-file floor in a v16.x absorption — see Authority). No execution-layer mechanism is asserted as built.*
+*v17 (2026-06-05): §23/§24 now acknowledge the Safety Portal's **standalone, approval-gated workspace** (`ITS — Safety Portal`) as an additive, deliberately-scoped exception to the five-workspace audience-separation model — its governing principle is **workspace-membership = approval authority**, and it is self-contained so the safety subsystem ships and hands over independently. Every other section and the audience-separation principle itself carry forward verbatim from v16. — v16 (2026-06-01): The Developer-Operator / Successor-Operator role split, §43, §44's repair-path/escalation structure, and the kill-switch reframe all carry forward. v16 removes the §44 "non-developer-safe enforcement layer" that v15 named as a hard pre-cutover BUILD GAP — there is no structural maintenance enforcement layer and none is built or required. The Tier-2 boundary holds by the trained operator's judgment, the both-rule, and co-resolution with the Developer-Operator until per-category clearance. The Successor-Operator is redefined as a trained operator who runs Claude Code himself (not a Smartsheet-UI-only approver). The Tier-1 self-heal gap survives as a standalone pre-cutover gate (its stale "Check H" status corrected to the implemented Check C marker-file floor in a v16.x absorption — see Authority). No execution-layer mechanism is asserted as built.*
 
 # Purpose
 
@@ -155,17 +155,19 @@ Reviewer chain (§4), confidence scoring (§5), structured outputs (§6), sender
 
 # §23 — Workspace Topology
 
-Five-workspace audience-separated model. Customer-facing: Forefront Portfolio + Human Review. Operator-only: Operations (master DBs), Archive (closed projects), System (config/errors/queues/daemons).
+Five-workspace audience-separated model. Customer-facing: Forefront Portfolio + Human Review. Operator-only: Operations (master DBs), Archive (closed projects), System (config/errors/queues/daemons). The audience-separation model carries forward from v10 §23 unchanged.
 
-Carries forward from v10 §23. No change.
+**v17 addition — sixth, standalone workspace: `ITS — Safety Portal`.** The Safety Portal subsystem owns a **standalone, self-contained workspace** that sits **outside** the audience-separation model on purpose, governed by a different principle: **workspace membership = approval authority** — the collaborators shared into the workspace are exactly those who may review / edit / approve the weekly safety report in `WSR_human_review`, so the share list *is* the External Send Gate (§1) access control for that workstream. The workspace is self-contained — the `Safety Portal` folder (`ITS_Active_Jobs`, `ITS_Forms_Catalog`), the per-job week sheets, and `WSR_human_review` all live in it — so the safety subsystem can be stood up, demoed, and handed over independent of the Forefront / demo / Operations structures; shared infrastructure config stays in `ITS — System`, read by ID. This is an **additive, deliberately-scoped exception**, not a change to the audience-separation principle, which is unchanged for every other workstream. The folder was moved from `ITS — Operations` with IDs preserved (see §24). Originating rationale: [Safety Portal mission §8](../workstreams/safety-portal/mission.md#8-self-containment-and-workspace-as-approval-authority).
 
 # §24 — Sheet-ID Bootstrap
 
 Workspace/folder/sheet ID inventory. Source of truth is shared/sheet_ids.py. v11 inventory refreshed:
 
-- Workspaces: Forefront Portfolio 4129485730670468, Human Review 8561891980142468, Operations 7217130472007556, Archive 5528280611743620, System 680592632244100.
+- Workspaces: Forefront Portfolio 4129485730670468, Human Review 8561891980142468, Operations 7217130472007556, Archive 5528280611743620, System 680592632244100, **Safety Portal 194283417429892 (NEW v17, `WORKSPACE_SAFETY_PORTAL`)**.
 
 - System folders: 01—Config 164788727768964, 02—Logs 5231338308560772, 03—Queues 7201663145535364, 04—Daemons 2130046845511556 (NEW PR #59/#60).
+
+- Safety Portal workspace contents (NEW v17): folder `Safety Portal` (`FOLDER_SAFETY_PORTAL` 6663869084002180 — moved from `ITS — Operations` 2026-06-05, ID preserved; `FOLDER_OPERATIONS_SAFETY_PORTAL` retained as a back-compat alias) holding `ITS_Active_Jobs`, `ITS_Forms_Catalog`, and `WSR_human_review` (`SHEET_WSR_HUMAN_REVIEW`, PR #168 — supersedes `WPR_Pending_Review` for the safety flow).
 
 - System sheets: ITS_Config 3072320166907780, Picklist_Sync_Config 7486553185013636, ITS_Errors 27291433258884, ITS_Quarantine 8687740798324612, ITS_Review_Queue 7243317526876036, ITS_Daemon_Health 4529351700729732 (NEW PR #59/#60).
 
@@ -777,13 +779,17 @@ The Tier-1 self-heal gap (the Check C marker-file staleness floor, §2 — earli
 
 # Authority
 
+Operational Standards **v17**, 2026-06-05 (verified against exec `753f12f`, PR #171). **§23/§24 sixth-workspace addition:** §23 now acknowledges the Safety Portal's **standalone, approval-gated workspace** (`ITS — Safety Portal`) as a deliberately-scoped, additive exception to the five-workspace audience-separation model — governing principle *workspace-membership = approval authority*; self-contained so the safety subsystem ships and hands over independently. §24's ID inventory gains the workspace, the moved `Safety Portal` folder (ID preserved), and `WSR_human_review`. This is a §23/§24 content change only — **every other section and the audience-separation principle itself carry forward verbatim from v16.** Originating workstream doctrine: [Safety Portal mission §8](../workstreams/safety-portal/mission.md#8-self-containment-and-workspace-as-approval-authority). v16 retires on acceptance of v17. Canonical git tag: `operational-standards-v17`.
+
 Operational Standards v16, 2026-06-01. Tier-2 boundary reframe: v16 removes the "non-developer-safe enforcement layer" framing introduced in v15 — a structural guard that v15 named as a hard pre-cutover build gap — and replaces it with the training-bounded co-resolution model. There is no structural maintenance enforcement layer; none is built or required. §44's Tier-2 boundary now holds by the trained operator's judgment + the both-rule + co-resolution with the Developer-Operator until per-category clearance. The Successor-Operator is redefined as a trained operator who runs Claude Code himself (not a Smartsheet-UI-only approver). §43, §44's LOW/HIGH capability-class sets, the both-rule, the audit-trail requirement, the §§37-41 role-scope clarifier, and the v14 §1 kill-switch reframe all carry forward. The Tier-1 self-heal gap (Check C marker-file staleness floor, §2 — earlier called "Check H") survives as a standalone pre-cutover gate, its stale status characterization corrected in a v16.x absorption (below); the v15 "BOTH" coupling to a Tier-2 enforcement layer is removed. No execution-layer mechanism is asserted as built. v15 retires on acceptance of v16. Canonical git tag: operational-standards-v16.
 
 v15 trigger: §43 + §44 added (Successor-Remediation Documentation Discipline; Tier-2 Claude-assisted repair path) and the Developer-Operator / Successor-Operator role split applied across §§37-44. v14 was complete on its own terms; v15 codifies the operator-decided three-tier non-developer-successor maintenance model and names the Tier-2 non-developer-safe enforcement layer as a hard pre-cutover build gap (alongside the Tier-1 Check H self-heal gap). Tag pushed post-merge: `operational-standards-v15`.
 
 v16 trigger: §44's Tier-2 protective basis recharacterized from structural (a "non-developer-safe enforcement layer," named in v15 as a hard pre-cutover build gap) to training-based (trained operator + both-rule + co-resolution); the Successor-Operator role redefined accordingly. Per the v16-trigger criterion the v15 doc carried ("recharacterization of a mechanism's protective claim"), changing §44's basis from structural to training/co-resolution is exactly that — a major bump, not a v15.x status update. Tag pushed post-merge: `operational-standards-v16`.
 
-v17 trigger: substantive doctrine change, new §, or recharacterization of a mechanism's protective claim. The v13→v14 reframe established that recharacterizing what a mechanism *is* is bump-worthy; v14→v15 established that a doc-wide role abstraction + a new tier is; v15→v16 established that changing a tier's protective basis (structural → training/co-resolution) is. v16.x absorbs further status updates (e.g., per-category clearances granted to the Successor-Operator) without major revision.
+v17 trigger: substantive doctrine change, new §, or recharacterization of a mechanism's protective claim. The v13→v14 reframe established that recharacterizing what a mechanism *is* is bump-worthy; v14→v15 established that a doc-wide role abstraction + a new tier is; v15→v16 established that changing a tier's protective basis (structural → training/co-resolution) is. v16.x absorbs further status updates (e.g., per-category clearances granted to the Successor-Operator) without major revision. **Realized 2026-06-05** by the §23/§24 sixth-workspace addition (the Safety Portal standalone workspace) — a substantive doctrine change.
+
+v18 trigger: substantive doctrine change, new §, recharacterization of a mechanism's protective claim, or a further change to the workspace-topology model. v17.x absorbs status updates (e.g., additional per-customer Safety Portal workspaces at onboarding) without a major bump.
 
 v16.x status absorption (2026-06-01, verified against exec 585823d): the §2 / §44 Tier-1 self-heal characterization is corrected. The mechanism described as an unimplemented "Check H heartbeat-staleness" check (reading ITS_Daemon_Health, 2 × Interval) with "two of three daemons heartbeat-retrofit-pending" was **never built**; the implemented staleness floor is the watchdog **Check C marker-file** check, which already covers all four tracked daemons (safety_intake, safety_weekly_send_poll, safety_weekly_generate, safety_picklist_audit), and the external **UptimeRobot** ping (audit F16) is live. The lone residual is the weekly_generate Friday-crash **catch-up** (exec follow-on). This correction does **not** change what the Tier-1 self-heal mechanism *is* or its protective claim — Tier-1 is still "daemons recover, the watchdog catches staleness, no human acts" — it corrects the stale *implementation-state* claim, so per the v17 trigger it is a **status update absorbed at v16.x: no major bump, no new tag.** The prior "Check H" framing is recorded here (and at §2 / §44 / line 94) for provenance.
 

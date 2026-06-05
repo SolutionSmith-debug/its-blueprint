@@ -2,17 +2,17 @@
 type: brief
 version: 6
 status: canonical
-last_verified: 2026-05-24
-last_verified_against: 3b7d56d
+last_verified: 2026-06-05
+last_verified_against: 753f12f
 workstream: safety_reports
 tags: [workstream-brief]
 ---
 
-**ITS Safety Reports Brief v6.1**
+**ITS Safety Reports Brief v6.2**
 
-2026-05-22 — Status Overlay Refreshing v6
+2026-06-05 — Safety Portal clean-break overlay (was v6.1, 2026-05-22)
 
-*intake.py + intake_poll.py + heartbeat shipped · Polling daemon canonical · Trusted-contacts + attachment screening framed*
+*v6.2 (2026-06-05, exec `753f12f`): the safety review surface is now `WSR_human_review` (in the standalone ITS — Safety Portal workspace), **not** `WPR_Pending_Review`; safety intake is **portal-only at launch** (the Safety Portal's Python pull transport), the email-PDF intake path **retired as the safety input** (`intake_poll.py` tombstoned in exec PR #171; the `weekly_generate`/`weekly_send` WSR rewire is in-flight — `WPR_Pending_Review` is **decommissioned-by-doc** in code until then, see §What Gets Built); the email infrastructure (`graph_client` / `untrusted_content` / `header_forgery`) is **preserved** for the committed Email Triage workstream. See [Safety Portal brief §8.1](../safety-portal/brief.md#81-clean-break-safety-intake-is-portal-only-at-launch). · v6.1 (2026-05-22): intake.py + intake_poll.py + heartbeat shipped · Polling daemon canonical*
 
 # Purpose of v6.1
 
@@ -112,11 +112,11 @@ Operator visibility: ITS_Daemon_Health sheet (4529351700729732, folder 04 — Da
 
 ## Weekly generation (safety_reports/weekly_generate.py) — PLANNED R3 Session 2
 
-Replaces the deprecated weekly_summary.py (stub raising NotImplementedError). Two-process model per FM v8 Invariant 1: generation script calls Anthropic, writes draft to WPR_Pending_Review; zero send capability. Friday afternoon launchd cadence (preferred) or polling-daemon model if dynamic triggering needed.
+Replaces the deprecated weekly_summary.py (stub raising NotImplementedError). Two-process model per FM v8 Invariant 1: generation script calls Anthropic, writes draft to `WSR_human_review` (the standalone ITS — Safety Portal workspace; supersedes `WPR_Pending_Review` under the Safety Portal clean-break) — the editable Email Body column is the source of truth for the send; zero send capability. Friday afternoon launchd cadence (preferred) or polling-daemon model if dynamic triggering needed.
 
 ## Weekly send (safety_reports/weekly_send.py) — PLANNED R3 Session 3
 
-Reads approved WPR rows from WPR_Pending_Review where Approved for Send=true. Sends via Resend or Graph send_mail. Zero AI step per FM v8 Invariant 1.
+Reads approved rows from `WSR_human_review` (ITS — Safety Portal workspace) where `Approve for Scheduled Send`=true, reading the human-edited Email Body as the source of truth. Sends via Resend or Graph send_mail. Zero AI step per FM v8 Invariant 1.
 
 # Operational Conventions Honored (REFRESHED for v11)
 
