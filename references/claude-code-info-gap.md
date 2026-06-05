@@ -2,15 +2,15 @@
 type: reference
 status: canonical
 workstream: null
-last_verified: 2026-06-04
-last_verified_against: fe615db
+last_verified: 2026-06-05
+last_verified_against: 827c374
 ---
 
 # Claude Code Info Gap
 
 **Purpose:** Context that lives only in chat memory / chat conversation and is NOT reachable from `~/its/` or `~/its-blueprint/` on a fresh Claude Code (CC) session. Drop this in project files so a chat-session can hand it to CC at spin-up, or so a fresh chat-session can re-orient quickly.
 
-**Last refreshed:** 2026-06-04
+**Last refreshed:** 2026-06-05
 **Maintained by:** chat-session at session close (treat as living doc)
 
 ---
@@ -191,7 +191,7 @@ When running a review subagent (e.g., `code-review`) over a git worktree, the sy
 ## 6. Tooling & Infrastructure
 
 ### CI gates
-- `mypy = 0` enforced as **blocking** step (PR #31).
+- `mypy = 0` enforced as **blocking** step (PR #31). The `test` CI job runs mypy first (blocking), then pytest, then ruff. Run `mypy .` locally before opening a PR — a mypy error blocks merge the same way ruff/pytest do.
 - `pytest -m integration` skipped by default; run against throwaway sandbox resources.
 - Branch protection requires `test` context to pass.
 
@@ -205,6 +205,9 @@ When running a review subagent (e.g., `code-review`) over a git worktree, the sy
 - Reports MCP is read-only; `create_report` needs REST fallback.
 - `get_sheet_summary` applies default sort by primary column (breaks header-row-context sheets); true native order requires `ss_api.py` via local execution.
 - Filter operators: EQUAL, NOT_EQUAL, LESS_THAN/GREATER_THAN variants only — no CONTAINS/LIKE.
+
+### Smartsheet API constraint: AUTO_NUMBER columns are UI-only
+`type: AUTO_NUMBER` is rejected by the Smartsheet REST API with `errorCode 1008` whether the column is added at sheet creation or post-create. The only path is the Smartsheet UI (Insert Column → System → Auto-Number/Series). Pattern: run the API-doable schema steps in code, detect-or-instruct on the UI-only step, document in `docs/tech_debt.md`. This affects ITS_Active_Jobs `Job ID` column (Phase 3, pending operator UI action). The older `DATETIME` user-column constraint (errorCode 4000) is a separate limitation (use `DATE` for user-defined date columns). See `docs/tech_debt.md` for both entries.
 
 ### Smartsheet REST via curl
 - Write multi-line JSON payloads to files, use `-d @/path/to/file`. Inline shell quoting produces misleading 401/400 errors.
@@ -297,6 +300,7 @@ With `its` installed editable (`__editable__.its-0.1.0.pth`), setting `PYTHONPAT
 - **2026-06-03 Safety Portal config sheets — PR #155 (exec, four-part-verify clean, merge `141a573`):** Built the two Smartsheet sheets the Safety Portal reads. LIVE in ITS — Operations workspace, new folder "Safety Portal" (id `6663869084002180`) containing ITS_Active_Jobs (id `6223950341164932`, 6 jobs seeded: bradley-1..rockford) and ITS_Forms_Catalog (id `423274885369732`, 4 forms: jha-v1/daily-site-safety-v1/equipment-preinspection-v1/toolbox-talk-v1). Two new `smartsheet_client` primitives: `find_folder_by_name_in_workspace` + `create_folder_in_workspace` (direct REST, `@_breaker_guard`, §42 docstrings). §30 live integration test (2 passed). §43 runbook at `docs/runbooks/safety_portal_config_sheets.md`. Note: job Addresses seeded BLANK (§4 forbids inventing them; PM fills manually before Work Location auto-fill goes live).
 - **2026-06-03 Unifying forensic alignment & drift audit — PR #156 (exec, four-part-verify clean, merge `9e4b51b`):** Propose-only meta-audit at `docs/audits/2026-06-03_unifying-alignment-audit.md` (status: draft). Per-axis verdicts A–F; ranked drift register (NO Critical, no surviving High after adversarial verification); consolidated open-findings register replacing four prior-audit lists. Key corrections to live claims: gitleaks + doctrine-drift ARE in CI; 9 subagents + 4 hooks are RELATIVE symlinks from blueprint into ~/its (single source); watchdog has 11 operational checks (A,B,C,D,F,G,I,J,K,L,M), only E deferred — CLAUDE.md still says "6 of 7" (stale). Open findings surfaced: DR-D1/H1 guard-hook self-presence (fail-open if .claude symlink dangles; Check M only detects post-hoc); DR-C2 Layer 6 attachment screening entirely unbuilt (legacy PDF-email attachments to safety@ upload to Box unscanned); DR-E1/OPEN-1 `ops-stds-enforcer` agent pinned at "Op Stds v13", 3 majors behind v16, blind to §43/§44.
 - **2026-06-04 Safety Portal Phase 2 — PR #158 (exec, four-part-verify clean, merge `fe615db`):** New `safety_portal/` tree — Cloudflare Worker (Hono router + TypeScript), Vite/React SPA (BRG/gold design system), Cloudflare D1 SQLite DB (users + form-submissions), bcryptjs auth, HMAC session-cookie middleware, SVG-vector signature pad (`signature_pad` library), 10 PDF reference forms committed to `public/forms/`. Locally validated end-to-end (wrangler dev --local + Playwright). Deploy deferred to operator Cloudflare token step (D1 create, remote migrations, secret put, wrangler deploy, custom domain). Zero Python touched. See §6 "Cloudflare / Safety Portal TS tree" for tooling notes.
+- **Safety Portal Phase 3 — PR #160 (exec, four-part-verify clean, merge `827c374`):** Live Job-ID resolution replacing intake's legacy name-matching. New `shared/active_jobs.py` (Job-ID lookup against ITS_Active_Jobs, read-only, mirrors `project_routing` pattern) + `shared/safety_week.py` (Sat-to-Fri week rule, canonical Saturday-date key, Dec→Jan boundary correct). `resolve_project()` rewritten to key on portal payload `Job ID`; returns `ProjectResolution(project, reason)` typed tuple; `reason` in {`job_id_match`, `not_found`, `inactive`, `sheet_error`}. Legacy fuzzy-match RETIRED. Live additive migration on ITS_Active_Jobs: 4 contact columns (Stakeholder Name/Email/Phone, Safety Reports Contact Email) + rename `Job ID`→`Job Slug` (freeing title for the future AUTO_NUMBER column). AUTO_NUMBER `Job ID` column pending operator UI step (`errorCode 1008` blocks API creation — see §6 Smartsheet API constraint). §43 runbook shipped. D1 dropdown sync, portal forms, and submission pipeline deferred to Phase 4/5.
 
 ### Bradley 1 (BBCHS 1)
 - Template project, six sheets migrated, demo seeding complete.
@@ -327,7 +331,7 @@ With `its` installed editable (`__editable__.its-0.1.0.pth`), setting `PYTHONPAT
 - **Safety Portal frontend CI gap** — no `tsc --noEmit` / `npm run build` CI step for the TS tree. See `docs/tech_debt.md`.
 
 ### On the horizon
-- **Safety Portal Phase 3+** — Worker-side auth hardening (session revocation table Phase 7), HMAC-verified email shim to `safety@` (Phase 5), intake.py portal-marker branches (Phase 5), form-rendering Phase 4, Worker-side capability-gate for TS (Phase 5). Cloudflare deploy is the immediate next step. **Config sheets LIVE (PR #155):** ITS_Active_Jobs (6 jobs, addresses blank) + ITS_Forms_Catalog (4 forms). **Phase 2 Worker LIVE locally, not yet deployed.** Legacy PDF-email is the documented fallback until portal goes live.
+- **Safety Portal Phase 4+** — Form rendering Phase 4; HMAC-verified email shim to `safety@` + intake.py portal-marker branches Phase 5; Worker-side capability-gate for TS Phase 5; session revocation table Phase 7. **Phase 3 LANDED (PR #160, `827c374`):** `shared/active_jobs.py` (Job-ID lookup, read-only) + `shared/safety_week.py` (Sat-to-Fri week rule, Saturday-date canonical key); `resolve_project()` rewritten — keys on portal payload `Job ID`, `ProjectResolution(project, reason)` typed return; legacy name-match RETIRED; §43 runbook. ITS_Active_Jobs: 4 contact columns + `Job ID`→`Job Slug` rename LIVE; AUTO_NUMBER `Job ID` column PENDING operator UI step. **Cloudflare deploy still deferred (D1 create, secret put, wrangler deploy).** Legacy PDF-email documented fallback. D1 dropdown sync (populate job list in portal form) deferred to deploy session.
 - Email Triage workstream build — now carries Invariant 2 Layer 6 (attachment screening) per the portal pivot reassignment
 - `fail_closed_until` kill-switch mechanism deferred from F07 (Q8 resolution) — currently fail-open by documented design; revisit in Phase 2+ when multi-operator scenario makes a true fail-closed window safe to add.
 - DFR backfill and Portfolio Rollups Reports continued expansion.

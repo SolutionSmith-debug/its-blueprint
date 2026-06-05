@@ -843,3 +843,68 @@ All steps require `CLOUDFLARE_API_TOKEN` (scopes: Workers, D1, R2 optional, cust
 | Session revocation | Phase 7 D1 sessions table | No server-side revocation until then |
 | Form catalog v1 | Confirm with PM | Committed PDFs ≠ ITS_Forms_Catalog 4 forms; confirm before Phase 4 |
 | TS capability gate | Phase 5 (email shim) | Python AST gate doesn't reach TS Worker |
+
+## §G18 — 2026-06-05 Safety Portal Phase 3: Job-ID resolution + active_jobs + safety_week
+
+PR #160 (squash `827c374`, four-part verify clean). Replaced `safety_reports/intake.py`'s legacy name-matching `resolve_project()` with a Job-ID-keyed lookup backed by `shared/active_jobs.py`. The portal payload now carries an explicit `Job ID` field; the intake pipeline reads it directly rather than fuzzy-matching a project name.
+
+### §G18.1 — New modules
+
+**`shared/active_jobs.py`** — read-only Job-ID lookup mirror for ITS_Active_Jobs. Key facts:
+
+- `get_job_by_id(job_id: str) -> Optional[JobRecord]` — fetches the ITS_Active_Jobs sheet and returns the row whose `Job Slug` column matches `job_id` (case-insensitive). Returns `None` if no match or the sheet is unreachable.
+- `JobRecord` is a typed dataclass with at minimum: `job_slug`, `project_name`, `address`, `stakeholder_email`, `safety_contact_email`, `active`.
+- Read-only; no write path. The sheet is the system of record.
+- Mirrors the `project_routing.py` pattern — same defensive caching + error surfacing.
+
+**`shared/safety_week.py`** — Sat→Fri week rule and canonical Saturday-date key.
+
+- `get_week_key(dt: date) -> date` — returns the Saturday that starts the week containing `dt`. If `dt` is already a Saturday, returns `dt`; otherwise rolls back to the prior Saturday.
+- Canonical key format: `YYYY-MM-DD` (the Saturday date). All week-sheet references use this format.
+- Handles Dec→Jan boundary correctly (no year-rollover bug).
+- Used by `intake.py` to build the per-job week-sheet name and by any consumer that needs a consistent "which week does this date belong to?" answer.
+
+### §G18.2 — resolve_project rewrite and legacy retirement
+
+`safety_reports/intake.py::resolve_project()` was rewritten. Old behavior: fuzzy name-match against `BOX_PROJECT_FOLDERS` dict (hardcoded). New behavior: reads `job_id` from the portal payload; calls `active_jobs.get_job_by_id(job_id)`; returns a `ProjectResolution(project, reason)` named tuple.
+
+`ProjectResolution` fields:
+- `project`: the resolved project slug / `JobRecord`, or `None` on failure.
+- `reason`: one of `"job_id_match"` | `"not_found"` | `"inactive"` | `"sheet_error"`.
+
+**Legacy retired:** the old `resolve_project` fuzzy-match path (name-matching against `BOX_PROJECT_FOLDERS`) is removed. PDF-email intake that does NOT include a `job_id` in the payload will resolve as `not_found` and route to `ITS_Review_Queue`. The documented fallback for legacy PDF-email senders is operator-assisted re-send with the job ID added.
+
+### §G18.3 — ITS_Active_Jobs live schema (post-Phase-3 migration)
+
+Phase 3 migration added 4 contact columns and renamed one system column. Final schema as seeded (6 rows: bradley-1..rockford-s2):
+
+| Column | Type | Notes |
+|---|---|---|
+| Project Name | TEXT_NUMBER (primary) | Human name, e.g. "Bradley 1 BBCHS" |
+| Job Slug | TEXT_NUMBER | kebab-id, e.g. "bradley-1" — the lookup key |
+| Address | TEXT_NUMBER | Blank (PM fills) |
+| Active | CHECKBOX | Default true |
+| Stakeholder Name | TEXT_NUMBER | |
+| Stakeholder Email | TEXT_NUMBER | Required for portal auth |
+| Stakeholder Phone | TEXT_NUMBER | |
+| Safety Reports Contact Email | TEXT_NUMBER | Required; receives weekly report |
+| Notes | TEXT_NUMBER | |
+| Job ID | AUTO_NUMBER (pending) | UI-only — NOT yet created; operator must add in Smartsheet UI (prefix JOB-, 4-digit fill, start 1). `active_jobs.py` reads it the moment it exists. |
+
+Sheet ID: `6223950341164932` (Operations workspace → Safety Portal folder `6663869084002180`).
+
+Note: column order is cosmetically scrambled in the UI (contact columns interleave with Active/Notes — added one-at-a-time). Not load-bearing; `active_jobs.py` resolves by title.
+
+### §G18.4 — Smartsheet API constraint: AUTO_NUMBER columns are UI-only
+
+`type: AUTO_NUMBER` is rejected by the Smartsheet REST API with `errorCode 1008` regardless of column position or `systemColumnType` field. The only path is the Smartsheet UI (Insert Column → System → Auto-Number/Series). This is a permanent platform constraint, not a gap to fix in code. The older `AUTO_NUMBER at sheet creation` entry in `docs/tech_debt.md` covers the at-create variant; Phase 3 discovered the same applies to post-create column additions.
+
+**Workaround pattern:** run the API-doable schema steps (add columns, rename) in code; detect-or-instruct on the UI-only step; document in `docs/tech_debt.md` for operator follow-up.
+
+### §G18.5 — Deferred items (Phase 3 boundaries)
+
+- **D1 dropdown sync (A.1.4):** deferred to deploy session. Needs D1 (Phase 2 deploy) + Python→D1 write mechanism decision (Worker `/api/sync` vs D1 HTTP API).
+- **Portal forms (Phase 4):** the JHA + daily safety form rendering and submission pipeline.
+- **Intake portal-marker branches (Phase 5):** `intake.py` HMAC-verified shim branches for portal-sourced submissions. Legacy PDF-email is the documented fallback.
+- **Submission pipeline (Phase 5):** `POST /api/submit` Worker route → HMAC-verified email → `intake.py` → week-sheet write.
+- **New Job form (UI-only):** Smartsheet form on ITS_Active_Jobs for office PM. Fields: Project Name, Address, Stakeholder Name/Email/Phone, Safety Reports Contact Email, Active.
