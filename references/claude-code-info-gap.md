@@ -2,15 +2,15 @@
 type: reference
 status: canonical
 workstream: null
-last_verified: 2026-06-03
-last_verified_against: 9e4b51b1
+last_verified: 2026-06-04
+last_verified_against: fe615db
 ---
 
 # Claude Code Info Gap
 
 **Purpose:** Context that lives only in chat memory / chat conversation and is NOT reachable from `~/its/` or `~/its-blueprint/` on a fresh Claude Code (CC) session. Drop this in project files so a chat-session can hand it to CC at spin-up, or so a fresh chat-session can re-orient quickly.
 
-**Last refreshed:** 2026-06-03
+**Last refreshed:** 2026-06-04
 **Maintained by:** chat-session at session close (treat as living doc)
 
 ---
@@ -243,6 +243,17 @@ With `its` installed editable (`__editable__.its-0.1.0.pth`), setting `PYTHONPAT
 - Gated: `improve-codebase-architecture` (§14 preservation-over-refactor).
 - `git-guardrails` planned as follow-up PR.
 
+### Cloudflare / Safety Portal TS tree (PR #158, 2026-06-04)
+`safety_portal/` is the TypeScript/Cloudflare workstream — a separate execution tree from the Python `safety_reports/` workstream. Key tooling facts:
+
+- **Local dev:** `npm run dev` (Vite dev server for React SPA) and `wrangler dev --local` (Worker + D1 in-process). Neither requires a Cloudflare account token. D1 state is local-only (`--local` flag).
+- **Deploy requires token:** `wrangler d1 create`, `wrangler d1 migrations apply` (remote), `wrangler secret put SESSION_SIGNING_SECRET`, `wrangler deploy` — all need `CLOUDFLARE_API_TOKEN` or `wrangler login`. Deferred to operator token step.
+- **`nodejs_compat` flag required** — bcryptjs imports `node:crypto`. Flag is in `wrangler.toml`; without it the Worker fails to parse on deploy.
+- **Topology TBD:** Workers Static Assets (current Cloudflare best-practice; better D1 binding integration) vs Cloudflare Pages (`*.pages.dev`). Code is deploy-agnostic; decide at deploy. Blueprint mission §11 assumed Pages — update once decided.
+- **Local D1 state wipe:** concurrent `wrangler` processes in the same directory (e.g., a review subagent running `wrangler d1 migrations apply --local` or `npm run build`) can reset the local D1 DB mid-session. Fix: re-run `npm run db:migrate:local`. Not a code bug — the local DB file is wiped by `wrangler`'s in-process setup.
+- **bcryptjs cost-10 CPU cap:** on Workers Free plan (10ms CPU/request), a bcrypt compare triggers Error 1102. Deploy on Paid plan OR swap to Web-Crypto PBKDF2-SHA-256. See `docs/tech_debt.md`.
+- **CI gap:** no frontend typecheck/build CI step yet. `tsc --noEmit` + `npm run build` are manual-only. See `docs/tech_debt.md`.
+
 ---
 
 ## 7. Orchestration Model
@@ -285,6 +296,7 @@ With `its` installed editable (`__editable__.its-0.1.0.pth`), setting `PYTHONPAT
 - **2026-06-03 Phase 3a/3b/E1 — PRs #151+#152+#153 (exec, all four-part-verify clean, main `9ff87ea`):** Phase 3a ADD — new `shared/smartsheet_client.create_picklist_column` helper + idempotent `scripts/migrations/add_dormant_picklist_columns.py`; ITS_Errors·Workstream + ITS_Quarantine·Disposition created live (#151). E1 flip — `SHEET_PROJECT_ROUTING = 3500842291253124` live in `shared/sheet_ids.py`; ITS_Project_Routing built + seeded; `get_folder_id` reading from sheet (E1 cutover LIVE after deploy) (#152). Phase 3b AUTOMATE — `--apply`/`--apply --commit` mode added to `scripts/audit_picklist_drift.py`; `audit --apply` ran 0/0 on clean registry (#153). (Session log PR #154.)
 - **2026-06-03 Safety Portal config sheets — PR #155 (exec, four-part-verify clean, merge `141a573`):** Built the two Smartsheet sheets the Safety Portal reads. LIVE in ITS — Operations workspace, new folder "Safety Portal" (id `6663869084002180`) containing ITS_Active_Jobs (id `6223950341164932`, 6 jobs seeded: bradley-1..rockford) and ITS_Forms_Catalog (id `423274885369732`, 4 forms: jha-v1/daily-site-safety-v1/equipment-preinspection-v1/toolbox-talk-v1). Two new `smartsheet_client` primitives: `find_folder_by_name_in_workspace` + `create_folder_in_workspace` (direct REST, `@_breaker_guard`, §42 docstrings). §30 live integration test (2 passed). §43 runbook at `docs/runbooks/safety_portal_config_sheets.md`. Note: job Addresses seeded BLANK (§4 forbids inventing them; PM fills manually before Work Location auto-fill goes live).
 - **2026-06-03 Unifying forensic alignment & drift audit — PR #156 (exec, four-part-verify clean, merge `9e4b51b`):** Propose-only meta-audit at `docs/audits/2026-06-03_unifying-alignment-audit.md` (status: draft). Per-axis verdicts A–F; ranked drift register (NO Critical, no surviving High after adversarial verification); consolidated open-findings register replacing four prior-audit lists. Key corrections to live claims: gitleaks + doctrine-drift ARE in CI; 9 subagents + 4 hooks are RELATIVE symlinks from blueprint into ~/its (single source); watchdog has 11 operational checks (A,B,C,D,F,G,I,J,K,L,M), only E deferred — CLAUDE.md still says "6 of 7" (stale). Open findings surfaced: DR-D1/H1 guard-hook self-presence (fail-open if .claude symlink dangles; Check M only detects post-hoc); DR-C2 Layer 6 attachment screening entirely unbuilt (legacy PDF-email attachments to safety@ upload to Box unscanned); DR-E1/OPEN-1 `ops-stds-enforcer` agent pinned at "Op Stds v13", 3 majors behind v16, blind to §43/§44.
+- **2026-06-04 Safety Portal Phase 2 — PR #158 (exec, four-part-verify clean, merge `fe615db`):** New `safety_portal/` tree — Cloudflare Worker (Hono router + TypeScript), Vite/React SPA (BRG/gold design system), Cloudflare D1 SQLite DB (users + form-submissions), bcryptjs auth, HMAC session-cookie middleware, SVG-vector signature pad (`signature_pad` library), 10 PDF reference forms committed to `public/forms/`. Locally validated end-to-end (wrangler dev --local + Playwright). Deploy deferred to operator Cloudflare token step (D1 create, remote migrations, secret put, wrangler deploy, custom domain). Zero Python touched. See §6 "Cloudflare / Safety Portal TS tree" for tooling notes.
 
 ### Bradley 1 (BBCHS 1)
 - Template project, six sheets migrated, demo seeding complete.
@@ -309,9 +321,13 @@ With `its` installed editable (`__editable__.its-0.1.0.pth`), setting `PYTHONPAT
 - **DR-D1/H1 guard-hook self-presence** — `.claude` hooks fail-open if the blueprint `.claude` symlink dangles; watchdog Check M only detects post-hoc, not preventively. No code change made this session; flagged in PR #156 audit.
 - **DR-C2 Layer 6 attachment screening entirely unbuilt** — legacy PDF-email attachments to safety@ upload to Box unscanned. Documented as planned Phase 1.4; now surfaced explicitly in the alignment audit. Email Triage workstream carries this.
 - **Safety Portal intake.py portal-marker branches** — PLANNED, not built. Legacy PDF-email is the documented fallback. HMAC-verified shim (`portal-noreply@` → `safety@`) not implemented.
+- **Safety Portal deploy deferred** — Cloudflare provisioning (D1/R2/Pages-or-Workers, secret put, deploy, custom domain `safety.evergreenmirror.com`) blocked on operator CLOUDFLARE_API_TOKEN. Code validated locally. See `docs/tech_debt.md` "Safety Portal deploy + provisioning deferred".
+- **Safety Portal topology TBD** — Workers Static Assets vs Pages; decide at deploy time. Blueprint mission §11 assumed Pages — needs update after decision. See `docs/tech_debt.md`.
+- **Safety Portal form-catalog mismatch** — committed 10-PDF corpus ≠ ITS_Forms_Catalog 4 forms. Confirm v1 catalog with PM before Phase 4. See `docs/tech_debt.md`.
+- **Safety Portal frontend CI gap** — no `tsc --noEmit` / `npm run build` CI step for the TS tree. See `docs/tech_debt.md`.
 
 ### On the horizon
-- Safety Portal build (blueprint `workstreams/safety-portal/` mission v1 + brief; Cloudflare Worker, intake.py portal-marker branches, HMAC-verified shim — partially started). **Config sheets LIVE (PR #155, 2026-06-03):** ITS_Active_Jobs (6 jobs seeded, addresses blank) + ITS_Forms_Catalog (4 forms). Remaining: Cloudflare Worker, intake.py portal-marker branches, HMAC-verified shim (all PLANNED, not built). Legacy PDF-email is the documented fallback. Attachment-screening (Invariant 2 Layer 6) is N/A for safety reports and reassigned to Email Triage.
+- **Safety Portal Phase 3+** — Worker-side auth hardening (session revocation table Phase 7), HMAC-verified email shim to `safety@` (Phase 5), intake.py portal-marker branches (Phase 5), form-rendering Phase 4, Worker-side capability-gate for TS (Phase 5). Cloudflare deploy is the immediate next step. **Config sheets LIVE (PR #155):** ITS_Active_Jobs (6 jobs, addresses blank) + ITS_Forms_Catalog (4 forms). **Phase 2 Worker LIVE locally, not yet deployed.** Legacy PDF-email is the documented fallback until portal goes live.
 - Email Triage workstream build — now carries Invariant 2 Layer 6 (attachment screening) per the portal pivot reassignment
 - `fail_closed_until` kill-switch mechanism deferred from F07 (Q8 resolution) — currently fail-open by documented design; revisit in Phase 2+ when multi-operator scenario makes a true fail-closed window safe to add.
 - DFR backfill and Portfolio Rollups Reports continued expansion.

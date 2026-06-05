@@ -760,3 +760,86 @@ The audit's per-axis verdicts confirm the architecture is sound. Drift is in low
 Memory Archive v5, 2026-05-22. Append-only extension of v4. §A-§G4 carry forward verbatim from v4; §G5 (2026-05-21 evening + 2026-05-22 cascade) added. v4 is not retired — v5 is the active reference for restoration of late-cycle operational detail; v4 remains the active reference for earlier-cycle detail.
 
 Loading model: not part of the canonical doc set loaded by default. Load on demand when specific operational details from this period are needed for restoration. v6 trigger: next major cycle of operational detail accumulation (anticipated post-Phase-1.5 cutover).
+
+## §G17 — 2026-06-04 Safety Portal Phase 2 Cloudflare scaffold (PR #158)
+
+### Summary
+
+PR #158 (squash `fe615db`, four-part-verify clean) introduced the `safety_portal/` TypeScript/Cloudflare execution tree — a new workstream alongside the Python `safety_reports/` workstream. Zero Python touched; all new code is TypeScript/Node/Cloudflare. Locally validated end-to-end (wrangler dev --local + Playwright). Deploy deferred to operator Cloudflare token step.
+
+### §G17.1 — Architecture of the safety_portal/ tree
+
+```
+safety_portal/
+  worker/
+    src/
+      worker/
+        index.ts          # Hono app root + static-asset binding
+        auth.ts           # bcryptjs login; HMAC session-cookie issue
+        middleware/
+          requireSession.ts  # HMAC-verify session cookie; iat+90d expiry
+        routes/
+          login.ts        # POST /login
+          jobs.ts         # GET /api/jobs → ITS_Active_Jobs via Smartsheet
+          forms.ts        # GET /api/forms → ITS_Forms_Catalog via Smartsheet
+          submit.ts       # POST /api/submit (Phase 4+ JHA/safety form submission)
+          logout.ts       # GET /logout (cookie clear)
+        db/
+          schema.sql      # D1: users + form_submissions tables
+    public/
+      forms/              # 10 PDF reference forms (static asset)
+    wrangler.toml         # D1 binding, nodejs_compat, static assets config
+    package.json          # hono, bcryptjs, signature_pad, vite, typescript
+  spa/
+    src/                  # React/Vite SPA (BRG/gold design system)
+      components/
+        SignaturePad.tsx  # SVG-vector signature capture (signature_pad library)
+      pages/
+        Login.tsx
+        JobHazardAnalysis.tsx  # JHA form stub (Phase 4)
+    vite.config.ts
+```
+
+**D1 database:** two tables — `users` (id, username, password_hash, role, created_at) and `form_submissions` (id, form_type, job_id, submitted_by, payload JSON, signature SVG, submitted_at). `wrangler d1` CLI manages schema; `npm run db:migrate:local` applies locally.
+
+**Auth model:** bcryptjs cost-10 password hash; HMAC-signed session cookie (shared `SESSION_SIGNING_SECRET`); `requireSession` middleware validates HMAC + iat+90d expiry. No server-side session table yet (revocation deferred to Phase 7).
+
+**Smartsheet reads:** the Worker reads ITS_Active_Jobs + ITS_Forms_Catalog directly via Smartsheet API (PAT from Cloudflare secret). These are the two sheets built in PR #155 (§G16.1 has their IDs).
+
+### §G17.2 — Local dev workflow
+
+```bash
+cd ~/its/safety_portal/worker
+npm install
+npm run db:migrate:local          # creates .wrangler/d1/local/its-safety-portal-db.sqlite
+npm run dev                        # wrangler dev --local on :8787 (Worker + D1)
+# in a second terminal:
+cd ../spa && npm run dev           # Vite dev server on :5173 (hot-reload SPA)
+```
+
+Playwright smoke (`npm run test` or `npx playwright test`) validates login + JHA stub against wrangler dev.
+
+**Local D1 wipe hazard:** any `wrangler d1 migrations apply --local` invocation in the same directory (e.g., a review subagent running it) wipes and re-creates the local DB. If the DB is missing/empty, login correctly fails with 500. Fix: re-run `npm run db:migrate:local` to restore schema; then `npm run seed:local` (if a seed script exists) or manually insert a test user.
+
+### §G17.3 — Deploy checklist (operator steps, deferred)
+
+All steps require `CLOUDFLARE_API_TOKEN` (scopes: Workers, D1, R2 optional, custom-domain bind):
+
+1. `wrangler login` or export `CLOUDFLARE_API_TOKEN=...`
+2. `wrangler d1 create its-safety-portal-db` → copy `database_id` into `wrangler.toml` under `[[d1_databases]]`
+3. `wrangler d1 migrations apply its-safety-portal-db` (remote, runs `db/schema.sql`)
+4. `wrangler secret put SESSION_SIGNING_SECRET` (≥32-byte random, e.g., `openssl rand -hex 32`)
+5. `wrangler secret put SMARTSHEET_TOKEN` (PAT with read on Operations workspace)
+6. Decide topology: **Workers Static Assets** (recommended, better D1 binding) or **Cloudflare Pages**. Workers Static Assets: `wrangler deploy`. Pages: `wrangler pages deploy dist/`. Update blueprint `workstreams/safety-portal/mission.md` §11 after decision.
+7. Bind custom domain `safety.evergreenmirror.com` in Cloudflare dashboard → Workers route or Pages domain.
+8. Smoke-test: `curl -X POST https://safety.evergreenmirror.com/login -d '{"username":"...","password":"..."}'`
+
+### §G17.4 — Open decisions at deploy
+
+| Decision | Options | Notes |
+|---|---|---|
+| Pages vs Workers Static Assets | Workers SA (recommended) / Pages | Code deploy-agnostic; blueprint §11 assumed Pages |
+| Free vs Paid plan | Paid (simpler) / Free + PBKDF2 swap | bcryptjs cost-10 > 10ms CPU on Free → Error 1102 |
+| Session revocation | Phase 7 D1 sessions table | No server-side revocation until then |
+| Form catalog v1 | Confirm with PM | Committed PDFs ≠ ITS_Forms_Catalog 4 forms; confirm before Phase 4 |
+| TS capability gate | Phase 5 (email shim) | Python AST gate doesn't reach TS Worker |
