@@ -907,4 +907,78 @@ Note: column order is cosmetically scrambled in the UI (contact columns interlea
 - **Portal forms (Phase 4):** the JHA + daily safety form rendering and submission pipeline.
 - **Intake portal-marker branches (Phase 5):** `intake.py` HMAC-verified shim branches for portal-sourced submissions. Legacy PDF-email is the documented fallback.
 - **Submission pipeline (Phase 5):** `POST /api/submit` Worker route → HMAC-verified email → `intake.py` → week-sheet write.
+
+## §G19 — 2026-06-05 Safety Portal Phase 3 contacts amendment (PR #162)
+
+PR #162 (squash `9e1ff9c`, four-part-verify clean). Extended `shared/active_jobs.py` and ITS_Active_Jobs to support TO/CC email routing and a named greeting contact. Zero impact on the portal Worker or the intake pipeline (sending is Phase 5).
+
+### §G19.1 — ITS_Active_Jobs schema after Phase 3 contacts amendment
+
+6 new TEXT columns added via additive API migration (run once, idempotent detect-or-skip):
+
+| New column | Type | Purpose |
+|---|---|---|
+| Safety Reports Contact Name | TEXT_NUMBER | Greeting name for the weekly report ("Dear {name}") |
+| CC 1 | TEXT_NUMBER | CC slot 1 — one email address string |
+| CC 2 | TEXT_NUMBER | CC slot 2 |
+| CC 3 | TEXT_NUMBER | CC slot 3 |
+| CC 4 | TEXT_NUMBER | CC slot 4 |
+| CC 5 | TEXT_NUMBER | CC slot 5 |
+
+Full post-Phase-3-amendment column list (inheriting §G18.3 baseline + these 6): `Project Name`, `Job Slug`, `Address`, `Active`, `Stakeholder Name`, `Stakeholder Email`, `Stakeholder Phone`, `Safety Reports Contact Email`, `Safety Reports Contact Name`, `CC 1`–`CC 5`, `Notes`, `Job ID (AUTO_NUMBER, pending)`.
+
+Sheet ID: `6223950341164932` (Operations workspace → Safety Portal folder `6663869084002180`). Cosmos from §G16.1 carried forward.
+
+### §G19.2 — Email routing model (Phase 3 definition)
+
+| Role | Source column | Used in | Notes |
+|---|---|---|---|
+| TO | Safety Reports Contact Email | `weekly_send` (Phase 5) | Required; single address |
+| CC | CC 1–CC 5 (flattened) | `weekly_send` (Phase 5) | 0–5 addresses; empty cells skipped |
+| Greeting | Safety Reports Contact Name | Report body — "Dear {name}" | Falls back to TO address if blank |
+| Stakeholder | Stakeholder Email/Name | Packet body reference only | NOT in the TO/CC envelope — referenced inside the weekly report as PM/project contact |
+
+All sending is Phase 5. This session only defined the model and wired the data model; no `weekly_send` code was changed.
+
+### §G19.3 — active_jobs.ActiveJob dataclass additions
+
+`shared/active_jobs.ActiveJob` now carries:
+
+```python
+safety_reports_contact_name: str   # from "Safety Reports Contact Name" TEXT column
+cc_emails: list[str]               # flattened, deduped; empty list if all CC slots blank
+```
+
+**`_flatten_cc(row, columns)` helper** — internal to `active_jobs.py`. For each of CC 1–5:
+1. Reads the TEXT cell value (empty string if blank).
+2. Comma-splits (handles multi-email strings in a single cell — not the design intent but handled defensively).
+3. Strips whitespace.
+4. Validates email shape (basic `@` check; malformed → WARN log + skip).
+5. Deduplicates the final list (preserving first-seen order).
+
+Returns a `list[str]` of validated email strings. Never raises; WARN on bad input.
+
+### §G19.4 — Key live finding: MULTI_CONTACT_LIST loses external email addresses on API read-back
+
+**Empirically confirmed in this session.** When a `MULTI_CONTACT_LIST` column holds external (non-org-member) email addresses via the API, `cell.value` returns display names (`"One, Two"`) and `cell.objectValue` is similarly name-only. The email addresses are silently dropped — Smartsheet resolves them to display names at write time and never persists the email string for externals.
+
+Behavior breakdown by column type and contact kind:
+
+| Column type | Contact kind | `cell.value` | `cell.objectValue` |
+|---|---|---|---|
+| MULTI_CONTACT_LIST | External email | Display names only | Name-only — email dropped |
+| CONTACT_LIST (single) | External email | Email address (reliable) | `{email, name}` |
+| CONTACT_LIST (single) | Org member | Email address | `{email, name}` |
+
+**Conclusion:** Do NOT use `MULTI_CONTACT_LIST` (or `CONTACT_LIST` in multi-mode) to store arbitrary external recipient emails. **Use TEXT columns** — store the email string directly. TEXT cell value is always the literal string you wrote.
+
+**TEXT → CONTACT_LIST column type flip:** verified live — `PUT /columns/{id}` with `{"type": "CONTACT_LIST"}` on a TEXT column returns 200. The reverse (CONTACT_LIST → TEXT) would lose contact data. This is a one-way operator escape hatch; not a routine code operation.
+
+**Applied decision in PR #162:** all 5 CC slots and the Contact Name column are `TEXT_NUMBER`. `_flatten_cc` reads them as plain strings. No CONTACT_LIST columns involved in the CC/TO routing path.
+
+### §G19.5 — Deferred items (Phase 3 contacts amendment boundaries)
+
+- **Phase 5 `weekly_send` wiring:** `send_one_row` must resolve TO + CC from `ActiveJob.safety_reports_contact_email` + `ActiveJob.cc_emails`; log the full resolved TO+CC list at send. Tech-debt entry filed (accepted-risk — addresses are operator-entered, not allowlist-validated).
+- **CC recipient allowlist validation:** currently none. Accepted risk documented in `docs/tech_debt.md`. Revisit at Phase 5 `weekly_send` build.
+- **ITS_Active_Jobs Address cells still BLANK** — PM fills manually; unchanged from Phase 3 baseline.
 - **New Job form (UI-only):** Smartsheet form on ITS_Active_Jobs for office PM. Fields: Project Name, Address, Stakeholder Name/Email/Phone, Safety Reports Contact Email, Active.

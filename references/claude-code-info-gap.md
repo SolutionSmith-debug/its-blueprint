@@ -3,14 +3,14 @@ type: reference
 status: canonical
 workstream: null
 last_verified: 2026-06-05
-last_verified_against: 827c374
+last_verified_against: 9e1ff9c
 ---
 
 # Claude Code Info Gap
 
 **Purpose:** Context that lives only in chat memory / chat conversation and is NOT reachable from `~/its/` or `~/its-blueprint/` on a fresh Claude Code (CC) session. Drop this in project files so a chat-session can hand it to CC at spin-up, or so a fresh chat-session can re-orient quickly.
 
-**Last refreshed:** 2026-06-05
+**Last refreshed:** 2026-06-05 (contacts amendment)
 **Maintained by:** chat-session at session close (treat as living doc)
 
 ---
@@ -209,6 +209,16 @@ When running a review subagent (e.g., `code-review`) over a git worktree, the sy
 ### Smartsheet API constraint: AUTO_NUMBER columns are UI-only
 `type: AUTO_NUMBER` is rejected by the Smartsheet REST API with `errorCode 1008` whether the column is added at sheet creation or post-create. The only path is the Smartsheet UI (Insert Column → System → Auto-Number/Series). Pattern: run the API-doable schema steps in code, detect-or-instruct on the UI-only step, document in `docs/tech_debt.md`. This affects ITS_Active_Jobs `Job ID` column (Phase 3, pending operator UI action). The older `DATETIME` user-column constraint (errorCode 4000) is a separate limitation (use `DATE` for user-defined date columns). See `docs/tech_debt.md` for both entries.
 
+### Smartsheet API constraint: MULTI_CONTACT_LIST loses external emails on read-back
+
+**Verified live (PR #162, 2026-06-05).** `MULTI_CONTACT_LIST` columns holding external (non-org-member) email addresses read back as display names only — `"One, Two"` — via BOTH `cell.value` AND `cell.objectValue`. The email addresses are silently dropped by Smartsheet. A `CONTACT_LIST` (single contact) yields the email address via `cell.value` even for externals (`objectValue = {email, name}`), but holds only one address per cell. A real org-member contact also yields the email via `cell.value`.
+
+**Implication for any ITS column storing arbitrary external recipient emails: use `TEXT` columns.** Store the email string directly. `CONTACT_LIST`/`MULTI_CONTACT_LIST` are only reliable when the contacts are org members.
+
+**Column-type flip note:** an in-place `TEXT` → `CONTACT_LIST` column-type change via `PUT /columns/{id}` returns 200 and succeeds. Useful for after-the-fact type correction if an operator decides a column should be a contact picker, but the reverse path (CONTACT_LIST → TEXT) loses existing data.
+
+**Applied in:** ITS_Active_Jobs `Safety Reports Contact Name`, `CC 1`–`CC 5` columns are TEXT (PR #162). `active_jobs.ActiveJob.cc_emails` / `safety_reports_contact_name` consumed from TEXT cells, not contact columns.
+
 ### Smartsheet REST via curl
 - Write multi-line JSON payloads to files, use `-d @/path/to/file`. Inline shell quoting produces misleading 401/400 errors.
 - **A 401 with `errorCode:2000` on POST is more likely a malformed payload than auth failure** if the same token succeeds on GET. PAT scope is uneven — platform behavior, not user error.
@@ -301,6 +311,7 @@ With `its` installed editable (`__editable__.its-0.1.0.pth`), setting `PYTHONPAT
 - **2026-06-03 Unifying forensic alignment & drift audit — PR #156 (exec, four-part-verify clean, merge `9e4b51b`):** Propose-only meta-audit at `docs/audits/2026-06-03_unifying-alignment-audit.md` (status: draft). Per-axis verdicts A–F; ranked drift register (NO Critical, no surviving High after adversarial verification); consolidated open-findings register replacing four prior-audit lists. Key corrections to live claims: gitleaks + doctrine-drift ARE in CI; 9 subagents + 4 hooks are RELATIVE symlinks from blueprint into ~/its (single source); watchdog has 11 operational checks (A,B,C,D,F,G,I,J,K,L,M), only E deferred — CLAUDE.md still says "6 of 7" (stale). Open findings surfaced: DR-D1/H1 guard-hook self-presence (fail-open if .claude symlink dangles; Check M only detects post-hoc); DR-C2 Layer 6 attachment screening entirely unbuilt (legacy PDF-email attachments to safety@ upload to Box unscanned); DR-E1/OPEN-1 `ops-stds-enforcer` agent pinned at "Op Stds v13", 3 majors behind v16, blind to §43/§44.
 - **2026-06-04 Safety Portal Phase 2 — PR #158 (exec, four-part-verify clean, merge `fe615db`):** New `safety_portal/` tree — Cloudflare Worker (Hono router + TypeScript), Vite/React SPA (BRG/gold design system), Cloudflare D1 SQLite DB (users + form-submissions), bcryptjs auth, HMAC session-cookie middleware, SVG-vector signature pad (`signature_pad` library), 10 PDF reference forms committed to `public/forms/`. Locally validated end-to-end (wrangler dev --local + Playwright). Deploy deferred to operator Cloudflare token step (D1 create, remote migrations, secret put, wrangler deploy, custom domain). Zero Python touched. See §6 "Cloudflare / Safety Portal TS tree" for tooling notes.
 - **Safety Portal Phase 3 — PR #160 (exec, four-part-verify clean, merge `827c374`):** Live Job-ID resolution replacing intake's legacy name-matching. New `shared/active_jobs.py` (Job-ID lookup against ITS_Active_Jobs, read-only, mirrors `project_routing` pattern) + `shared/safety_week.py` (Sat-to-Fri week rule, canonical Saturday-date key, Dec→Jan boundary correct). `resolve_project()` rewritten to key on portal payload `Job ID`; returns `ProjectResolution(project, reason)` typed tuple; `reason` in {`job_id_match`, `not_found`, `inactive`, `sheet_error`}. Legacy fuzzy-match RETIRED. Live additive migration on ITS_Active_Jobs: 4 contact columns (Stakeholder Name/Email/Phone, Safety Reports Contact Email) + rename `Job ID`→`Job Slug` (freeing title for the future AUTO_NUMBER column). AUTO_NUMBER `Job ID` column pending operator UI step (`errorCode 1008` blocks API creation — see §6 Smartsheet API constraint). §43 runbook shipped. D1 dropdown sync, portal forms, and submission pipeline deferred to Phase 4/5.
+- **Safety Portal Phase 3 contacts amendment — PR #162 (exec, four-part-verify clean, merge `9e1ff9c`):** Added 6 TEXT columns to ITS_Active_Jobs — `Safety Reports Contact Name` + `CC 1`–`CC 5`. Augmented `shared/active_jobs.ActiveJob` dataclass with `cc_emails: list[str]` + `safety_reports_contact_name: str`. `_flatten_cc()` helper: comma-splits each CC 1–5 cell, deduplicates, skips malformed addresses with a WARN log. Email routing model: TO = Safety Reports Contact Email, CC = all flattened CC 1–5, greeting = Contact Name, Stakeholder = reference-only in packet body. Sending is Phase 5. CONTACT_LIST/MULTI_CONTACT_LIST columns NOT used for CC slots — external email read-back failure (see §6 "MULTI_CONTACT_LIST loses external emails" — this session's key live finding). Tech-debt entry added: CC recipients are operator-entered, not allowlist-validated (accepted risk; External Send Gate still required before any send).
 
 ### Bradley 1 (BBCHS 1)
 - Template project, six sheets migrated, demo seeding complete.
