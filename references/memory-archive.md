@@ -1255,3 +1255,76 @@ A ratified **decision**, not yet in code: `weekly_generate.py` at `cf86a9e` **st
 ### §G24.3 — Why deterministic (rationale)
 
 The per-submission PDFs are already render-parity artifacts (Option-B Python renderer, PR #167); a weekly packet is their Sat→Fri merge — a narrative LLM pass added cost, an injection-relevant LLM surface, and review burden without changing the legal artifact. A fixed-template email body + the merged PDF is the customer-facing product; the human edits the body in `WSR_human_review` before the gated send. Removing the LLM from this path also removes Invariant 2's LLM-defense layers as live concerns there (they remain inherited).
+
+## §G25 — 2026-06-05 WSR rewire: Python-side Safety Portal pull model code-complete (PRs #173–#177)
+
+### Summary
+
+Five execution-repo PRs landed 2026-06-05 (all four-part-verified, CodeQL-clean), completing the **Python side** of the Safety Portal pull model. Exec HEAD `025215d` (PR #177 session log). **NOT yet live-verified** — deploy + live smoke = next session. The `~/its` working tree still has the old code on disk (live daemons keep it); the rewired code is on main but not yet pulled to the host.
+
+This section records the non-obvious, non-git-derivable decisions and gotchas for the next CC session.
+
+### §G25.1 — What landed (five PRs)
+
+- **#173 `df3f748` — infra layer:** `shared/portal_client.py` (Worker transport: `get_pending` / `mark_filed`, `F02`-allowlisted); `box_client.upload_bytes` + `get_or_create_folder`; `form_pdf.load_definition` (load a form definition JSON by `formId`); `safety_reports/week_sheet.py` (idempotent Saturday per-(job,week) sheet, columns built via API); `prompts/snippets/invariant-restatement.md` (shared prompt snippet).
+- **#174 `bdb9f8f` — consumers:** `intake.process_portal_submission` (parallel to the email path; UUID dedupe via week-sheet; deny-by-default job resolution; payload validation vs Phase-4 form definition; deterministic render; Box filing; amend-supersede; poison-message-safe drain policy) + `safety_reports/portal_poll.py` (fail-closed creds; per-row HMAC verify→reject-never-file; mark-filed receipt; seen-set; daemon-health / heartbeat / watchdog; `GATED` — does NOT run until the deploy session enables it).
+- **#175 `49b393d` — `weekly_generate` rewired** to a deterministic compile (Anthropic narrative core RETIRED): gather per-submission PDFs → `form_pdf.merge_pdfs` → ITS-prefixed Box week folder → dual-write the week-sheet Rollup snapshot + one `WSR_human_review` row per (job,week). `wsr_review.py` added; WSR Send-Status picklist registered; orphaned Anthropic prompt + schema deleted.
+- **#176 `e628044` — `weekly_send` + `weekly_send_poll` repointed WPR→WSR:** recipients resolved from `ITS_Active_Jobs` at SEND TIME (not from WSR display columns); compiled PDF attached; HELD on empty-TO / missing-PDF; FAILED+retry on transient errors; F22 verify on the driving Send-Now/Scheduled-Send checkbox + approver stamp; `active_jobs.ActiveJob.job_slug` field DROPPED. Watchdog Check-I repointed to WSR (Saturday Week Of). WPR = decommission-by-doc (no live runtime reference).
+- **#177 `025215d` — session log + doc-index regen.** Final main SHA = `025215d`.
+
+### §G25.2 — Box filing model (owner override of the brief)
+
+Per-submission PDFs file into the job's **existing category subfolders** (JHAs / Toolbox Talks / Inspection Reports), named `<work_date>-<type>.pdf`. The compiled WSR packet files into an **auto-created `ITS`-prefixed week folder** (`ITS Week of <YYYY-MM-DD>/`) inside the job's Box tree. Operator rule: all ITS-auto-created Box folders start with `ITS` to distinguish them from human-created folders.
+
+`canonical_job_path()` in `box_client.py` remains a **stub** — the brief originally envisioned it for per-job path resolution, but the portal instead uses `project_routing.get_folder_id` (ITS_Project_Routing lookup) + the email-path category subfolder convention. The stub is left in-tree and is NOT called by portal code.
+
+### §G25.3 — Dedupe authority: week-sheet UUID check (survives state-file wipe)
+
+The **week-sheet Submission-UUID column** is the canonical dedupe authority — it is durable (Smartsheet survives a Mac state-file wipe). The `portal_poll` seen-set (in `~/its/state/portal_poll_seen.json`) is a defense-in-depth fast-path that also:
+
+- Re-posts a lost `mark-filed` receipt on a UUID it already processed (idempotent POST, Worker ignores dup).
+- One-shot flags a rejected (bad-HMAC) UUID with a `security_flag=True` Review-Queue record and drains it (no repeat CRITICAL spam).
+
+### §G25.4 — Poison-message policy: drain vs retry
+
+`intake.process_portal_submission` returns one of three outcomes:
+
+| Return | Meaning | `portal_poll` action |
+|--------|---------|----------------------|
+| `processed` / `already_filed` | Success / already handled | POST `mark-filed` → drains from D1 |
+| `review_queue` | Permanent refusal (bad payload, no matching job) | POST `mark-filed` → drains WITH a Review-Queue record holding the full payload (operator re-files) |
+| `error` | Transient failure (Smartsheet / Box network error) | NOT drained → stays in D1 → re-pulled next cycle |
+
+A permanently-bad message MUST drain (via mark-filed) to avoid infinite CRITICAL spam; the Review-Queue record is the operator's re-file path.
+
+### §G25.5 — CodeQL FP root-cause: tuple-unpacking taint (PR #174)
+
+`py/clear-text-logging-sensitive-data` HIGH was triggered by tuple-unpacking taint. `_resolve_credentials` originally returned `(base_url, bearer_token, hmac_secret)`. CodeQL propagated the `bearer_token` secret-taint onto `base_url` (taint-imprecise for tuples), which rode into the Worker request and appeared in every logged submission field.
+
+**Fix:** refactored to a named-field `_PortalCreds` dataclass (field-sensitive — CodeQL tracks taint per field, not per tuple position) + isolated the HMAC secret to a verification-only code path that never enters the row dict flowing to logs or intake. This is genuine hygiene, not a suppression.
+
+**Reusable pattern:** when a function returns a tuple containing a secret alongside non-secrets, CodeQL may taint all tuple elements. Use a named dataclass so the secret field is tracked in isolation.
+
+### §G25.6 — Scheduled send: window + F22 verify
+
+`Approve for Scheduled Send` rows dispatch only inside `safety_reports.weekly_send.scheduled_send_local` (default `MON 07:00` Pacific, DST-aware via `zoneinfo`). `Send Now` rows dispatch on the next `weekly_send_poll` cycle. F22 (`shared/approval_verification.py`) verifies the **driving checkbox** (Send Now or Scheduled Send, depending on which is True), not just any checkbox on the row.
+
+### §G25.7 — WPR decommission-by-doc (cleanup follow-up)
+
+After the rewire, no live runtime code references `SHEET_WPR_PENDING_REVIEW`. The constant + picklist entry + the catch-up smoke remain until the operator deletes the WPR sheet in Smartsheet. Tracked in exec `docs/tech_debt.md`. No runtime consequence — the sheet is simply orphaned.
+
+### §G25.8 — Deploy-session checklist (next session)
+
+The following must happen before the rewired code is live — the `portal_poll` daemon is GATED until all are done:
+
+1. **Cloudflare:** `wrangler secret put ITS_PORTAL_INTERNAL_TOKEN` + `wrangler secret put ITS_PORTAL_HMAC_SECRET` on the Worker; `wrangler deploy`.
+2. **Mac Keychain:** add `ITS_PORTAL_INTERNAL_TOKEN` + `ITS_PORTAL_HMAC_SECRET` via `shared/keychain.set_secret`.
+3. **ITS_Config row:** `safety_reports.portal.worker_base_url` = deployed Worker URL.
+4. **`portal_poll` launchd job:** load via `scripts/launchd/install.sh`; add `safety_portal_poll` to `TRACKED_JOBS` in `scripts/watchdog.py`.
+5. **Pull + reload:** `git -C ~/its pull origin main && git -C ~/its checkout main` so the live daemons pick up the rewired code.
+6. **Operator-manual retirement:** unload the retired `safety-intake` launchd job (`scripts/uninstall_safety_intake_daemon.sh`); operator-delete the `WPR_Pending_Review` sheet + `Job Slug` column from `ITS_Active_Jobs` when convenient.
+7. **Smoke:** `pytest -m integration` against live Smartsheet/Box; live portal submission → verify D1 queue → verify `portal_poll` pull + file + receipt; verify `weekly_generate` compile → `WSR_human_review` row; verify `weekly_send` send + attachment.
+
+### §G25.9 — week_sheet.py: Saturday-keyed per-(job,week) sheet
+
+`safety_reports/week_sheet.py` creates (idempotently) one Smartsheet sheet per (job_slug, week_saturday) with a stable, predictable title (`<Job Slug> — Week of <YYYY-MM-DD>`). Columns are built via the Smartsheet API at first creation; idempotent on re-run. The sheet is the UUID-dedupe surface AND the read-only Rollup snapshot written by `weekly_generate`. UUID column is TEXT (not AUTO_NUMBER — the AUTO_NUMBER constraint from §6 applies here too; the UUID is a portal-supplied string, not a system counter).
