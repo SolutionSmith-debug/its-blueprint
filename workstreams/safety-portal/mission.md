@@ -3,7 +3,7 @@ type: mission
 version: 2
 status: canonical
 last_verified: 2026-06-05
-last_verified_against: 753f12f
+last_verified_against: 025215d
 supersedes: workstreams/safety-portal/mission.md@v1
 workstream: safety_portal
 tags: [workstream-mission, customer-facing, external-input-surface, external-send-gate, standalone-workspace, pull-transport, clean-break]
@@ -13,7 +13,7 @@ tags: [workstream-mission, customer-facing, external-input-surface, external-sen
 
 2026-06-05 — As-built reconciliation. Absorbs the 2026-06-04/05 design+build sessions (Phases 2–4 landed) and the architecture decisions that postdate v1: standalone `ITS — Safety Portal` workspace, Cloudflare **Workers + Static Assets** (not Pages), **Python Option-B** PDF rendering, the **`WSR_human_review`** central approval sheet, **6-digit `AUTO_NUMBER` Job ID** (legacy kebab `Job Slug` retired), **Saturday→Friday** weeks, and **TEXT** recipient columns. Foundation Mission reference bumped v8 → v11.
 
-**2026-06-05 transport+clean-break delta (verified against exec `753f12f`, PR #171):** the v2 **email shim is retired** — transport is a **Python PULL model** (send-free Worker D1 queue → Mac-side `portal_poll.py`; §1, §7). Safety intake is **portal-only at launch** (clean break — see [brief §8.1](brief.md#81-clean-break-safety-intake-is-portal-only-at-launch)); `WPR_Pending_Review` is **decommissioned** in favor of `WSR_human_review`, and the `safety_reports` docs are reconciled this session. Phase 5 PRs 1+2 (`ffad86b`/`fc034eb`) + the **`intake_poll.py` retirement** (PR #171, tombstoned) landed; `portal_poll.py` + the intake portal-branch + the `weekly_*` WSR rewire remain in-flight (so `WPR_Pending_Review` is decommissioned-by-doc until that rewire lands). Companion: [2026-06-05 transport+clean-break session log](../../session-logs/2026-06-05_safety-portal-transport-cleanbreak.md).
+**2026-06-05 WSR rewire code-complete (verified against exec `025215d`, PRs #173–#177):** Python-side Safety Portal pull model **fully landed**. `portal_poll.py` GATED pending deploy. WPR = decommission-by-doc (no live runtime reference). Remaining = deploy + live smoke (next session). See memory-archive §G25. · **2026-06-05 transport+clean-break delta (verified against exec `753f12f`, PR #171):** the v2 **email shim is retired** — transport is a **Python PULL model** (send-free Worker D1 queue → Mac-side `portal_poll.py`; §1, §7). Safety intake is **portal-only at launch** (clean break); `WPR_Pending_Review` is **decommissioned** in favor of `WSR_human_review`. Companion: [2026-06-05 transport+clean-break session log](../../session-logs/2026-06-05_safety-portal-transport-cleanbreak.md).
 
 *Originated from `safety_portal_architecture.md` v1 draft (2026-05-24); split into [mission](mission.md) + [brief](brief.md) per the [new-workstream scaffold](../../prompts/scaffold/new-workstream.md). v1 absorbed the Q1–Q10 grill-me decisions ([2026-05-25 session log](../../session-logs/2026-05-25_safety-portal-grill.md)); v2 absorbs the build-session decisions ([2026-06-05 session log](../../session-logs/2026-06-05_safety-portal-blueprint-update.md)).*
 

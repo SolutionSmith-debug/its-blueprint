@@ -3,7 +3,7 @@ type: brief
 version: 6
 status: canonical
 last_verified: 2026-06-05
-last_verified_against: cf86a9e
+last_verified_against: 025215d
 workstream: safety_reports
 tags: [workstream-brief, llm-free, deterministic-weekly]
 ---
@@ -12,7 +12,7 @@ tags: [workstream-brief, llm-free, deterministic-weekly]
 
 2026-06-05 — LLM-free deterministic weekly product + Safety Portal clean-break overlay (was v6.1, 2026-05-22)
 
-*v6.3 (2026-06-05, exec `cf86a9e`): **the Safety Reports workflow is now LLM-free** — the weekly product is a **deterministic merge** of the week's submitted-form PDFs (`form_pdf.merge_pdfs`) + a **fixed-template email body**; the Anthropic-drafted-narrative WPR is **retired** (LLM stays in scope for other workstreams only). Foundation invariants unchanged; Adversarial **Layer 2 N/A** for this path (no LLM ingestion). Code-state (`cf86a9e`): `weekly_generate.py` still calls Anthropic; the deterministic rewire is in-flight. See §What Gets Built. · v6.2 (2026-06-05, exec `753f12f`): the safety review surface is now `WSR_human_review` (in the standalone ITS — Safety Portal workspace), **not** `WPR_Pending_Review`; safety intake is **portal-only at launch** (the Safety Portal's Python pull transport), the email-PDF intake path **retired as the safety input** (`intake_poll.py` tombstoned in exec PR #171; the `weekly_generate`/`weekly_send` WSR rewire is in-flight — `WPR_Pending_Review` is **decommissioned-by-doc** in code until then, see §What Gets Built); the email infrastructure (`graph_client` / `untrusted_content` / `header_forgery`) is **preserved** for the committed Email Triage workstream. See [Safety Portal brief §8.1](../safety-portal/brief.md#81-clean-break-safety-intake-is-portal-only-at-launch). · v6.1 (2026-05-22): intake.py + intake_poll.py + heartbeat shipped · Polling daemon canonical*
+*v6.4 (2026-06-05, exec `025215d`): **WSR rewire CODE-COMPLETE** — `weekly_generate`, `weekly_send`, `weekly_send_poll` all repointed WPR→WSR (PRs #173–#177). `portal_poll.py` GATED pending deploy. WPR = decommission-by-doc. Remaining = deploy + live smoke (next session). See memory-archive §G25. · v6.3 (2026-06-05, exec `cf86a9e`): **the Safety Reports workflow is now LLM-free** — the weekly product is a **deterministic merge** of the week's submitted-form PDFs (`form_pdf.merge_pdfs`) + a **fixed-template email body**; the Anthropic-drafted-narrative WPR is **retired** (LLM stays in scope for other workstreams only). Foundation invariants unchanged; Adversarial **Layer 2 N/A** for this path (no LLM ingestion). See §What Gets Built. · v6.2 (2026-06-05, exec `753f12f`): the safety review surface is now `WSR_human_review` (in the standalone ITS — Safety Portal workspace), **not** `WPR_Pending_Review`; safety intake is **portal-only at launch** (the Safety Portal's Python pull transport), the email-PDF intake path **retired as the safety input** (`intake_poll.py` tombstoned in exec PR #171; the `weekly_generate`/`weekly_send` WSR rewire is in-flight — `WPR_Pending_Review` is **decommissioned-by-doc** in code until then, see §What Gets Built); the email infrastructure (`graph_client` / `untrusted_content` / `header_forgery`) is **preserved** for the committed Email Triage workstream. See [Safety Portal brief §8.1](../safety-portal/brief.md#81-clean-break-safety-intake-is-portal-only-at-launch). · v6.1 (2026-05-22): intake.py + intake_poll.py + heartbeat shipped · Polling daemon canonical*
 
 # Purpose of v6.1
 
@@ -110,11 +110,11 @@ Operator visibility: ITS_Daemon_Health sheet (4529351700729732, folder 04 — Da
 
 168-line module. Idempotent find-or-create for per-project per-week Field Reports folder + Daily Reports sheet + Weekly Rollup sheet. Race condition tracked in docs/tech_debt.md.
 
-## Weekly compile (safety_reports/weekly_generate.py) — DETERMINISTIC, LLM-free — PLANNED rewire
+## Weekly compile (safety_reports/weekly_generate.py) — DETERMINISTIC, LLM-free — CODE-COMPLETE (PR #175, `49b393d`)
 
-The weekly product is a **deterministic merge** (`form_pdf.merge_pdfs`) of the week's submitted-form PDFs **+ a fixed-template email body — no Anthropic / LLM call** (the prior Anthropic-drafted-narrative WPR is retired with the portal cutover; LLM stays in scope for other workstreams only). Two-process model per FM v8 Invariant 1 holds structurally: the compile process has **zero send capability** and writes the draft row to `WSR_human_review` (the standalone ITS — Safety Portal workspace; supersedes `WPR_Pending_Review` under the clean-break) with the **template-seeded**, editable Email Body as the send's source of truth. Friday-afternoon launchd cadence (or the `Compile Now` checkbox). **Code-state (exec `cf86a9e`):** `weekly_generate.py` currently still calls Anthropic to draft a narrative WPR; the deterministic-merge rewire is in-flight (part of the Phase 5 `weekly_*` rewire), not yet on main.
+The weekly product is a **deterministic merge** (`form_pdf.merge_pdfs`) of the week's submitted-form PDFs **+ a fixed-template email body — no Anthropic / LLM call** (the prior Anthropic-drafted-narrative WPR is retired with the portal cutover; LLM stays in scope for other workstreams only). Two-process model per FM v8 Invariant 1 holds structurally: the compile process has **zero send capability** and writes the draft row to `WSR_human_review` (the standalone ITS — Safety Portal workspace; supersedes `WPR_Pending_Review` under the clean-break) with the **template-seeded**, editable Email Body as the send's source of truth. Friday-afternoon launchd cadence (or the `Compile Now` checkbox). **Code-state (exec `025215d`):** deterministic rewire LANDED (PR #175); `portal_poll.py` GATED pending deploy. NOT yet live on host (deploy session required — see §G25.8).
 
-## Weekly send (safety_reports/weekly_send.py) — PLANNED R3 Session 3
+## Weekly send (safety_reports/weekly_send.py) — CODE-COMPLETE (PR #176, `e628044`)
 
 Reads approved rows from `WSR_human_review` (ITS — Safety Portal workspace) where `Approve for Scheduled Send`=true, reading the human-edited Email Body as the source of truth. Sends via Resend or Graph send_mail. Zero AI step per FM v8 Invariant 1.
 

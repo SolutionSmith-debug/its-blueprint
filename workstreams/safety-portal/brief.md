@@ -3,7 +3,7 @@ type: brief
 version: 2
 status: canonical
 last_verified: 2026-06-05
-last_verified_against: cf86a9e
+last_verified_against: 025215d
 supersedes: workstreams/safety-portal/brief.md@v1
 workstream: safety_portal
 tags: [workstream-brief, cloudflare-workers, static-assets, d1, hmac, pull-transport, python-option-b, standalone-workspace, parent-variant-forms, clean-break]
@@ -13,7 +13,7 @@ tags: [workstream-brief, cloudflare-workers, static-assets, d1, hmac, pull-trans
 
 2026-06-05 — As-built architecture reconciliation. Companion to [mission.md](mission.md). Supersedes v1 (2026-05-25) on every point the 2026-06-04/05 build sessions changed: **Workers + Static Assets** deploy (not Pages), **Python Option-B** PDF rendering (not client-side TS), the portal **never reads or writes Smartsheet** (job/form data served from D1), **6-digit `AUTO_NUMBER` Job ID** (kebab `Job Slug` retired), **Saturday→Friday** weeks, the **`WSR_human_review`** central approval sheet, **TEXT** recipient columns, and the standalone **`ITS — Safety Portal`** workspace.
 
-**2026-06-05 transport+clean-break delta (verified against exec `753f12f`, PR #171):** the v2 **email shim is retired** — transport is now a **Python PULL model** (send-free Worker D1 queue → Mac-side `portal_poll.py` drains it; §1, §8). Safety intake is **portal-only at launch** (clean break, §8.1); `WPR_Pending_Review` is **decommissioned** in favor of `WSR_human_review`. Production-cutover facts added (§11). Phase 5 PRs 1+2 (`ffad86b`/`fc034eb`) + the **`intake_poll.py` retirement** (PR #171, tombstoned) have landed; `portal_poll.py` + the intake portal-branch + the `weekly_*` WSR rewire remain in-flight.
+**2026-06-05 WSR rewire code-complete delta (verified against exec `025215d`, PRs #173–#177):** the Python-side Safety Portal pull model is **fully landed** — `portal_poll.py` (GATED), `intake.process_portal_submission`, deterministic `weekly_generate`, WSR-repointed `weekly_send`/`weekly_send_poll`, `week_sheet.py`. WPR = decommission-by-doc. Remaining = deploy + live smoke (next session). See memory-archive §G25. · **2026-06-05 transport+clean-break delta (verified against exec `753f12f`, PR #171):** the v2 **email shim is retired** — transport is now a **Python PULL model** (send-free Worker D1 queue → Mac-side `portal_poll.py` drains it; §1, §8). Safety intake is **portal-only at launch** (clean break, §8.1); `WPR_Pending_Review` is **decommissioned** in favor of `WSR_human_review`. Production-cutover facts added (§11). Phase 5 PRs 1+2 (`ffad86b`/`fc034eb`) + `intake_poll.py` retirement (PR #171) landed.
 
 > **Altitude note.** This brief is doctrine/architecture-level. Implementation mechanics (migration line numbers, exact column lists, API call shapes, test scaffolds) live in the execution-repo briefs (`safety_portal_backhalf_cc_brief.md`, `safety_portal_phase4_forms_cc_brief.md`) and in `shared/sheet_ids.py`. Customer-0 IDs are intentionally **not** copied here (per repo `CLAUDE.md`); they live in `sheet_ids.py`.
 
@@ -145,7 +145,7 @@ Evergreen cuts over all-at-once with **no integration of the legacy email-PDF sy
 
 **Scope boundary — this is NOT an email teardown.** The email *infrastructure* is **preserved** — `shared/graph_client.py` (list_inbox / mark_read / GraphError / MSAL), `shared/untrusted_content.py`, `shared/header_forgery.py` — because the **Email Triage** workstream (a committed future workstream) depends on it. `intake.py` **stays**: it gains a portal-marker branch driven by `portal_poll.py`, while its email/Graph `process_message` path remains in-tree (deactivated as the *safety* input; available to Email Triage).
 
-**Code state (exec `753f12f`, PR #171):** a ratified *decision*, actively landing. **Landed:** the Worker transport + HMAC contract (PR #169); the `WSR_human_review` sheet (PR #168); and the **`intake_poll.py` retirement** — it is now tombstoned (raises `NotImplementedError`; PR #171), the safety email intake retired, with the shared Graph infra (`graph_client`/`untrusted_content`/`header_forgery`) explicitly preserved for Email Triage. **Still in-flight (not on main):** `portal_poll.py`, the `intake.py` portal-marker branch, and the `weekly_generate`/`weekly_send` rewire onto `WSR_human_review` — so `WPR_Pending_Review` is **decommissioned-by-doc** (the `weekly_*` scripts still reference it pending the rewire), not yet decommissioned in code.
+**Code state (exec `025215d`, PRs #173–#177):** **Python-side CODE-COMPLETE.** All five Phase-5 Python PRs landed four-part-verified, CodeQL-clean. `portal_poll.py` is GATED (not loaded as a launchd job). `weekly_generate`, `weekly_send`, `weekly_send_poll` are all WSR-repointed; WPR = decommission-by-doc (no live runtime reference). `~/its` working-tree is behind origin/main pending the deploy-session `git pull`. **Remaining:** deploy + live smoke (see memory-archive §G25.8 checklist).
 
 ## 9. Filing — Box is the system of record
 
@@ -220,10 +220,11 @@ The as-built phase plan supersedes v1's speculative Phase 0–10 breakdown:
 - **Phase 2 — front-half (LANDED, PR #158):** login + SPA + Worker scaffold.
 - **Phase 3 — job model (LANDED, PR #160, #162):** live Job-ID resolution against `ITS_Active_Jobs`, the Saturday→Friday week rule, legacy `Job Slug` retired, schema + the contacts amendment (TEXT contacts + CC 1–5).
 - **Phase 4 — forms (LANDED, PR #164, #166, #167):** meta-schema + parent/variant catalog + the declarative form definitions; the definition-driven TS display runtime; the Python Option-B renderer + equipment tri-state. (The definition set was revised after the PR #164 foundation; the current catalog is 5 parents + 7 variants — see [memory-archive §G21](../../references/memory-archive.md).)
-- **Phase 5 — submission pipeline (IN PROGRESS):**
+- **Phase 5 — submission pipeline (Python-side CODE-COMPLETE, `025215d`):**
   - **PR 1 landed** (PR #168, `ffad86b`) — `WSR_human_review` sheet, weekly PDF merge, `sheet_ids` constants (`WORKSPACE_SAFETY_PORTAL`, `FOLDER_SAFETY_PORTAL`, `SHEET_WSR_HUMAN_REVIEW`) + amendments b/c.
-  - **PR 2 landed** (PR #169, `fc034eb`) — the **Worker-side pull transport**: `/api/submit` HMAC-signs each submission; bearer-gated `/api/internal/pending` (queue drain, `timingSafeEqual`, fail-closed 503 if `HMAC_SECRET` unset) + `/api/internal/mark-filed` (receipt); the cross-language `shared/portal_hmac.py` contract (validated against the Worker's `crypto.subtle` on `wrangler dev`). Worker remains send-free.
-  - **Remaining — the in-flight Python rewire (not on main as of `753f12f`):** the `portal_poll.py` Mac daemon; the `intake.py` portal-marker branch (HMAC verify → dedup-on-UUID → week bucket → Box tree → render → upload → receipt); the `weekly_generate`/`weekly_send` rewire onto `WSR_human_review` (Pacific-Monday send; until then `WPR_Pending_Review` is decommissioned-by-doc only); and the `box_client.get_or_create_folder` primitive (currently stubbed). (`intake_poll.py` is already retired/tombstoned — PR #171.)
+  - **PR 2 landed** (PR #169, `fc034eb`) — the **Worker-side pull transport**: `/api/submit` HMAC-signs each submission; bearer-gated `/api/internal/pending` (queue drain, `timingSafeEqual`, fail-closed 503 if `HMAC_SECRET` unset) + `/api/internal/mark-filed` (receipt); the cross-language `shared/portal_hmac.py` contract. Worker remains send-free.
+  - **PRs #173–#177 landed** — full Python-side WSR rewire. `shared/portal_client.py` + `box_client.upload_bytes/get_or_create_folder` + `form_pdf.load_definition` + `week_sheet.py`; `intake.process_portal_submission` + `portal_poll.py` (GATED); deterministic `weekly_generate` (Anthropic narrative RETIRED); `weekly_send`/`weekly_send_poll` WSR-repointed; `wsr_review.py`; WPR decommission-by-doc. See memory-archive §G25.
+  - **Remaining — deploy + live smoke (next session):** see §G25.8 deploy checklist.
 - **Deploy (PENDING):** Cloudflare account (Evergreen-owned, fresh at cutover), D1/secrets (`HMAC_SECRET` + `INTERNAL_BEARER_TOKEN`), Workers Paid-plan upgrade, custom-domain attach (§11 production cutover).
 
 ## 15. Sequencing Dependencies
