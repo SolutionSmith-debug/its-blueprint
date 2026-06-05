@@ -3,16 +3,16 @@ type: brief
 version: 6
 status: canonical
 last_verified: 2026-06-05
-last_verified_against: 753f12f
+last_verified_against: cf86a9e
 workstream: safety_reports
-tags: [workstream-brief]
+tags: [workstream-brief, llm-free, deterministic-weekly]
 ---
 
-**ITS Safety Reports Brief v6.2**
+**ITS Safety Reports Brief v6.3**
 
-2026-06-05 — Safety Portal clean-break overlay (was v6.1, 2026-05-22)
+2026-06-05 — LLM-free deterministic weekly product + Safety Portal clean-break overlay (was v6.1, 2026-05-22)
 
-*v6.2 (2026-06-05, exec `753f12f`): the safety review surface is now `WSR_human_review` (in the standalone ITS — Safety Portal workspace), **not** `WPR_Pending_Review`; safety intake is **portal-only at launch** (the Safety Portal's Python pull transport), the email-PDF intake path **retired as the safety input** (`intake_poll.py` tombstoned in exec PR #171; the `weekly_generate`/`weekly_send` WSR rewire is in-flight — `WPR_Pending_Review` is **decommissioned-by-doc** in code until then, see §What Gets Built); the email infrastructure (`graph_client` / `untrusted_content` / `header_forgery`) is **preserved** for the committed Email Triage workstream. See [Safety Portal brief §8.1](../safety-portal/brief.md#81-clean-break-safety-intake-is-portal-only-at-launch). · v6.1 (2026-05-22): intake.py + intake_poll.py + heartbeat shipped · Polling daemon canonical*
+*v6.3 (2026-06-05, exec `cf86a9e`): **the Safety Reports workflow is now LLM-free** — the weekly product is a **deterministic merge** of the week's submitted-form PDFs (`form_pdf.merge_pdfs`) + a **fixed-template email body**; the Anthropic-drafted-narrative WPR is **retired** (LLM stays in scope for other workstreams only). Foundation invariants unchanged; Adversarial **Layer 2 N/A** for this path (no LLM ingestion). Code-state (`cf86a9e`): `weekly_generate.py` still calls Anthropic; the deterministic rewire is in-flight. See §What Gets Built. · v6.2 (2026-06-05, exec `753f12f`): the safety review surface is now `WSR_human_review` (in the standalone ITS — Safety Portal workspace), **not** `WPR_Pending_Review`; safety intake is **portal-only at launch** (the Safety Portal's Python pull transport), the email-PDF intake path **retired as the safety input** (`intake_poll.py` tombstoned in exec PR #171; the `weekly_generate`/`weekly_send` WSR rewire is in-flight — `WPR_Pending_Review` is **decommissioned-by-doc** in code until then, see §What Gets Built); the email infrastructure (`graph_client` / `untrusted_content` / `header_forgery`) is **preserved** for the committed Email Triage workstream. See [Safety Portal brief §8.1](../safety-portal/brief.md#81-clean-break-safety-intake-is-portal-only-at-launch). · v6.1 (2026-05-22): intake.py + intake_poll.py + heartbeat shipped · Polling daemon canonical*
 
 # Purpose of v6.1
 
@@ -64,7 +64,7 @@ Engineering complement to ITS — Safety Reports Mission v5.1 (2026-05-22). Miss
 
 # Architecture (REFRESHED in v6.1)
 
-ITS — Safety Reports runs as a set of Claude Code scripts on the production MacBook, triggered by launchd-driven polling daemons (canonical pattern per Op Stds v11 §31). Claude Code handles both data movement (Smartsheet, Box, Outlook via API) and reasoning steps (Anthropic API for classification, extraction, drafting). See ITS Operational Standards v11 for the cross-cutting patterns.
+ITS — Safety Reports runs as a set of Python scripts on the production MacBook (launchd-driven). **The active safety-reports path is now LLM-free:** portal submissions arrive structured (no classify/extract) and the weekly product is a deterministic merge (no drafting) — the pipeline does data movement (Smartsheet, Box via API) with **no Anthropic call**. The Anthropic-based classification/extraction stages (Stages 6–7 below) survive only in the **preserved** email-intake path (`intake.py`, reserved for Email Triage — see the v6.2 clean-break overlay). See ITS Operational Standards for the cross-cutting patterns.
 
 Foundation Invariants implementation: 6-layer Adversarial Input Handling per FM v8. See Mission v5.1 for the layer-by-layer breakdown.
 
@@ -110,9 +110,9 @@ Operator visibility: ITS_Daemon_Health sheet (4529351700729732, folder 04 — Da
 
 168-line module. Idempotent find-or-create for per-project per-week Field Reports folder + Daily Reports sheet + Weekly Rollup sheet. Race condition tracked in docs/tech_debt.md.
 
-## Weekly generation (safety_reports/weekly_generate.py) — PLANNED R3 Session 2
+## Weekly compile (safety_reports/weekly_generate.py) — DETERMINISTIC, LLM-free — PLANNED rewire
 
-Replaces the deprecated weekly_summary.py (stub raising NotImplementedError). Two-process model per FM v8 Invariant 1: generation script calls Anthropic, writes draft to `WSR_human_review` (the standalone ITS — Safety Portal workspace; supersedes `WPR_Pending_Review` under the Safety Portal clean-break) — the editable Email Body column is the source of truth for the send; zero send capability. Friday afternoon launchd cadence (preferred) or polling-daemon model if dynamic triggering needed.
+The weekly product is a **deterministic merge** (`form_pdf.merge_pdfs`) of the week's submitted-form PDFs **+ a fixed-template email body — no Anthropic / LLM call** (the prior Anthropic-drafted-narrative WPR is retired with the portal cutover; LLM stays in scope for other workstreams only). Two-process model per FM v8 Invariant 1 holds structurally: the compile process has **zero send capability** and writes the draft row to `WSR_human_review` (the standalone ITS — Safety Portal workspace; supersedes `WPR_Pending_Review` under the clean-break) with the **template-seeded**, editable Email Body as the send's source of truth. Friday-afternoon launchd cadence (or the `Compile Now` checkbox). **Code-state (exec `cf86a9e`):** `weekly_generate.py` currently still calls Anthropic to draft a narrative WPR; the deterministic-merge rewire is in-flight (part of the Phase 5 `weekly_*` rewire), not yet on main.
 
 ## Weekly send (safety_reports/weekly_send.py) — PLANNED R3 Session 3
 
@@ -128,7 +128,7 @@ Reads approved rows from `WSR_human_review` (ITS — Safety Portal workspace) wh
 
 - External Send Gate: per FM v8 Invariant 1. No generation script imports send capability.
 
-- Adversarial Input Handling: per FM v8 Invariant 2 6-layer. Every Anthropic call processing external content wrapped + anomaly-logged.
+- Adversarial Input Handling: per FM v8 Invariant 2 6-layer (inherited, unchanged). **Layer 2 (untrusted-content wrapping) is N/A for the active safety-reports path — no LLM ingestion surface** (portal intake is structured; the weekly compile is deterministic). The wrap-+-anomaly-log mechanism applies to the preserved email-intake path / Email Triage, not the active safety flow.
 
 - Credentials from macOS Keychain: shared.keychain.get_secret(name). Never env files.
 

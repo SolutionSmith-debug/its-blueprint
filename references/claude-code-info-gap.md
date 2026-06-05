@@ -3,14 +3,14 @@ type: reference
 status: canonical
 workstream: null
 last_verified: 2026-06-05
-last_verified_against: 753f12f
+last_verified_against: cf86a9e
 ---
 
 # Claude Code Info Gap
 
 **Purpose:** Context that lives only in chat memory / chat conversation and is NOT reachable from `~/its/` or `~/its-blueprint/` on a fresh Claude Code (CC) session. Drop this in project files so a chat-session can hand it to CC at spin-up, or so a fresh chat-session can re-orient quickly.
 
-**Last refreshed:** 2026-06-05 (Phase 4 complete — PRs #164/#166/#167; Phase 5 PRs 1+2 — PRs #168/#169/#170; **`intake_poll.py` retired/tombstoned — PR #171, `753f12f`**; pull-model transport + **clean-break** (portal-only safety intake) ratified; production-cutover DNS facts enumerated; **Op Stds bumped v16→v17** for the 6th workspace)
+**Last refreshed:** 2026-06-05 (Phase 4 complete — PRs #164/#166/#167; Phase 5 PRs 1+2 — PRs #168/#169/#170; **`intake_poll.py` retired/tombstoned — PR #171, `753f12f`**; pull-model transport + **clean-break** (portal-only safety intake) ratified; production-cutover DNS facts enumerated; **Op Stds bumped v16→v17** for the 6th workspace; **Safety Reports is now LLM-free** — deterministic weekly merge (`form_pdf.merge_pdfs` + fixed-template body), Anthropic-narrative WPR retired; PR #172 (`cf86a9e`) removed the unused R2/PDF_BUCKET binding)
 **Maintained by:** chat-session at session close (treat as living doc)
 
 ---
@@ -293,7 +293,7 @@ The portal→intake transport is a **Python pull model** (operator-ratified 2026
 
 ### Safety Portal clean break + production cutover (2026-06-05)
 
-- **Clean break — safety intake is portal-only at launch.** Evergreen cuts over all-at-once with **no integration of the legacy email-PDF system**; no Evergreen safety data flows the old path. `intake_poll.py` (the safety mailbox poller) is **retired/tombstoned** (PR #171 — raises `NotImplementedError`) and superseded by `portal_poll.py` (PLANNED) for safety; `WPR_Pending_Review` is **decommissioned** in favor of `WSR_human_review` (by-doc in code — the `weekly_*` scripts still reference it until the WSR rewire lands). **NOT an email teardown:** the shared email infra (`graph_client` / `untrusted_content` / `header_forgery`) and `intake.py`'s Graph `process_message` path are **preserved** for the committed Email Triage workstream.
+- **Clean break — safety intake is portal-only at launch.** Evergreen cuts over all-at-once with **no integration of the legacy email-PDF system**; no Evergreen safety data flows the old path. `intake_poll.py` (the safety mailbox poller) is **retired/tombstoned** (PR #171 — raises `NotImplementedError`) and superseded by `portal_poll.py` (PLANNED) for safety; `WPR_Pending_Review` is **decommissioned** in favor of `WSR_human_review` (by-doc in code — the `weekly_*` scripts still reference it until the WSR rewire lands). **NOT an email teardown:** the shared email infra (`graph_client` / `untrusted_content` / `header_forgery`) and `intake.py`'s Graph `process_message` path are **preserved** for the committed Email Triage workstream. **The weekly product is LLM-free too** — a deterministic merge (`form_pdf.merge_pdfs` of the week's submitted-form PDFs + a fixed-template email body), not an Anthropic-drafted narrative (decision 2026-06-05; `weekly_generate.py` still calls Anthropic at `cf86a9e` — the deterministic rewire is in-flight). So the whole active safety-reports path has **no LLM**; Adversarial Layer 2 is N/A there (no LLM ingestion). LLM stays in scope for Email Triage / AI Employee only.
 - **Production cutover DNS (applicable at cutover, not now):** Evergreen's site is **GoDaddy-hosted WordPress + Elementor**; the apex `evergreenrenewables.com` DNS + M365 email live on GoDaddy. **Evergreen has no Cloudflare account** — one is created fresh at cutover, **Evergreen-owned** (Daniel creates it). Do **not** migrate the apex zone; attach **only** `safety.evergreenrenewables.com` to Cloudflare, **likely via subdomain NS-delegation** at GoDaddy (delegate that label's NS records to Cloudflare), leaving WordPress + M365 email untouched. Exact subdomain-attach mechanism resolved at deploy prep — **likely path, not locked.**
 - **Doctrine:** Op Stds bumped **v16 → v17** (§23/§24 now acknowledge the standalone `ITS — Safety Portal` workspace as a 6th, approval-gated workspace; tag `operational-standards-v17`). Blueprint mission/brief carry the transport + clean-break delta; see memory-archive §G22.
 

@@ -3,16 +3,16 @@ type: mission
 version: 5
 status: canonical
 last_verified: 2026-06-05
-last_verified_against: 753f12f
+last_verified_against: cf86a9e
 workstream: safety_reports
-tags: [workstream-mission]
+tags: [workstream-mission, llm-free, deterministic-weekly]
 ---
 
-**ITS Safety Reports Mission v5.2**
+**ITS Safety Reports Mission v5.3**
 
-2026-06-05 — Safety Portal clean-break overlay (was v5.1, 2026-05-22)
+2026-06-05 — LLM-free deterministic weekly product + Safety Portal clean-break overlay (was v5.1, 2026-05-22)
 
-*v5.2 (2026-06-05, exec `753f12f`): the customer-facing weekly safety report is now reviewed/approved/sent through `WSR_human_review` (standalone ITS — Safety Portal workspace), **not** `WPR_Pending_Review`; safety intake is **portal-only at launch** (the Safety Portal's Python pull transport), the email-PDF path **retired as the safety input** (`intake_poll.py` is tombstoned in exec PR #171; the `weekly_generate`/`weekly_send` WSR rewire is in-flight, so `WPR_Pending_Review` is **decommissioned-by-doc** in code until then); email infrastructure (`graph_client`/`untrusted_content`/`header_forgery`) is **preserved** for the committed [Email Triage](../email-triage/mission.md) workstream. See [Safety Portal brief §8.1](../safety-portal/brief.md#81-clean-break-safety-intake-is-portal-only-at-launch). · v5.1 (2026-05-22): R3 Session 1 shipped + polling daemon + trusted-contacts cluster · Q4-Q8 resolved · Substance otherwise unchanged*
+*v5.3 (2026-06-05, exec `cf86a9e`): **the Safety Reports workflow is now LLM-free.** The weekly product is a **deterministic merge** of the week's submitted-form PDFs (`form_pdf.merge_pdfs`) + a **fixed-template email body** — the prior Anthropic-drafted-narrative WPR is **retired** with the portal cutover. (LLM/Anthropic stays in scope for **other** workstreams — Email Triage, AI Employee Capabilities — this removal is scoped to Safety Reports only.) Foundation invariants are **unchanged and still inherited**; Adversarial Input Handling **Layer 2** (untrusted-content wrapping before an LLM) is **N/A for this path now** — there is no LLM ingestion surface. Code-state (`cf86a9e`): `weekly_generate.py` still calls Anthropic; the deterministic rewire is in-flight. See [Safety Portal brief §8 compile](../safety-portal/brief.md#8-submission-pipeline). · v5.2 (2026-06-05, exec `753f12f`): the customer-facing weekly safety report is now reviewed/approved/sent through `WSR_human_review` (standalone ITS — Safety Portal workspace), **not** `WPR_Pending_Review`; safety intake is **portal-only at launch** (the Safety Portal's Python pull transport), the email-PDF path **retired as the safety input** (`intake_poll.py` is tombstoned in exec PR #171; the `weekly_generate`/`weekly_send` WSR rewire is in-flight, so `WPR_Pending_Review` is **decommissioned-by-doc** in code until then); email infrastructure (`graph_client`/`untrusted_content`/`header_forgery`) is **preserved** for the committed [Email Triage](../email-triage/mission.md) workstream. See [Safety Portal brief §8.1](../safety-portal/brief.md#81-clean-break-safety-intake-is-portal-only-at-launch). · v5.1 (2026-05-22): R3 Session 1 shipped + polling daemon + trusted-contacts cluster · Q4-Q8 resolved · Substance otherwise unchanged*
 
 # Purpose of v5.1
 
@@ -44,19 +44,19 @@ Why this is Phase 1: simplest of the workstreams in workflow shape (read inbox �
 
 # Foundation Invariants Inherited (Refreshed for FM v8)
 
-External Send Gate — implementation: `WSR_human_review` Smartsheet (in the standalone ITS — Safety Portal workspace; supersedes the legacy `WPR_Pending_Review` under the Safety Portal clean-break) with `Approve for Scheduled Send` + `Send Now` checkboxes, auto-stamped Approved By/At, and an editable Email Body column as the send's source of truth. Two-process model: weekly-generate script (calls Anthropic, no send capability) writes drafts to the sheet; weekly-send script (no AI step) reads only approved rows and sends. Permanent rule, not time-bounded. Capability gating verified by tests/test_capability_gating.py.
+External Send Gate — implementation: `WSR_human_review` Smartsheet (in the standalone ITS — Safety Portal workspace; supersedes the legacy `WPR_Pending_Review` under the Safety Portal clean-break) with `Approve for Scheduled Send` + `Send Now` checkboxes, auto-stamped Approved By/At, and an editable Email Body column as the send's source of truth. Two-process model: the weekly-compile script — a **deterministic, LLM-free** merge (`form_pdf.merge_pdfs` of the week's submitted-form PDFs) + a **fixed-template email body**, with **zero send capability** — writes the draft row; the weekly-send script (no AI step) reads only approved rows and sends. (The prior Anthropic-drafted-narrative WPR is retired — see the v5.3 overlay.) Permanent rule, not time-bounded. Capability gating verified by tests/test_capability_gating.py.
 
 Adversarial Input Handling — implementation (6-layer per FM v8):
 
 - Layer 1 (Sender Allowlist + Scope + Header-Forgery): ITS_Trusted_Contacts sheet exact-match with Status=ACTIVE; project/workstream scope enforcement; SPF/DKIM/DMARC + Return-Path validation precedes lookup. Cutover from ITS_Config JSON list scheduled V&R v7.2 Phase 1.4.
 
-- Layer 2 (Untrusted-Content Tagging): email body + attachments wrapped in <untrusted_content> XML tags in every Anthropic call via shared/untrusted_content.py.
+- Layer 2 (Untrusted-Content Tagging): **N/A for the safety-reports workflow as it now runs** — there is no LLM ingestion surface (portal intake is structured; the weekly compile is a deterministic merge — no Anthropic). The invariant is unchanged and still inherited; if the **preserved** email-intake path (`intake.py` `process_message`, kept for Email Triage) is ever reactivated, Layer 2 re-applies via `shared/untrusted_content.py`. (Mirrors the Safety Portal's Layer-6-N/A pattern.)
 
 - Layer 3 (Capability Gating): two-process model + tests/test_intake_capability_gating.py.
 
-- Layer 4 (Structured Output Enforcement): JSON-schema-conforming Anthropic responses; non-conforming rejected.
+- Layer 4 (Structured Output Enforcement): now realized as **form-definition schema validation** of the structured portal payload (client + server); the prior "JSON-schema-conforming Anthropic responses" enforcement is N/A in the LLM-free path (re-applies on the preserved email-intake path).
 
-- Layer 5 (Anomaly Logging): shared/anomaly_logger.py on every extraction output; security_flag=True routes to ITS_Review_Queue.
+- Layer 5 (Anomaly Logging): the LLM-**extraction-output** anomaly check is N/A in the deterministic/structured path (no extraction); a pattern tripwire on PM-entered text remains (see [Safety Portal mission §7 Layer 5](../safety-portal/mission.md#7-foundation-invariants-inherited)). `shared/anomaly_logger.py` re-applies on the preserved email-intake path.
 
 - Layer 6 (Attachment Screening — NEW v8): four sub-layers per Op Stds v11 §34: static signatures + structural inspection + ClamAV + optional VirusTotal. Cutover scheduled V&R v7.2 Phase 1.4.
 

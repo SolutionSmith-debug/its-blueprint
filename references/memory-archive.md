@@ -3,7 +3,7 @@ type: reference
 version: 5
 status: canonical
 last_verified: 2026-06-05
-last_verified_against: 753f12f
+last_verified_against: cf86a9e
 supersedes: references/memory-archive.md@v4
 workstream: null
 tags: [restoration, operational-detail, post-compaction-recovery]
@@ -1235,3 +1235,23 @@ Operator-approved doctrine bump. §23/§24 now acknowledge **`ITS — Safety Por
 
 - **`ops-stds-enforcer` agent is pinned at Op Stds v13.** The v17 bump **widens** that gap; the agent-file update (Op Stds version + §43/§44 awareness + the §23 6th-workspace acknowledgement) is an exec-repo task. Until then the agent is blind to §23's v17 change.
 - **`check_doctrine_drift` scan-scope** widening (to recognize the topology acknowledgement) is exec-side — not touched from this blueprint session.
+
+## §G24 — 2026-06-05 Safety Reports is LLM-free (deterministic weekly product)
+
+### Summary
+
+Operator-confirmed 2026-06-05: the **Safety Reports workflow uses no LLM.** The weekly product is a **deterministic merge** of the week's submitted-form PDFs (`form_pdf.merge_pdfs`) **+ a fixed-template email body**, written to `WSR_human_review` for human review/edit/approve/send. The prior design — Anthropic drafts a narrative Weekly Project Report (WPR) — is **retired** with the portal cutover. Scoped to Safety Reports **only**: LLM/Anthropic remains in scope for Email Triage and AI Employee Capabilities. Blueprint-only change (no doctrine bump; foundation invariants unchanged). Verified against exec HEAD `cf86a9e` (PR #172; the repo advanced `753f12f` → `cf86a9e` — R2/PDF_BUCKET binding removed, consistent with Box-SoR + Option-B).
+
+### §G24.1 — What changed in the blueprint
+
+- `safety-reports/mission.md` → **v5.3** overlay; `brief.md` → **v6.3** overlay. The weekly "generation" is reframed as a deterministic **compile** (merge + template body), not an Anthropic draft. Architecture §67 reframed: the active safety path is LLM-free; the Anthropic classify/extract stages survive only in the preserved email-intake path (Email Triage).
+- `safety-portal/brief.md` §8 step 7 (Compile) made **LLM-free / deterministic** explicit (alongside the Option-B per-submission render already in v2); step 8 notes the Email Body is template-seeded, not LLM-drafted.
+- **Adversarial Input Handling (Invariant 2) — N/A layers for the active safety path:** Layer 2 (untrusted-content wrapping before an LLM) is **N/A** — no LLM ingestion surface (mirrors the portal's Layer-6-N/A pattern). Layer 4 is now realized as form-definition schema validation (not Anthropic tool-use JSON); Layer 5's extraction-output anomaly check is N/A (no extraction). **The invariant itself is unchanged and still inherited by every workstream**; all LLM-tied layers re-apply on the preserved email-intake path / Email Triage if reactivated. Capability-gating: the Anthropic surface is removed from the safety-reports weekly path.
+
+### §G24.2 — Code-state (verify-before-fix, exec `cf86a9e`)
+
+A ratified **decision**, not yet in code: `weekly_generate.py` at `cf86a9e` **still calls Anthropic** (`generate_weekly_project_report` tool-use, `narrative_summary`, `claude-sonnet-4-6`) and writes `WPR_Pending_Review`. The deterministic-merge rewire (merge the week's per-submission PDFs + template body → `WSR_human_review`, no Anthropic) is part of the in-flight Phase 5 `weekly_*` rewire — not on main. The blueprint encodes the decided LLM-free architecture and records this landed/in-flight boundary.
+
+### §G24.3 — Why deterministic (rationale)
+
+The per-submission PDFs are already render-parity artifacts (Option-B Python renderer, PR #167); a weekly packet is their Sat→Fri merge — a narrative LLM pass added cost, an injection-relevant LLM surface, and review burden without changing the legal artifact. A fixed-template email body + the merged PDF is the customer-facing product; the human edits the body in `WSR_human_review` before the gated send. Removing the LLM from this path also removes Invariant 2's LLM-defense layers as live concerns there (they remain inherited).

@@ -3,7 +3,7 @@ type: brief
 version: 2
 status: canonical
 last_verified: 2026-06-05
-last_verified_against: 753f12f
+last_verified_against: cf86a9e
 supersedes: workstreams/safety-portal/brief.md@v1
 workstream: safety_portal
 tags: [workstream-brief, cloudflare-workers, static-assets, d1, hmac, pull-transport, python-option-b, standalone-workspace, parent-variant-forms, clean-break]
@@ -132,8 +132,8 @@ The portal hands off; the Python pipeline runs the stages. End to end:
 4. **Render (Python, Option B).** The per-submission PDF is rendered server-side from the structured payload with render-parity to the Evergreen header.
 5. **File + record.** Upload the PDF to Box (job/week tree, §9) and write the per-submission row to the week sheet (Box link on the row).
 6. **Receipt.** `portal_poll.py` POSTs `/api/internal/mark-filed`, flipping `box_verified` / `filed_at` on the D1 row → the portal shows "received & filed." **Fail-closed:** unconfirmed stays pending.
-7. **Compile.** Triggered by a week-sheet `Compile Now` checkbox **or** automatically on Friday. **Skips if already compiled and no new docs.** Merges Sat→Fri ascending. **Never closes the week** — multiple packets per week are allowed.
-8. **Dual-write the rollup.** To the week sheet (read-only snapshot) **and** to `WSR_human_review` (editable approval row).
+7. **Compile (deterministic, LLM-free).** Triggered by a week-sheet `Compile Now` checkbox **or** automatically on Friday. The weekly product is a **deterministic merge** (`form_pdf.merge_pdfs`) of the week's per-submission PDFs **+ a fixed-template email body — no Anthropic / LLM call** (the prior Anthropic-drafted-narrative WPR is retired with the portal cutover; LLM stays in scope for *other* workstreams only). **Skips if already compiled and no new docs.** Merges Sat→Fri ascending. **Never closes the week** — multiple packets per week are allowed.
+8. **Dual-write the rollup.** To the week sheet (read-only snapshot) **and** to `WSR_human_review` (editable approval row — the Email Body **seeded from a fixed template**, not LLM-drafted).
 9. **Human review.** An approver reviews/edits the email body (source of truth) and sets `Approve for Scheduled Send` / `Send Now` in `WSR_human_review`.
 10. **`weekly_send` (Python, no AI step).** TO = the safety-reports contact; **CC = the non-empty CC 1–5**; Evergreen contact body-only; the **edited body is read from `WSR_human_review`**; the compiled PDF is attached. Default cadence **7 AM Pacific Monday** from an `ITS_Config` row; a watchdog retries; the resolved recipient list is logged.
 
