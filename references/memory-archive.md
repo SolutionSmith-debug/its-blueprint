@@ -2,8 +2,8 @@
 type: reference
 version: 5
 status: canonical
-last_verified: 2026-05-29
-last_verified_against: df83713
+last_verified: 2026-06-05
+last_verified_against: ffad86b
 supersedes: references/memory-archive.md@v4
 workstream: null
 tags: [restoration, operational-detail, post-compaction-recovery]
@@ -705,7 +705,7 @@ Two more exec PRs landed this session after the Phase 3a/3b/E1 cluster (§G15), 
 
 **PR #155 — `feat(safety-portal): build ITS_Active_Jobs + ITS_Forms_Catalog config sheets` (merge `141a573`):** Built the two Smartsheet config sheets the Safety Portal reads (its only two Smartsheet inputs). Live side effects applied same session:
 
-- New folder "Safety Portal" in the ITS — Operations workspace (folder id `6663869084002180`).
+- New folder "Safety Portal" in the ITS — Operations workspace (folder id `6663869084002180`). **[Superseded: this folder was later MOVED to the standalone `ITS — Safety Portal` workspace during the 2026-06-04/05 sessions, IDs preserved — see §G21.]**
 - **ITS_Active_Jobs** (sheet id `6223950341164932`): 6 rows seeded — `bradley-1`, `bradley-2`, `brimfield-1`, `brimfield-2`, `huntley`, `rockford`. Columns: Project Name (TEXT_NUMBER, primary — display name matching ITS_Project_Routing), Job ID (TEXT_NUMBER, kebab-case stable key), Address (TEXT_NUMBER), Active (PICKLIST: Active/Inactive/Archived), Notes (TEXT_NUMBER), Last Modified (system MODIFIED_DATE), Modified By (system MODIFIED_BY). **Address cells seeded BLANK** — §4 forbids inventing real addresses and no structured live source exists; the office PM fills them before Work Location auto-fill can serve values.
 - **ITS_Forms_Catalog** (sheet id `423274885369732`): 4 rows seeded — `jha-v1`, `daily-site-safety-v1`, `equipment-preinspection-v1`, `toolbox-talk-v1` (no `jha-bradley-v1` variant — that's a meeting decision). Columns: Form Name (TEXT_NUMBER, primary), Form Code (TEXT_NUMBER, == code form.ts directory), Active (PICKLIST: Active/Inactive/Archived), Description (TEXT_NUMBER), Display Order (TEXT_NUMBER), Available For Jobs (TEXT_NUMBER, CSV of Job IDs or empty=all), Last Modified (system MODIFIED_DATE), Modified By (system MODIFIED_BY).
 - Two new `smartsheet_client` primitives: `find_folder_by_name_in_workspace(workspace_id, name)` + `create_folder_in_workspace(workspace_id, name)` — direct REST (`requests.get`/`requests.post` on `/workspaces/{id}[/folders]`), `@_breaker_guard`, full §42 docstrings (only folder-in-folder existed before).
@@ -733,7 +733,7 @@ For a fresh CC session wiring portal logic:
 
 | Sheet / Folder | ID |
 |---|---|
-| Safety Portal folder (Operations workspace) | `6663869084002180` |
+| Safety Portal folder (now in standalone `ITS — Safety Portal` workspace; moved from Operations, IDs preserved — see §G21) | `6663869084002180` |
 | ITS_Active_Jobs | `6223950341164932` |
 | ITS_Forms_Catalog | `423274885369732` |
 
@@ -889,9 +889,9 @@ Phase 3 migration added 4 contact columns and renamed one system column. Final s
 | Stakeholder Phone | TEXT_NUMBER | |
 | Safety Reports Contact Email | TEXT_NUMBER | Required; receives weekly report |
 | Notes | TEXT_NUMBER | |
-| Job ID | AUTO_NUMBER (pending) | UI-only — NOT yet created; operator must add in Smartsheet UI (prefix JOB-, 4-digit fill, start 1). `active_jobs.py` reads it the moment it exists. |
+| Job ID | AUTO_NUMBER (pending) | UI-only — NOT yet created; operator must add in Smartsheet UI (prefix JOB-, **6-digit fill → `JOB-000001`** — corrected from "4-digit" per §G21), start 1. `active_jobs.py` reads it the moment it exists. **This `Job ID` is the decided permanent key; `Job Slug` (above) is being retired — see §G21.** |
 
-Sheet ID: `6223950341164932` (Operations workspace → Safety Portal folder `6663869084002180`).
+Sheet ID: `6223950341164932` (standalone `ITS — Safety Portal` workspace → Safety Portal folder `6663869084002180`; moved from Operations, IDs preserved — see §G21).
 
 Note: column order is cosmetically scrambled in the UI (contact columns interleave with Active/Notes — added one-at-a-time). Not load-bearing; `active_jobs.py` resolves by title.
 
@@ -927,7 +927,7 @@ PR #162 (squash `9e1ff9c`, four-part-verify clean). Extended `shared/active_jobs
 
 Full post-Phase-3-amendment column list (inheriting §G18.3 baseline + these 6): `Project Name`, `Job Slug`, `Address`, `Active`, `Stakeholder Name`, `Stakeholder Email`, `Stakeholder Phone`, `Safety Reports Contact Email`, `Safety Reports Contact Name`, `CC 1`–`CC 5`, `Notes`, `Job ID (AUTO_NUMBER, pending)`.
 
-Sheet ID: `6223950341164932` (Operations workspace → Safety Portal folder `6663869084002180`). Cosmos from §G16.1 carried forward.
+Sheet ID: `6223950341164932` (standalone `ITS — Safety Portal` workspace → Safety Portal folder `6663869084002180`; moved from Operations, IDs preserved — see §G21). Cosmos from §G16.1 carried forward.
 
 ### §G19.2 — Email routing model (Phase 3 definition)
 
@@ -1060,3 +1060,63 @@ Two PRs remain before Phase 5:
 
 **Build approach used for PR #164:** each form definition was built by loading the reference PDF in `safety_portal/worker/public/forms/` and manually transcribing the structure (section titles, item labels, signature-block positions) into JSON per the meta-schema. This required iterative meta-schema refinement as edge cases surfaced (e.g., the TBT sign-in model needed a `content_then_signin` subtype of `sectioned_assessment`). No AI extraction was used — deterministic transcription is load-bearing for legal-invariant preservation.
 - **New Job form (UI-only):** Smartsheet form on ITS_Active_Jobs for office PM. Fields: Project Name, Address, Stakeholder Name/Email/Phone, Safety Reports Contact Email, Active.
+
+## §G21 — 2026-06-05 Safety Portal blueprint reconciliation (Phase 4 PR 2/3 landed; workspace move; WSR_human_review design; deploy + topology resolved)
+
+### Summary
+
+Blueprint doctrine brought current with the as-built Safety Portal (exec HEAD `ffad86b`, Phase 5 PR 1 / PR #168) and the 2026-06-04/05 design+build decisions. `workstreams/safety-portal/{mission,brief}.md` bumped to **v2**; the topology and the deploy decision were reconciled across the reference docs; a doctrine-update flag was raised for Op Stds §23/§24 (not edited — version-gated). This §G21 consolidates the operational detail and supersedes the stale locations pointered inline in §G16/§G18/§G19. (Phase 5 PR 1 landed mid-session — see §G21.8 — and resolved the code-label drift this §G21 originally flagged.)
+
+### §G21.1 — Phase 4 PRs 2 + 3 landed; form definition set revised
+
+- **PR #166** (`23af65f`) — definition-driven TS display runtime. **PR #167** (`2946184`) — Python Option-B `reportlab` renderer + equipment tri-state. Phase 4 (PRs 1–3) is **complete**.
+- The form definition set was **revised** from PR #164's intermediate set (§G20). Current as-built = **10 definition files** in `safety_portal/forms/*.json` = **5 parents + 7 variants**:
+  - Parents (no-variant parents render their own definition): `jha-v1`, `hsse-work-observation-v1`, `visitor-sign-in-v1`. Variant-parents (collapse under a 3rd picklist, no own definition): Equipment Pre-Inspection, Toolbox Talk.
+  - Variants: equipment `skid-steer`, `telehandler`; toolbox-talk `back-sprains`, `electrical`, `ergonomics`, `hard-hat`, `ppe`.
+  - Daily Site Safety Worksheet is **out**; Visitor Sign-In + HSS&E Work Observation are **in** (canonical = the 10 reference PDFs).
+- **Equipment checklists are tri-state OK / NOT OK / N/A** (N/A distinct from blank). Legal-invariants-in-code (JHA "if conditions change…" footer; equipment lock/tag-out line) are mandatory + non-editable.
+- The single declarative definition drives **both** the TS display runtime and the Python renderer (the no-drift contract).
+
+### §G21.2 — Workspace move to standalone `ITS — Safety Portal` (live; IDs preserved)
+
+The `Safety Portal` folder (id `6663869084002180`) and its two sheets — `ITS_Active_Jobs` (`6223950341164932`), `ITS_Forms_Catalog` (`423274885369732`) — were **MOVED from `ITS — Operations` to a new STANDALONE workspace `ITS — Safety Portal`**, with **all IDs preserved**. The per-job week sheets and the `WSR_human_review` approval sheet live in the same workspace. Config sheets (`ITS_Config`, `ITS_Errors`, `ITS_Trusted_Contacts`, `ITS_Review_Queue`, `ITS_Quarantine`) stay in `ITS — System` and are read by ID (shared infra, not safety-specific).
+
+Doctrine consequence: **workspace access = approval authority** (sharing the workspace is the send-gate access control); the safety subsystem ships independent of the Forefront/demo structures. Supersedes the "Operations workspace" locations in §G16 (lines 708, 736), §G18.3 (894), §G19.1 (930) — pointered inline.
+
+**Code label drift — RESOLVED same session by Phase 5 PR 1 (PR #168; see §G21.8):** at mid-session authoring, `shared/sheet_ids.py` still named the folder `FOLDER_OPERATIONS_SAFETY_PORTAL` with "ITS — Operations / Safety Portal" comments and had **no `WORKSPACE_SAFETY_PORTAL` constant** (the move was live in Smartsheet, IDs preserved → code still functioned, but the labels lagged). PR #168 then added `WORKSPACE_SAFETY_PORTAL = 194283417429892`, renamed the folder constant to `FOLDER_SAFETY_PORTAL` (keeping `FOLDER_OPERATIONS_SAFETY_PORTAL` as a back-compat alias), and added `SHEET_WSR_HUMAN_REVIEW`.
+
+### §G21.3 — Topology is now 6 workspaces (doctrine-update FLAGGED)
+
+The canonical model (Op Stds §23) is the **five-workspace audience-separated** topology. The standalone `ITS — Safety Portal` is a **sixth** workspace, deliberately **outside** that audience-separation model (approval-gated, self-contained). **DOCTRINE-UPDATE FLAGGED** (not edited — version-gated): Op Stds **§23** ("Carries forward… No change", 5-workspace) and **§24** (sheet-ID bootstrap, 5 workspaces) need a v17 bump to acknowledge the sixth workspace. Active-memory entry #15 and §G1's 5-workspace list remain as historical records; the **live count is 6**. The reference topology tables (`foundation-scaffold.md`, `project-organization.md`, `smartsheet-handoff.md`) were updated to add the sixth workspace pending the §23 bump.
+
+### §G21.4 — Deploy resolved: Cloudflare Workers + Static Assets
+
+Deploy = **Cloudflare Workers + Static Assets** (a single Worker serves the SPA + same-origin `/api/*`). **NOT Cloudflare Pages** (Pages is in maintenance mode). Validation host `safety.evergreenmirror.com`; production on `evergreenrenewables.com`. This resolves the §G17.4 "Decide topology" open row and the `claude-code-info-gap.md` "topology TBD" / "blueprint mission §11 assumed Pages" notes. **Requires Workers Paid (~$5/mo)** — see §G21.6(c).
+
+### §G21.5 — `WSR_human_review` (Phase 5 design) supersedes `WPR_Pending_Review` for the safety path
+
+NEW central approval sheet in the Safety Portal folder — **not** the legacy `WPR_Pending_Review` in `ITS — Human Review`. One row per **(job, week)**: compiled PDF, **editable email body (source of truth for send)**, recipients (TO = Safety Reports Contact Email; CC = non-empty CC 1–5), `Approve for Scheduled Send` + `Send Now`, auto-stamped Approved By/At. **Review + edit + approve + send happen only here.** `weekly_send` (Phase 5) reads the approved, human-edited body from this sheet; default cadence **7 AM Pacific Monday** from an `ITS_Config` row, watchdog retries, resolved recipient list logged. **Compile** (week-sheet `Compile Now` checkbox or auto Friday; skips if already compiled and no new docs; merges Sat→Fri ascending; never closes the week) dual-writes the rollup to the week sheet (read-only snapshot) and to `WSR_human_review` (editable). Late arrivals → next uncompiled week + Review-Queue flag. The sheet was **built by Phase 5 PR 1** (PR #168, `build_wsr_human_review_sheet.py`; `SHEET_WSR_HUMAN_REVIEW = 5035670127988612`); the intake/compile/send wiring that populates and reads it is the rest of Phase 5 (§G21.8).
+
+This is the safety workstream's `<Workstream>_Pending_Review` surface under FM v11 Invariant 1. **Drift flagged:** `safety_reports/{mission,brief}.md` and `system-hr-handoff.md` still name `WPR_Pending_Review`; reconciliation deferred to the operator (the safety pipeline's approval sheet is now `WSR_human_review`).
+
+### §G21.6 — Empirical findings (consolidated, durable)
+
+Three platform constraints, surfaced here so no future session re-discovers them:
+
+- **(a) Smartsheet `AUTO_NUMBER` columns are UI-only.** REST API rejects `type: AUTO_NUMBER` with `errorCode 1008` (§G18.4). The `Job ID` column (`AUTO_NUMBER`, `JOB-000001` — **6-digit**, corrected from §G18.3's "4-digit") must be created in the Smartsheet UI; code reads it once it exists. This 6-digit `Job ID` is the **decided permanent key**; the legacy kebab `Job Slug` is **retired** (vestigial — `active_jobs.py` still matches on `Job Slug` pending the column creation + migration).
+- **(b) Smartsheet `MULTI_CONTACT_LIST` drops external emails on API read-back** (§G19.4) → recipient columns (Safety Reports Contact Email, CC 1–5) use **`TEXT`**, storing the literal email string.
+- **(c) Cloudflare Workers free-tier 10 ms CPU cap cannot run a secure password hash.** `bcryptjs` cost-10 exceeds it (Error 1102) → **Workers Paid plan required**. Resolves the §G17.4 "Free vs Paid" row as a hard constraint, not a tuning choice.
+
+### §G21.7 — Portal never reads or writes Smartsheet (correction to §G16 framing)
+
+Verified in execution code (`2946184`): `safety_portal/worker/index.ts` serves `/api/jobs` "from D1; the portal never reads Smartsheet"; `safety_portal/src/forms/registry.ts` derives the catalog from the bundled definitions + the D1 sync. This **supersedes** §G16's "the two Smartsheet config sheets the Safety Portal reads" framing: the portal reads its **own D1** (populated out of band from `ITS_Active_Jobs` / `ITS_Forms_Catalog`), and the **Python pipeline holds the only Smartsheet/Box write credentials**. The catalog→D1 sync mechanism is a deferred execution detail; the durable doctrine fact is the portal↔Smartsheet decoupling (the External Send Gate two-process model as a deployment boundary).
+
+### §G21.8 — Phase 5 PR 1 landed mid-session (PR #168, `ffad86b`) — back-half foundation
+
+PR #168 — `feat(safety-portal): Phase 5 PR 1 — back-half foundation (WSR_human_review + PDF merge + sheet_ids + amendments b/c)` — merged during this same 2026-06-05 window (after Phase 4's `2946184`, which several inline citations above reference as the then-current HEAD). What it landed:
+
+- **`WSR_human_review` sheet built** — `scripts/migrations/build_wsr_human_review_sheet.py`; `SHEET_WSR_HUMAN_REVIEW = 5035670127988612` in `shared/sheet_ids.py`. This is the §G21.5 review surface, now provisioned (the intake/compile/send *wiring* that populates and reads it remains the rest of Phase 5).
+- **`sheet_ids.py` standalone-workspace constants** — `WORKSPACE_SAFETY_PORTAL = 194283417429892`; folder constant renamed to `FOLDER_SAFETY_PORTAL = 6663869084002180` with `FOLDER_OPERATIONS_SAFETY_PORTAL` kept as a back-compat alias. **This resolves the code-label drift §G21.2 originally flagged** (no separate execution tech-debt needed for the rename/capture).
+- **Weekly PDF merge** primitive + amendments b/c (the amend-supersede path).
+
+Net effect on this §G21: the deploy decision (§G21.4), topology (§G21.3 — doctrine flag still stands; Op Stds §23/§24 unchanged), and empirical findings (§G21.6) are unaffected; the §G21.2 code-drift flag is **closed**; the §G21.5 WSR sheet is **built**. The blueprint `last_verified_against` for the docs touched this session is `ffad86b`.

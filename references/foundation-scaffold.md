@@ -2,8 +2,8 @@
 type: reference
 version: 6
 status: canonical
-last_verified: 2026-05-24
-last_verified_against: 3b7d56d
+last_verified: 2026-06-05
+last_verified_against: ffad86b
 supersedes: references/foundation-scaffold.md@v6.4
 workstream: null
 tags: [status-snapshot, what-is-done]
@@ -187,6 +187,9 @@ Significance: watchdog and picklist-sync plists predate PR #59. The polling-daem
 | ITS — Operations | 7217130472007556 | Operator-only (master DBs) |
 | ITS — Archive | 5528280611743620 | Operator-only (closed projects) |
 | ITS — System | 680592632244100 | Operator-only (config/errors/queues/daemons) |
+| ITS — Safety Portal | 194283417429892 | Operator-only, **standalone + approval-gated** — Safety Portal folder (`6663869084002180`: ITS_Active_Jobs, ITS_Forms_Catalog), per-job week sheets, `WSR_human_review`. Moved from Operations 2026-06-04/05, IDs preserved. |
+
+**Sixth workspace, added 2026-06-04/05:** `ITS — Safety Portal` is a standalone, self-contained, approval-gated workspace (workspace access = approval authority), deliberately **outside** the five-workspace audience-separated model. **Doctrine-update flagged:** Op Stds §23/§24 (five-workspace, "no change") do not yet acknowledge it — pending a v17 bump (see [memory-archive §G21.3](memory-archive.md) and the [2026-06-05 session log](../session-logs/2026-06-05_safety-portal-blueprint-update.md)). **Codified by Phase 5 PR 1 (PR #168, `ffad86b`):** `shared/sheet_ids.py` now defines `WORKSPACE_SAFETY_PORTAL = 194283417429892` and `FOLDER_SAFETY_PORTAL` (with `FOLDER_OPERATIONS_SAFETY_PORTAL` kept as a back-compat alias) plus `SHEET_WSR_HUMAN_REVIEW`.
 
 ## System Workspace Contents (Verified)
 

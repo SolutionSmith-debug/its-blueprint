@@ -2,8 +2,8 @@
 type: reference
 version: 5
 status: canonical
-last_verified: 2026-05-24
-last_verified_against: 3b7d56d
+last_verified: 2026-06-05
+last_verified_against: ffad86b
 workstream: null
 tags: [smartsheet, handoff, sheet-ids]
 ---
@@ -27,6 +27,8 @@ Per Op Stds v9.3 §23. Full inventory:
 | ITS — Operations | 7217130472007556 | Master Databases (Vendor DB, Subcontractor DB, Equipment Master) |
 | ITS — Archive | 5528280611743620 | Closed Projects (empty by design) |
 | ITS — System | 680592632244100 | 01 — Config (incl. Picklist_Sync_Config from PR #46), plus existing system sheets |
+
+> **Update 2026-06-04/05 — sixth workspace:** A standalone `ITS — Safety Portal` workspace was added (`WORKSPACE_SAFETY_PORTAL = 194283417429892` in `shared/sheet_ids.py`, captured by PR #168). The `Safety Portal` folder (`6663869084002180`: `ITS_Active_Jobs`, `ITS_Forms_Catalog`) was **moved there from `ITS — Operations`, IDs preserved**; per-job week sheets and the `WSR_human_review` approval sheet live there too. It is approval-gated (workspace access = approval authority) and deliberately outside the five-workspace audience-separated model — Op Stds §23/§24 doctrine bump flagged (see [memory-archive §G21.3](memory-archive.md)).
 
 ## Active Projects folder inventory
 
