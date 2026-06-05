@@ -3,14 +3,14 @@ type: reference
 status: canonical
 workstream: null
 last_verified: 2026-06-05
-last_verified_against: ffad86b
+last_verified_against: fc034eb
 ---
 
 # Claude Code Info Gap
 
 **Purpose:** Context that lives only in chat memory / chat conversation and is NOT reachable from `~/its/` or `~/its-blueprint/` on a fresh Claude Code (CC) session. Drop this in project files so a chat-session can hand it to CC at spin-up, or so a fresh chat-session can re-orient quickly.
 
-**Last refreshed:** 2026-06-05 (Phase 4 complete — PRs #164/#166/#167; Phase 5 PR 1 landed — PR #168; Safety Portal blueprint reconciliation: standalone `ITS — Safety Portal` workspace, Workers deploy resolved, `WSR_human_review` built)
+**Last refreshed:** 2026-06-05 (Phase 4 complete — PRs #164/#166/#167; Phase 5 PRs 1+2 landed — PRs #168/#169; pull-model transport decided; deploy prerequisites enumerated)
 **Maintained by:** chat-session at session close (treat as living doc)
 
 ---
@@ -268,6 +268,18 @@ With `its` installed editable (`__editable__.its-0.1.0.pth`), setting `PYTHONPAT
 - **ITS_Forms_Catalog v1 after PR #164:** 5 parents + 7 variants = 12 rows. Parents: jha, equipment-preinspection, hsse, visitor, toolbox-talk. Daily Site Safety removed (not a form-fill candidate); Visitor + HSS&E added. All marked Active.
 - **Adding a Python dep note:** `reportlab` (Phase 4 PR 3) is a one-line `pyproject.toml` edit; CI installs via `pip install -e .[dev]`, no lockfile.
 
+### Safety Portal transport: Python PULL model (Phase 5 PR 2, PR #169, 2026-06-05)
+
+The portal→intake transport is a **Python pull model** (operator-ratified 2026-06-05; supersedes the brief's email-shim design):
+
+- **Worker = send-free durable D1 queue.** Submission stored in D1 at submit time (cloud-always-on capture). Worker exposes two internal endpoints: `GET /api/internal/pending` (bearer auth) + `POST /api/internal/mark-filed` (receipt). No outbound email from the Worker.
+- **`portal_poll.py` (to build)** — Mac-side daemon (modeled on `intake_poll`); polls the Worker over outbound HTTPS; verifies `X-ITS-Portal-HMAC` using `shared/portal_hmac.py`; hands each submission to `intake.py`; POSTs receipt.
+- **`shared/portal_hmac.py`** — the cross-language HMAC verify contract; validated in PR #169 tests.
+- **Capture cloud-always-on; filing on the Mac.** Submissions queue in D1 if the Mac sleeps; drain when it wakes. Filing (Smartsheet/Box write + reportlab render) stays on the Mac — a deliberate doctrine choice (no write-creds in the cloud).
+- **Approval stays human-in-loop (F22):** `Approve for Scheduled Send` on `WSR_human_review`; `MODIFIED_BY` auto-stamps approver identity; `verify_approval` still validates the actor before send.
+- **WSR_human_review** (`SHEET_WSR_HUMAN_REVIEW = 5035670127988612`) supersedes `WPR_Pending_Review` for the safety portal flow. One row per (job, week): compiled PDF, editable email body, recipients (TO = Safety Reports Contact Email, CC = CC 1–5 flattened), `Approve for Scheduled Send` + `Send Now`, auto-stamped Approved By/At. Built by PR #168.
+- **Secrets at deploy:** Worker needs `HMAC_PAYLOAD_SECRET` + `PORTAL_INTERNAL_API_TOKEN` (via `wrangler secret put`); Mac Keychain mirrors as `ITS_PORTAL_HMAC_SECRET` + `ITS_PORTAL_INTERNAL_TOKEN`.
+
 ### Cloudflare / Safety Portal TS tree (PR #158, 2026-06-04)
 `safety_portal/` is the TypeScript/Cloudflare workstream — a separate execution tree from the Python `safety_reports/` workstream. Key tooling facts:
 
@@ -348,15 +360,15 @@ With `its` installed editable (`__editable__.its-0.1.0.pth`), setting `PYTHONPAT
 - **`ops-stds-enforcer` agent pinned at "Op Stds v13"** (DR-E1/OPEN-1) — 3 majors behind v16, blind to §43/§44 successor-remediation discipline. Needs agent-file update. Tracked `docs/tech_debt.md`.
 - **DR-D1/H1 guard-hook self-presence** — `.claude` hooks fail-open if the blueprint `.claude` symlink dangles; watchdog Check M only detects post-hoc, not preventively. No code change made this session; flagged in PR #156 audit.
 - **DR-C2 Layer 6 attachment screening entirely unbuilt** — legacy PDF-email attachments to safety@ upload to Box unscanned. Documented as planned Phase 1.4; now surfaced explicitly in the alignment audit. Email Triage workstream carries this.
-- **Safety Portal intake.py portal-marker branches** — PLANNED, not built. Legacy PDF-email is the documented fallback. HMAC-verified shim (`portal-noreply@` → `safety@`) not implemented.
+- **Safety Portal intake.py portal-marker branches** — PLANNED, not built. Transport is pull model (Worker D1 queue → `portal_poll.py` → `intake.py`; see §6); the earlier email-shim design is superseded. Legacy PDF-email remains the documented fallback during transition.
 - **Safety Portal deploy deferred** — Cloudflare provisioning (**Workers + Static Assets**, D1, secret put, deploy, custom domain `safety.evergreenmirror.com`) blocked on operator CLOUDFLARE_API_TOKEN (a short-lived provisioning credential, revoked after — never Keychain). **Requires Workers Paid (~$5/mo)** for bcrypt login. Code validated locally. See `docs/tech_debt.md` "Safety Portal deploy + provisioning deferred".
 - **Safety Portal topology RESOLVED** — Cloudflare **Workers + Static Assets** (NOT Pages; Pages in maintenance mode). Blueprint `brief.md` §11 updated to v2. (Closes the prior "topology TBD / mission §11 assumed Pages" item.)
 - **Safety Portal form-catalog mismatch RESOLVED** — PR #164 migrated ITS_Forms_Catalog to 5 parents + 7 variants (12 rows); Daily Site Safety removed, Visitor + HSS&E added. v1 catalog is now aligned with the 11 form definitions. Original 4-form mismatch entry closed.
 - **Safety Portal frontend CI gap** — no `tsc --noEmit` / `npm run build` CI step for the TS tree. See `docs/tech_debt.md`.
-- **Safety Portal Phase 4 COMPLETE** — PR 2 (definition-driven TS display runtime, `23af65f`/#166) + PR 3 (Python Option-B reportlab renderer + equipment tri-state, `2946184`/#167) **landed**. The form definition set was revised after PR #164: current as-built = 10 definition files = 5 parents + 7 variants (see memory-archive §G21.1). **Phase 5 IN PROGRESS** — PR 1 (back-half foundation: `WSR_human_review` sheet built + weekly PDF merge + `sheet_ids` constants `WORKSPACE_SAFETY_PORTAL`/`FOLDER_SAFETY_PORTAL`/`SHEET_WSR_HUMAN_REVIEW` + amendments) **landed** (PR #168, `ffad86b`); intake portal-marker branch + compile + gated send wiring is next (memory-archive §G21.8).
+- **Safety Portal Phase 4 COMPLETE** — PR 2 (definition-driven TS display runtime, `23af65f`/#166) + PR 3 (Python Option-B reportlab renderer + equipment tri-state, `2946184`/#167) **landed**. The form definition set was revised after PR #164: current as-built = 10 definition files = 5 parents + 7 variants (see memory-archive §G21.1). **Phase 5 PRs 1+2 LANDED** — PR 1 back-half foundation (`ffad86b`/#168): `WSR_human_review` built + PDF merge + `sheet_ids` constants `WORKSPACE_SAFETY_PORTAL`/`FOLDER_SAFETY_PORTAL`/`SHEET_WSR_HUMAN_REVIEW`; PR 2 transport queue (`fc034eb`/#169): Worker HMAC signing + `/api/internal/pending` + `/api/internal/mark-filed` + bearer auth; `shared/portal_hmac.py` verify contract; D1 migration 0005. Transport is **pull model** (not email shim — see §6 "Safety Portal transport"). Remaining Phase 5 = `portal_poll.py` + intake portal-marker branch + generate/send rewires + deploy (all deploy/live-gated). See memory-archive §G22.
 
 ### On the horizon
-- **Safety Portal Phase 4** — Form rendering: **Phase 4 PR 1 LANDED (PR #164, `940999e`):** meta-schema + 11 definitions + ITS_Forms_Catalog parent/variant catalog + jsonschema validation. **Phase 4 COMPLETE:** PR 2 (definition-driven TS display runtime, 3 archetypes — rows+signatures, grouped-checklist, sectioned-assessment; form-type/variant dropdowns; multi-row SVG signatures; amend prefill; structured-data emit; `23af65f`/#166) + PR 3 (Python Option-B reportlab renderer + equipment tri-state, deterministic, per-form parity; `2946184`/#167) **landed**. After Phase 4: **Phase 5 PR 1 (back-half foundation) LANDED (PR #168, `ffad86b`)** — `WSR_human_review` sheet built + weekly PDF merge + `sheet_ids` constants + amendments b/c. **Remaining Phase 5** = HMAC-verified email shim to `safety@` + intake portal-marker branch (dedup + fail-closed receipt callback) + per-submission Python render + week-sheet write + **compile** + dual-write to `WSR_human_review` + gated `weekly_send` (7 AM Pacific Monday); Phase 7 = session revocation table. **Phase 3 LANDED (PR #160 + PR #162):** `shared/active_jobs.py` + `shared/safety_week.py`; Job-ID resolution live; CC routing columns live. **Cloudflare deploy still deferred.** Legacy PDF-email documented fallback. D1 dropdown sync deferred to deploy session.
+- **Safety Portal** — **Phase 4 COMPLETE** (PRs #164/#166/#167: form definitions + TS runtime + Python renderer). **Phase 5 PRs 1+2 LANDED** (PRs #168/#169: WSR_human_review + PDF merge + pull-model transport queue). Transport model = Python PULL (not email shim; see §6). **Remaining Phase 5 (all deploy/live-gated):** `portal_poll.py` Mac-side puller daemon; intake portal-marker branch (HMAC verify → UUID dedupe → week/job routing → render → Box file → receipt POST); `weekly_generate` compile (narrative→PDF-merge + dual-write WSR_human_review); `weekly_send` attachment + TO/CC from active_jobs + WSR body + Pacific-Monday 7 AM cadence + watchdog catch-up. Phase 7 = session revocation table. **Phase 3 LANDED (PR #160 + PR #162):** `shared/active_jobs.py` + `shared/safety_week.py`; Job-ID resolution live; CC routing columns live. **Deploy prerequisites:** Cloudflare API token + D1 create + wrangler.jsonc `database_id` + `HMAC_PAYLOAD_SECRET` + `PORTAL_INTERNAL_API_TOKEN` (Worker secrets) + Keychain mirrors `ITS_PORTAL_HMAC_SECRET` / `ITS_PORTAL_INTERNAL_TOKEN` + `wrangler deploy` + custom domain. **Requires Workers Paid (~$5/mo).** D1 dropdown sync deferred to deploy session. Legacy PDF-email documented fallback.
 - Email Triage workstream build — now carries Invariant 2 Layer 6 (attachment screening) per the portal pivot reassignment
 - `fail_closed_until` kill-switch mechanism deferred from F07 (Q8 resolution) — currently fail-open by documented design; revisit in Phase 2+ when multi-operator scenario makes a true fail-closed window safe to add.
 - DFR backfill and Portfolio Rollups Reports continued expansion.

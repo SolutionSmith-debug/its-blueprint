@@ -1120,3 +1120,84 @@ PR #168 — `feat(safety-portal): Phase 5 PR 1 — back-half foundation (WSR_hum
 - **Weekly PDF merge** primitive + amendments b/c (the amend-supersede path).
 
 Net effect on this §G21: the deploy decision (§G21.4), topology (§G21.3 — doctrine flag still stands; Op Stds §23/§24 unchanged), and empirical findings (§G21.6) are unaffected; the §G21.2 code-drift flag is **closed**; the §G21.5 WSR sheet is **built**. The blueprint `last_verified_against` for the docs touched this session is `ffad86b`.
+
+## §G22 — 2026-06-05 Safety Portal Phase 4 PR 2/3 + Phase 5 PRs 1+2: display runtime, renderer, transport queue
+
+### Summary
+
+PRs #166–#169 (exec HEAD `fc034eb`) completed Phase 4 and landed Phase 5 PRs 1+2. Four PRs in one session; all four-part-verified clean. The dominant design decision was the **Phase 5 transport model**: operator ratified a Python pull model (Worker D1 queue + Mac-side `portal_poll.py`) over the brief's email-shim design. Session log: `docs/session_logs/2026-06-05_safety-portal-phase4-runtime-renderer-phase5-foundation-transport.md`.
+
+### §G22.1 — Phase 4 PRs 2+3: display runtime + PDF renderer
+
+**PR #166** (`23af65f`, four-part-verify clean) — TS definition-driven display runtime:
+- `safety_portal/src/forms/` — 3 archetype renderer components (rows+signatures, grouped-checklist, sectioned-assessment).
+- Form-type + variant dropdowns populated from ITS_Forms_Catalog (parent/variant columns); variant-parent model data-driven.
+- Multi-row SVG signature capture via `signature_pad`; amend/prefill from a prior submission (D1 lookup by submission UUID).
+- Structured-data emit to Worker on submit.
+- 3 new Worker endpoints: `GET /api/jobs` (active job list for the dropdown), `GET /api/forms/:id` (form definition), `POST /api/submissions` (store + queue).
+- D1 migration 0004: `jobs` + `submissions` tables.
+
+**PR #167** (`2946184`, four-part-verify clean) — Python Option-B reportlab renderer + equipment tri-state:
+- `safety_reports/form_pdf.py` — reads `safety_portal/forms/*.json` + structured submission payload → deterministic print-parity PDF.
+- Layout engine: Evergreen header, per-archetype table/checklist/section layout, legal invariants in code (JHA "conditions change" footer; equipment lock/tag-out line), embedded SVG signatures (rasterized to PNG via cairosvg, then placed in the PDF).
+- **Equipment tri-state:** checklist items are OK / NOT OK / N/A (N/A is distinct from blank/unchecked; the N/A branch is a deliberate "inspected, not applicable" signal — not the same as "skipped").
+- `form_pdf.merge_pdfs(pdf_paths) -> bytes` primitive: merges a list of PDFs into one packet via pypdf.
+- No AI step; no Anthropic calls. Deterministic.
+- `+reportlab` + `+pypdf` to `pyproject.toml` runtime deps (one-line edits; CI `pip install -e ".[dev]"`, no lockfile to regen).
+- N/A-vs-blank distinction is load-bearing: the PDF renderer must faithfully represent "inspector deliberately marked N/A" vs "inspector did not reach this item."
+
+### §G22.2 — Phase 5 PR 1: back-half foundation (PR #168, `ffad86b`)
+
+Landed the structural scaffolding Phase 5 needs before any wiring:
+
+- **`WSR_human_review` sheet** — built by `scripts/migrations/build_wsr_human_review_sheet.py`; `SHEET_WSR_HUMAN_REVIEW = 5035670127988612`. Schema: one row per (job, week); columns: Job ID, Week Ending, PDF URL, Email Body (editable; source of truth for send), Approved By, Approved At, Approve for Scheduled Send (checkbox), Send Now (checkbox), Send Status, Sent At. This is the safety workstream's `<Workstream>_Pending_Review` surface under FM v11 Invariant 1. `WPR_Pending_Review` in `ITS — Human Review` is superseded for the portal flow (legacy weekly-generate still writes there; the portal-backed compile will dual-write WSR going forward).
+- **`sheet_ids.py` constants:** `WORKSPACE_SAFETY_PORTAL = 194283417429892`; `FOLDER_SAFETY_PORTAL = 6663869084002180`; `FOLDER_OPERATIONS_SAFETY_PORTAL` kept as back-compat alias; `SHEET_WSR_HUMAN_REVIEW = 5035670127988612`.
+- **Amendments b/c** (stale comment fixes; runbook Job ID format corrected to 6-digit `JOB-000001`).
+
+### §G22.3 — Phase 5 PR 2: transport queue — pull model decided (PR #169, `fc034eb`)
+
+**The transport decision (operator-ratified 2026-06-05, supersedes brief's email-shim design):**
+
+The portal→intake transport is a **Python pull model**. The brief had specified a `portal-noreply@` email shim that would relay submissions as HMAC-verified emails into the unified `safety@` mailbox (intake_poll would read them like legacy emails, just with a trust marker). This was rejected in favor of:
+
+- **Worker = durable D1 queue (send-free).** Submission stored atomically in D1 at submit time — cloud-always-on. The Worker never emails. It exposes two authenticated internal endpoints:
+  - `GET /api/internal/pending` — bearer-authed; returns unprocessed submission rows.
+  - `POST /api/internal/mark-filed` — bearer-authed; marks a submission as processed + stores the receipt.
+- **`shared/portal_hmac.py` — the cross-language HMAC verify contract.** Signs/verifies `X-ITS-Portal-HMAC` headers (`HMAC-SHA256(secret, payload_json)`). Cross-language validation confirmed in PR #169 tests (Python signs → TS verifies; TS signs → Python verifies).
+- **`portal_poll.py` (to build)** — Mac-side daemon polling the Worker. Standard daemon contract (heartbeat, kill-switch, fcntl lock, `@its_error_log`). Polls `/api/internal/pending`, verifies the HMAC, hands each submission to `intake.py`'s processing path, posts receipt.
+- **D1 migration 0005** — adds the `pending_submissions` queue table + `processed` flag.
+
+**Why pull over email shim:**
+1. Reliability: one local D1 write vs a multi-hop Worker→email-provider→mailbox→poll chain. "Submitted" is atomic at the D1 write, not eventual.
+2. Edge security: Worker holds no send capability, no outbound SMTP/Resend key. Can't become a spam cannon even if compromised at the Worker layer.
+3. No new infrastructure: no `portal-noreply@` mailbox, no sending domain, no M365 app registration.
+4. Operator preference: leaning away from Microsoft for non-critical paths; Resend would work but adds a dependency for no gain.
+
+**Capture cloud-always-on; filing on the Mac (deliberate doctrine choice).**
+Submission queues in D1 if the Mac is offline; drains when it wakes. Nothing is lost. Filing (Smartsheet/Box write + Python reportlab render) stays on the Mac. This is NOT a doctrine change from the planning layer's "Mac-first through Phase 4" model — the cloud holds only the submission queue, no write credentials or rendering capability.
+
+**Approval stays human-in-loop (F22 preserved):** a human flips `Approve for Scheduled Send` on `WSR_human_review`; Smartsheet `MODIFIED_BY` auto-captures the approver identity; F22 `verify_approval` checks the actor is in the authorized-approvers list before `weekly_send` proceeds.
+
+### §G22.4 — Deploy secrets enumerated (Phase 5 additions)
+
+Phase 5 adds two new Worker secrets beyond the base deploy entry (see §G21.4 / §G17.4):
+
+| Secret | Worker name | Mac Keychain name | Description |
+|---|---|---|---|
+| HMAC payload secret | `HMAC_PAYLOAD_SECRET` | `ITS_PORTAL_HMAC_SECRET` | ≥32-byte random; used by `shared/portal_hmac.py` + Worker signing |
+| Internal bearer token | `PORTAL_INTERNAL_API_TOKEN` | `ITS_PORTAL_INTERNAL_TOKEN` | Bearer auth for `/api/internal/*`; Mac daemon presents this to poll |
+
+Both must be set before `portal_poll.py` can authenticate. The HMAC secret must be identical on both sides (Worker `wrangler secret put` + Mac Keychain). `wrangler.jsonc` also needs the D1 `database_id` placeholder filled (migrations 0001–0005 applied remotely).
+
+### §G22.5 — Remaining Phase 5 (all deploy/live-gated)
+
+In dependency order:
+
+1. **Deploy prerequisites** (§G22.4 + §G21.4): Cloudflare token + D1 create + secrets + `wrangler deploy` + custom domain.
+2. **`portal_poll.py`** — Mac-side puller daemon. Standard daemon contract. Locally testable on `wrangler dev --local`.
+3. **Intake portal-marker branch** — in `safety_reports/intake.py`: HMAC verify (already done by `portal_poll`) → UUID dedupe guard → Sat→Fri week key via `safety_week` → `active_jobs` lookup → `form_pdf.render` (Option B) → per-job/week Box tree via `week_folder` → file PDF → write week-sheet row → receipt POST. **`box_client.canonical_job_path()` is still a stub** (format unconfirmed with owner; see existing tech-debt entry); a `get_or_create_folder` primitive is needed. UUID idempotency guard must prevent double-filing on retry.
+4. **`weekly_generate` compile step** — on Friday 14:00 (or `Compile Now` checkbox): merge Sat→Fri submission PDFs via `form_pdf.merge_pdfs` + generate narrative; dual-write to per-job week sheet (read-only snapshot) and `WSR_human_review` row (editable body + resolved recipients). Skip if already compiled + no new docs since last compile. Late arrivals → next uncompiled week + Review-Queue flag.
+5. **`weekly_send` rewire** — Phase 5 send: reads approved `WSR_human_review` rows; attaches merged PDF; TO = `safety_reports_contact_email`, CC = flattened `cc_emails` from `ActiveJob`; logs full resolved TO+CC at send; refuses on blank recipients or `[GENERATION_FAILED:]` tag; Pacific-Monday 7 AM cadence from `ITS_Config`. Watchdog catch-up (Check I) retries missed Friday compile.
+6. **D1 dropdown sync** (deferred to deploy session) — push ITS_Active_Jobs active jobs → Worker D1 `active_jobs` table so the portal's Job dropdown stays current. Mechanism TBD: Worker `/api/sync` (POST, HMAC-authed) vs Cloudflare D1 HTTP API from Python.
+
+Phase 7: server-side session revocation table (D1 `sessions` with `revoked_at`).
