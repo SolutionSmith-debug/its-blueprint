@@ -1,17 +1,21 @@
 ---
 type: doctrine
-version: 8
+version: 9
 status: canonical
-last_verified: 2026-06-01
-last_verified_against: 585823d
-supersedes: doctrine/handover-plan.md@v7
+last_verified: 2026-06-07
+last_verified_against: f3ad814
+supersedes: doctrine/handover-plan.md@v8
 workstream: null
-tags: [california-cutover, hardware-handoff, permissions, successor-operator, training-bounded-co-resolution]
+tags: [california-cutover, hardware-handoff, permissions, successor-operator, training-bounded-co-resolution, portal-user-admin, safety-portal]
 ---
 
-**ITS Handover Plan v8**
+**ITS Handover Plan v9**
 
-2026-06-01 — Tier-2 Enforcement Layer Removed; Successor-Operator = Trained CC Operator
+2026-06-07 — Safety Portal field-PM account administration runbook added to Step 8 (Phase 7 admin CLI landed, PR-H #185)
+
+*v9 adds the **Safety Portal field-PM account provision/deprovision runbook** to Step 8 (Owner-Side Activation) — the operator manages portal accounts via the Mac CLI `safety_reports.portal_admin` (`add-user`/`reset-password`/`disable-user`/`enable-user`/`list-users`), with server-side session revocation; this realizes the v8→v9 trigger ("a further structural change to the cutover runbook") now that the Phase-7 admin route merged (PR-H #185, exec `f3ad814`). Portal-user administration is a **Tier-2 low-class operator action** (rotating the admin TOKEN itself is Tier-3 secrets/auth). A one-time Developer-Operator live-activation gate precedes it (byte-equal admin tokens; migration 0006 to live D1 before redeploy; redeploy). v8's three-tier model, roles, escalation boundary, and all prior structure carry forward verbatim.*
+
+**ITS Handover Plan v8 (retained for provenance)** — 2026-06-01 — Tier-2 Enforcement Layer Removed; Successor-Operator = Trained CC Operator
 
 *Modifies the v7 three-tier model · the Tier-2 "non-developer-safe enforcement layer" pre-cutover build gap is REMOVED (no structural maintenance enforcement layer exists or is required) · the Tier-2 boundary is held by training + the both-rule + co-resolution with the Developer-Operator until per-category clearance · the Successor-Operator is redefined as a TRAINED operator who runs Claude Code himself (not a Smartsheet-UI-only approver) · the Tier-1 self-heal pre-cutover gate survives, its stale "Check H" status corrected to the implemented Check C marker-file floor (all four daemons) + live UptimeRobot ping (F16), residual = weekly_generate Friday-crash catch-up · v7's model, roles, escalation boundary, and Step 8/Day-7 reframes carry forward*
 
@@ -21,7 +25,7 @@ v8 modifies the three-tier fault-response model that v7 established. v7's model,
 
 The three-tier model as it now stands: (1) Tier 1 self-heal; (2) two named operator roles — Developer-Operator (Seth) and the trained Successor-Operator; (3) the Tier-2/Tier-3 "both" rule over the four high-class categories (External Send Gate, secrets/auth, doctrine, code changes) — the structural *definition* of high-class stands; only the idea of *structurally enforcing* it at Tier 2 is removed, replaced by training + co-resolution; (4) Step 8 acceptance + Day-7 routing to the Successor-Operator with Seth at Tier 3; (5) pre-cutover conditions — the Tier-1 self-heal gate (real) plus a Tier-2 *readiness* gate (the §44 low-class action set implemented + §43 runbooks + trained-operator/demonstrated-repair). The v7 Tier-2 enforcement-layer build gap is removed.
 
-v7 retires on acceptance of v8. v8 is the canonical baseline and operative reference (frontmatter version and title both read v8). v9 trigger: a further structural change to the cutover runbook or the fault-response model.
+v7 retires on acceptance of v8. **v9 (2026-06-07) is now the canonical baseline** (frontmatter version and title read v9); it carries v8's three-tier model forward verbatim and adds the Safety Portal field-PM account-administration runbook to Step 8 (below). v10 trigger: a further structural change to the cutover runbook or the fault-response model.
 
 # What Changed in v8
 
@@ -117,6 +121,16 @@ After all workstreams cut over and watchdog is stable:
 
 - Customer admin briefed on header-forgery detection. A legitimate sender whose mail server has SPF/DKIM/DMARC misconfigurations will land in ITS_Review_Queue rather than the pipeline — this is expected behavior, not a malfunction. Customer admin escalates to operator if persistent legitimate-sender routing fails surface.
 
+## New items (NEW v9) — Safety Portal field-PM account administration
+
+The Safety Portal authenticates field PMs against per-user accounts (no self-registration). Provisioning, password reset, and revocation are an **operator** responsibility, performed from the Mac via the CLI `python -m safety_reports.portal_admin <subcommand>` (Phase 7, PR-H #185, exec `f3ad814`). This is a **Tier-2 low-capability-class** operator action — application-level user administration that touches neither the External Send Gate, system secrets/auth, doctrine, nor code — so it is in the trained Successor-Operator's scope.
+
+- **Subcommands:** `add-user <username>` (provision — prompts for a password, the **backend** bcrypt-hashes it; plaintext is never stored on the Mac or logged), `reset-password <username>`, `disable-user <username>` (revoke), `enable-user <username>` (restore), `list-users` (usernames + disabled flag). Username convention is `lastname.firstname`.
+- **Revocation is server-side and immediate-ish:** `disable-user` sets `users.disabled` in D1; the Worker's `requireSession` checks it per request, so a disabled (or deleted) user is locked out on their next request (`401 revoked`), not merely at cookie expiry. Re-enable with `enable-user`.
+- **Auth + the Tier boundary:** the CLI authenticates with the macOS Keychain bearer `ITS_PORTAL_ADMIN_TOKEN`, byte-equal to the Worker secret `PORTAL_ADMIN_API_TOKEN` (privilege-separated from the poller's `PORTAL_INTERNAL_API_TOKEN`). Provisioning/resetting/disabling a *field-PM account* is low-class (Tier 2). **Rotating the admin TOKEN itself** (`PORTAL_ADMIN_API_TOKEN` / `ITS_PORTAL_ADMIN_TOKEN`) is **secrets/auth → Tier 3 (Developer-Operator)** per the high-class definition (Fault-Response Model).
+- **One-time live-activation prerequisite (Developer-Operator, at cutover):** the merged admin route is **inert** until (1) `PORTAL_ADMIN_API_TOKEN` (Worker) + `ITS_PORTAL_ADMIN_TOKEN` (Keychain) are set **byte-equal**; (2) migration **0006** (`users.disabled`) is applied to the live D1 **before** the Worker redeploys (else `requireSession` fail-closes every session to `401`); (3) the Worker is redeployed. Until then the CLI's calls error. See [memory-archive §G26](../references/memory-archive.md#g26-2026-06-07-safety-portal-deploy-session-reconciliation-exec-prs-178189) (§G26.9) for the as-built detail.
+- **Step-8 acceptance test (add to the owner-side checklist):** the customer admin / Successor-Operator demonstrates `add-user`, `disable-user` (confirm the disabled PM is locked out on next request), and `list-users` against the live portal.
+
 # Pre-Cutover Conditions (EXTENDED v6.3)
 
 ## Existing conditions (carried forward from v6.2)
@@ -175,8 +189,10 @@ After all workstreams cut over and watchdog is stable:
 
 # Authority
 
+Handover Plan **v9**, 2026-06-07 (verified against exec main `f3ad814`). v9 adds the **Safety Portal field-PM account-administration runbook** to Step 8 (Owner-Side Activation) — operator provision/reset/disable/enable/list of portal accounts via the `safety_reports.portal_admin` CLI, with server-side session revocation (`requireSession` D1 `disabled` check), a Keychain↔Worker byte-equal admin bearer (privilege-separated from the poller token), and a one-time Developer-Operator live-activation gate (tokens + migration 0006-before-redeploy + redeploy). Portal-user administration is classified **Tier-2 low-class**; rotating the admin token itself is **Tier-3 secrets/auth**. This realizes the v8→v9 trigger ("a further structural change to the cutover runbook") now that the Phase-7 admin route merged (PR-H #185). **v8's three-tier model, the two operator roles, the Tier-2/Tier-3 escalation boundary, the Step 1–7 carry-forwards, and all Pre-Cutover Conditions carry forward verbatim.** v8 retires on acceptance of v9. Canonical git tag: `handover-plan-v9`.
+
 Handover Plan v8, 2026-06-01. v8 removes the Tier-2 "non-developer-safe enforcement layer" that v7 named as a hard pre-cutover build gap (there is no structural maintenance enforcement layer; none is built or required — FM v11 / Op Stds v16) and redefines the Successor-Operator as a trained operator who runs Claude Code himself, follows the §43 runbooks, and escalates the four high-class categories — not a Smartsheet-UI-only approver. The Tier-2 boundary is held by training + the both-rule + co-resolution with the Developer-Operator until per-category clearance; the v7 Tier-2 pre-cutover condition is replaced by a Tier-2 readiness gate. The Tier-1 self-heal gate survives unchanged in scope; its stale "Check H" status characterization is corrected in a v8.x absorption (below). v7's three-tier model, roles, escalation boundary, and Step 8/Day-7 reframes, plus v6.3's Phase 1.4 hardening, carry forward. v7 retires on acceptance of v8; v8 is the canonical baseline and operative reference (frontmatter version and title both read v8). Canonical git tag: handover-plan-v8.
 
-v9 trigger criteria: a further structural change to the cutover runbook or to the fault-response model. Status updates that do not change runbook or model structure are absorbed without a major bump.
+v10 trigger criteria: a further structural change to the cutover runbook or to the fault-response model. Status updates that do not change runbook or model structure are absorbed without a major bump (e.g., the Safety Portal live-activation tracks completing is a status update, not a v10 trigger). **Realized 2026-06-07** by the v9 Step-8 Safety Portal account-administration runbook.
 
 v8.x status absorption (2026-06-01, verified against exec 585823d): the Tier-1 self-heal gate's characterization (Tier 1 — Self-Heal section; ClamAV + TIER-1 SELF-HEAL pre-cutover conditions; the Op Stds §2 cross-reference) is corrected. The mechanism described as an unimplemented "Check H heartbeat-staleness" check with "2 of 3 daemons heartbeat-pending" was **never built**; the implemented staleness floor is the watchdog **Check C marker-file** check, which already covers all four tracked daemons, and the external **UptimeRobot** ping (audit F16) is live. The "every Enabled daemon emits a heartbeat that Check H reads" criterion was mis-specified — the watchdog is deliberately NOT self-tracked (its liveness is the F16 ping). The lone residual gate is the weekly_generate Friday-crash **catch-up** (exec follow-on). This is a Tier-1 self-heal **status update** that changes neither the cutover runbook nor the fault-response model structure, so per the v9 trigger it is **absorbed at v8.x: no major bump, no new tag.** A stale "Op Stds v11 §2" citation in the ClamAV condition is corrected to v16 §2 in the same pass. The prior "Check H" framing is recorded here for provenance.

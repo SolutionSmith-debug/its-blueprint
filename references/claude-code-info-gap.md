@@ -2,15 +2,15 @@
 type: reference
 status: canonical
 workstream: null
-last_verified: 2026-06-05
-last_verified_against: 025215d
+last_verified: 2026-06-07
+last_verified_against: f3ad814
 ---
 
 # Claude Code Info Gap
 
 **Purpose:** Context that lives only in chat memory / chat conversation and is NOT reachable from `~/its/` or `~/its-blueprint/` on a fresh Claude Code (CC) session. Drop this in project files so a chat-session can hand it to CC at spin-up, or so a fresh chat-session can re-orient quickly.
 
-**Last refreshed:** 2026-06-05 (WSR rewire code-complete — PRs #173–#177 (`025215d`); Python-side Safety Portal pull model fully landed: `portal_client`, `portal_poll`, `intake.process_portal_submission`, deterministic `weekly_generate`, WSR-repointed `weekly_send`/`weekly_send_poll`; WPR decommissioned-by-doc; CodeQL `py/clear-text-logging-sensitive-data` HIGH resolved via `_PortalCreds` named dataclass; NOT yet live-verified — deploy + smoke = next session)
+**Last refreshed:** 2026-06-07 (Safety Portal deploy + Phase-7 batch — PRs #178–#189 all merged, exec main `f3ad814`; deploy wiring + Phase 7: week-sheet filing relocation, D1 job sync, F22 workspace-membership authority, inline PDF attachments, Box-409 version fix, sheet styling, custom domain, Box mirror tree schema, admin route + session revocation; PR-H merged after its 2 CodeQL FPs were operator-dismissed. Nothing live yet — 3 operator activation tracks remain: admin tokens + migration 0006 + redeploy / Box root folder + `portal_root_folder_id` / `wrangler deploy` custom domain)
 **Maintained by:** chat-session at session close (treat as living doc)
 
 ---
@@ -132,8 +132,8 @@ gh pr view <num> --json mergedAt,mergeCommit,state
 ### PR-number prediction drift (2026-05-28)
 Never hard-code a predicted PR number into docs/code before `gh pr create` returns the actual number. The issue/PR counter advances unpredictably — predicted #103 was actually #104 because #103 was an unrelated open PR. Pattern: use a placeholder (`#TBD`) and fill in after creation, or accept a follow-up correction commit. A correction commit is cheap; stale PR citations in docs are not.
 
-### Op Stds is canonically v16 (as of 2026-06-02)
-v12 added §§37–41 (CC Skills / Agent Guardrails / Per-Customer-Fork Security / Migration-Script PII / Actions Version-Bump). v13 added §42 (code-level self-documentation discipline). v14 (F07, PR #23, 2026-05-29) reframed §1 kill switch from implied "security control" to "operator-convenience suggested pause, NOT a security boundary" (fail-open by design; External Send Gate = real boundary). v15 added §43/§44 (successor-remediation documentation discipline + Tier-2 Claude-assisted repair path) with the Developer-Operator / Successor-Operator role split. v16 reframed §44's Tier-2 boundary as training-bounded co-resolution — no structural maintenance enforcement layer built or required. New content citing `Op Stds §N` should reference v16. Historical version references in older tech-debt entries and session logs are grandfathered.
+### Op Stds is canonically v18 (as of 2026-06-07)
+v12 added §§37–41 (CC Skills / Agent Guardrails / Per-Customer-Fork Security / Migration-Script PII / Actions Version-Bump). v13 added §42 (code-level self-documentation discipline). v14 (F07, PR #23, 2026-05-29) reframed §1 kill switch from implied "security control" to "operator-convenience suggested pause, NOT a security boundary" (fail-open by design; External Send Gate = real boundary). v15 added §43/§44 (successor-remediation documentation discipline + Tier-2 Claude-assisted repair path) with the Developer-Operator / Successor-Operator role split. v16 reframed §44's Tier-2 boundary as training-bounded co-resolution — no structural maintenance enforcement layer built or required. v17 added §23/§24 acknowledgment of `ITS — Safety Portal` as the 6th, standalone, approval-gated workspace (workspace-membership = approval authority). v18 added §§45–49: §45 find-or-create-not-strand (portal artifact auto-provision); §46 workspace-membership = approval authority (as-built F22 pattern); §47 Box version-on-conflict (deterministic re-upload → new version; distinct docs keep suffix); §48 CodeQL FP handling (per-alert dismissal + genuine-fix rule; dismiss-block hook is agent-scoped in `codeql-fp-triager.md`, not global `settings.json`); §49 preservation-for-future-workstream (extends §14). New content citing `Op Stds §N` should reference v18. Historical version references in older tech-debt entries and session logs are grandfathered.
 
 ### CodeQL false positives (Python + Actions, weekly, since 2026-05-24)
 Dismiss-as-FP unless content shows actual secret/PII value being logged:
@@ -186,6 +186,20 @@ When a function returns a tuple containing a secret alongside non-secrets (e.g.,
 
 This is genuine hygiene, not a suppression. See also: §5 "CodeQL false positives" for the three dismiss-as-FP patterns (this is NOT a dismissal — it was a real taint path).
 
+### CodeQL `py/clear-text-logging` on operator CLI — interprocedural taint through shared request fn (PR #185, 2026-06-07)
+
+When a bearer token (sensitive source) is passed into a shared HTTP request function whose **return value** is printed (e.g., a JSON response body), CodeQL's interprocedural taint marks all prints of that return value as clear-text logging of the sensitive input — even if the return value contains no credential data. This pattern fires in `portal_admin.py` on `list-users` (prints the response JSON, not the token) and `_fail` (prints an error response body).
+
+**This is a FALSE POSITIVE** — the response body is not the bearer token. Refactoring to stop echoing the raw `response` dict cleared 1 of 3 alerts; the remaining 2 are unfixable without contorting correct code.
+
+**Resolution pattern:** operator runs `codeql-fp-triager` to generate the dismissal proposals (with quoted evidence), then applies them in the GitHub UI. CC is hook-blocked from dismissing CodeQL alerts. This is NOT one of the three auto-dismiss FP patterns in §5 above — `codeql-fp-triager` must evaluate it explicitly.
+
+### Require up-to-date branch before merge — merge serialization (2026-06-07)
+
+GitHub branch protection enforces "require branches to be up to date before merging." When multiple PRs are open in a batch, each branching off an older `main`, the first merge advances `main` and all sibling PRs are immediately BEHIND. Each must be updated (`gh pr update-branch <N>`) — which triggers a fresh CI run — before it can merge. This **serializes** the batch even if the PRs are independently correct.
+
+**Pattern:** in a batch session, plan for the serialization overhead. After each merge, update the next PR's branch and wait for CI before merging. The update also re-runs CI, catching any interaction regressions between the just-merged PR and the queued one.
+
 ### Circuit-breaker control-plane vs data-plane distinction (F08, 2026-06-02)
 `shared/circuit_breaker.py` wraps the 16 Smartsheet network methods with a `guard` decorator. Two patterns a fresh CC session must know:
 
@@ -237,6 +251,26 @@ This is genuine hygiene, not a suppression. See also: §5 "CodeQL false positive
 - `store_tokens` Keychain callback is **CRITICAL** — refresh tokens rotate every use.
 - Keychain keys: `ITS_BOX_CLIENT_ID`, `ITS_BOX_SECRET`, `ITS_BOX_REFRESH_TOKEN`.
 - Setup: `setup_box_oauth.py` (one-time). Smoke test: `smoke_test_box.py`.
+
+### Smartsheet API constraint: column format via attribute only, not dict constructor
+
+**Verified live (PR #187, 2026-06-07).** Column **format string** (bold, color, font, size) must be assigned via the Python SDK model **attribute** (`column.format = "..."`). Passing it via the dict constructor (`smartsheet.models.Column({"format": "..."})`) silently drops the value — the API returns 200 but the column is left unformatted. Column **width** works via either path. Per-cell format (e.g., Status cell coloring) works via the `Cell` dict through the `_resolve_cells` `_formats` meta-key extension.
+
+**Palette index source:** `GET /2.0/serverinfo` → `.formats.color` (array, 0-indexed, index → hex). Known values: 38 = `#237F2E` (dark green), 7 = `#E7F5E9` (light green), 18 = `#E5E5E5` (gray). `dateFormat` enum at `.formats.dateFormat`.
+
+**`_formats` meta-key extension to `smartsheet_client._resolve_cells`:** additive extension (skip `_`-prefixed keys, attach per-cell format string). Rows that do not carry `_formats` are byte-identical to before. Enables per-cell Status coloring at write time — the substitute for UI-only conditional-format rules (those cannot be set via the API). See `shared/smartsheet_client.py` `_resolve_cells`.
+
+### Box version-on-conflict: `update_contents_with_stream` (PR #186, 2026-06-07)
+
+When uploading a Box file with the same name as an existing file in the folder, the SDK raises a 409 conflict. The correct resolution for a same-name overwrite is to upload a **new version** of the existing file via `client.file(existing_id).update_contents_with_stream(BytesIO(data))`. This preserves the stable file ID and maintains Box version history (Box is a SoR; version history is meaningful for compiled packets). Pattern implemented in `box_client.upload_bytes_or_new_version` + `_find_child_file`. The per-submission PDF path keeps the filename-suffix strategy (amendments = distinct docs); only the compiled-packet path uses version-on-conflict.
+
+### Config-gate pattern for inert SoR-path changes (PR-K, 2026-06-07)
+
+When a PR changes a filing path (e.g., switches from `project_routing` category subfolders to a new Box mirror tree), gate the new path on an ITS_Config value. An **unset config value → legacy path**: the new code is merged and deployed but remains inert until the operator activates it. This allows merging and pulling without immediately switching live SoR filing — the operator activates when ready. Pattern: `safety_reports.box.portal_root_folder_id` (empty/missing → legacy; set to the root folder ID → mirror-tree path). The gating check is a single `if cfg` branch in `intake._resolve_portal_box_folder` and `weekly_generate._ensure_its_week_folder`.
+
+### `safety_naming.py` — shared naming source of truth (PR-K, 2026-06-07)
+
+`safety_reports/safety_naming.py` is the single source of truth for all Box + Smartsheet naming in the safety portal: `job_folder_name(job_slug)`, `week_label(saturday)`, `CFG_BOX_PORTAL_ROOT` (the ITS_Config key name). Both `intake` and `weekly_generate` import from it; `week_sheet` delegates `_folder_name` / `week_sheet_name` to it. No duplication of the naming logic. When adding a new naming convention for the safety portal, extend `safety_naming.py` — do not inline the pattern in a consuming module.
 
 ### MCP-gap REST-fallback pattern
 When Smartsheet/Box/Graph MCP lacks a primitive:
@@ -374,15 +408,16 @@ The portal→intake transport is a **Python pull model** (operator-ratified 2026
 - **`ops-stds-enforcer` agent pinned at "Op Stds v13"** (DR-E1/OPEN-1) — 3 majors behind v16, blind to §43/§44 successor-remediation discipline. Needs agent-file update. Tracked `docs/tech_debt.md`.
 - **DR-D1/H1 guard-hook self-presence** — `.claude` hooks fail-open if the blueprint `.claude` symlink dangles; watchdog Check M only detects post-hoc, not preventively. No code change made this session; flagged in PR #156 audit.
 - **DR-C2 Layer 6 attachment screening entirely unbuilt** — legacy PDF-email attachments to safety@ upload to Box unscanned. Documented as planned Phase 1.4; now surfaced explicitly in the alignment audit. Email Triage workstream carries this.
-- **Safety Portal Python-side code-complete; deploy + live smoke NEXT SESSION** — `portal_poll.py` is GATED (not loaded as a launchd job yet). Deploy checklist: (1) Worker secrets (`ITS_PORTAL_INTERNAL_TOKEN` + `ITS_PORTAL_HMAC_SECRET` via `wrangler secret put`) + `wrangler deploy`; (2) Mac Keychain mirrors; (3) ITS_Config row `safety_reports.portal.worker_base_url`; (4) load `portal_poll` launchd job + add `safety_portal_poll` to `TRACKED_JOBS` in `scripts/watchdog.py`; (5) `git -C ~/its pull` + reload live daemons; (6) operator-manual unload of retired `safety-intake` launchd job; (7) `pytest -m integration` + live portal submission smoke. See memory-archive §G25.8.
+- **Safety Portal Python-side code-complete; deploy + live smoke NEXT SESSION** — `portal_poll.py` is GATED (not loaded as a launchd job yet). Activation punch-list (three tracks): (a) **admin**: dismiss PR-H CodeQL FPs → merge PR-H → set `PORTAL_ADMIN_API_TOKEN` secret + `ITS_PORTAL_ADMIN_TOKEN` Keychain (byte-equal) → apply migration 0006 to live D1 BEFORE redeploy → `npm run deploy` → `portal_admin add-user`; (b) **Box mirror tree**: create "ITS Safety Portal" root Box folder → set `safety_reports.box.portal_root_folder_id` in ITS_Config → `git pull`; (c) **domain**: Cloudflare dashboard custom-domain add for `safety.evergreenmirror.com`. Deploy checklist (existing): (1) Worker secrets (`ITS_PORTAL_INTERNAL_TOKEN` + `ITS_PORTAL_HMAC_SECRET`) + `wrangler deploy`; (2) Mac Keychain mirrors; (3) ITS_Config `worker_base_url`; (4) load `portal_poll` launchd + `TRACKED_JOBS`; (5) `git -C ~/its pull` + reload daemons; (6) unload retired `safety-intake` job; (7) smoke. See memory-archive §G25.8 + §G26.
 - **WPR sheet + `Job Slug` column cleanup** — decommission-by-doc: no runtime reference remains; operator deletes the `WPR_Pending_Review` sheet + `Job Slug` column from `ITS_Active_Jobs` when convenient. Tracked in exec `docs/tech_debt.md`.
 - **Safety Portal frontend CI gap** — no `tsc --noEmit` / `npm run build` CI step for the TS tree. See `docs/tech_debt.md`.
 - **Safety Portal topology RESOLVED** — Cloudflare **Workers + Static Assets** (NOT Pages; Pages in maintenance mode). Blueprint `brief.md` §11 updated to v2. (Closes the prior "topology TBD / mission §11 assumed Pages" item.)
 - **Safety Portal form-catalog mismatch RESOLVED** — PR #164 migrated ITS_Forms_Catalog to 5 parents + 7 variants (12 rows). Original 4-form mismatch entry closed.
 - **WSR rewire code-complete (PRs #173–#177, `025215d`, 2026-06-05):** Python-side Safety Portal pull model fully landed across 5 PRs (all four-part-verified, CodeQL-clean). `shared/portal_client.py` + `box_client.upload_bytes/get_or_create_folder` + `form_pdf.load_definition` + `safety_reports/week_sheet.py` (#173); `intake.process_portal_submission` + `portal_poll.py` GATED (#174); `weekly_generate` deterministic compile — Anthropic narrative RETIRED, `wsr_review.py` added (#175); `weekly_send`/`weekly_send_poll` repointed WPR→WSR, recipients from `ITS_Active_Jobs` at send time, compiled PDF attached (#176); session log + doc-index regen (#177). WPR = decommission-by-doc. `active_jobs.ActiveJob.job_slug` field DROPPED. CodeQL HIGH resolved via `_PortalCreds` named dataclass (tuple-taint root cause — see memory-archive §G25.5). **NOT yet live-verified** — deploy + live smoke = next session. See memory-archive §G25 for full decision/gotcha record.
+- **Safety Portal deploy + Phase-7 batch (PRs #178–#189, all merged, 2026-06-06/07, exec main `f3ad814`):** Phase 6 deploy PRs (#179/#180 wrangler.jsonc + launchd/watchdog wiring) + Phase 7 PRs (#181–#189). Earlier-session PRs (#181–#184) already landed + four-part-verified. This-session PRs: PR-G (#186 `34e271d`) Box-409 fix (`box_client.upload_bytes_or_new_version` + `_find_child_file` — version-on-conflict pattern, live-proven); PR-I (#187 `53c27ac`) Smartsheet sheet styling (`smartsheet_client.apply_column_styles` — **column format via attribute, not dict constructor**; `_resolve_cells` additive `_formats` meta-key; `week_sheet.WEEK_SHEET_STYLES`; `scripts/style_safety_portal_sheets.py` one-time pass — ran live: 3 static + 7 week sheets styled); PR-J (#188 `6c1993d`) custom domain `safety.evergreenmirror.com` declared in `wrangler.jsonc` (NOT deployed — operator activates); PR-K (#189 `ecb06d9`) Box mirror tree schema (`safety_reports/safety_naming.py` shared naming + config-gated `ROOT→per-job→per-week` Box tree in intake + weekly_generate; config gate = `safety_reports.box.portal_root_folder_id` unset → inert); PR-H (#185 `f3ad814`) admin route + session revocation — **merged last** after its 2 CodeQL `py/clear-text-logging` FPs (`portal_admin.py:52` + `:148`) were operator-dismissed (a clean §48 live exercise). Nothing live yet — 3 operator activation tracks remain (admin tokens + migration 0006 + redeploy / Box root folder + config key / `wrangler deploy`). Live actions: one-time styling pass; JOB-000008 "ZZ Portal Proof" DEACTIVATED. See memory-archive §G26.
 
 ### On the horizon
-- **Safety Portal** — **Phase 5 Python-side CODE-COMPLETE** (PRs #173–#177, `025215d`, 2026-06-05). All five Python-side PRs landed four-part-verified, CodeQL-clean. `portal_poll.py` is GATED. **Remaining = deploy + live smoke (next session):** Cloudflare Worker secrets + `wrangler deploy`; Mac Keychain mirrors; ITS_Config `worker_base_url`; load `portal_poll` launchd + watchdog `TRACKED_JOBS`; pull + reload live daemons; retire `safety-intake` job; integration test + live portal submission smoke. Phase 7 = session revocation table (D1 `sessions.revoked_at`). D1 active-jobs dropdown sync deferred to deploy session. **Phase 4 COMPLETE** (PRs #164/#166/#167). **Phase 3 LANDED** (PRs #160/#162: `active_jobs.py` + `safety_week.py`). **Deploy prerequisites:** Cloudflare API token + `HMAC_PAYLOAD_SECRET` + `PORTAL_INTERNAL_API_TOKEN` (Worker secrets) + Keychain mirrors + `wrangler deploy` + custom domain `safety.evergreenmirror.com`. **Requires Workers Paid (~$5/mo).** See memory-archive §G25 for the full as-built decision record.
+- **Safety Portal** — **Phase 6/7 batch fully merged (PRs #178–#189, exec main `f3ad814`, 2026-06-07).** Phase 6 deploy-wiring + Phase 7 features all landed: week-sheet filing relocation, D1 job sync, F22 workspace-membership authority, inline PDF attachments, Box-409 version fix, sheet styling, custom domain declaration, Box mirror tree schema, and the admin route + session revocation (migration 0006). **PR-H (#185) merged** after its 2 CodeQL `py/clear-text-logging` FPs (`portal_admin.py`) were operator-dismissed (a clean §48 exercise). **Nothing is live yet — 3 operator activation tracks remain:** (a) admin route (byte-equal `PORTAL_ADMIN_API_TOKEN`↔`ITS_PORTAL_ADMIN_TOKEN` + migration 0006 to live D1 *before* redeploy + redeploy); (b) Box mirror tree (create the root Box folder + set `ITS_Config` `safety_reports.box.portal_root_folder_id` — unset = inert/legacy); (c) custom domain (`wrangler deploy` / dashboard add). **Phase 5 Python-side CODE-COMPLETE** (PRs #173–#177). Phase 4 COMPLETE (PRs #164/#166/#167). Phase 3 LANDED. **Requires Workers Paid (~$5/mo).** Handover Plan bumped **v8→v9** (portal-user admin-CLI runbook). See memory-archive §G25 + §G26.
 - Email Triage workstream build — now carries Invariant 2 Layer 6 (attachment screening) per the portal pivot reassignment
 - `fail_closed_until` kill-switch mechanism deferred from F07 (Q8 resolution) — currently fail-open by documented design; revisit in Phase 2+ when multi-operator scenario makes a true fail-closed window safe to add.
 - DFR backfill and Portfolio Rollups Reports continued expansion.

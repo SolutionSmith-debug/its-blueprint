@@ -1,17 +1,19 @@
 ---
 type: mission
-version: 2
+version: 3
 status: canonical
-last_verified: 2026-06-05
-last_verified_against: 025215d
-supersedes: workstreams/safety-portal/mission.md@v1
+last_verified: 2026-06-07
+last_verified_against: f3ad814
+supersedes: workstreams/safety-portal/mission.md@v2
 workstream: safety_portal
-tags: [workstream-mission, customer-facing, external-input-surface, external-send-gate, standalone-workspace, pull-transport, clean-break]
+tags: [workstream-mission, customer-facing, external-input-surface, external-send-gate, standalone-workspace, pull-transport, clean-break, workspace-membership-approval, find-or-create, box-mirror]
 ---
 
-# ITS Safety Portal — Mission v2
+# ITS Safety Portal — Mission v3
 
-2026-06-05 — As-built reconciliation. Absorbs the 2026-06-04/05 design+build sessions (Phases 2–4 landed) and the architecture decisions that postdate v1: standalone `ITS — Safety Portal` workspace, Cloudflare **Workers + Static Assets** (not Pages), **Python Option-B** PDF rendering, the **`WSR_human_review`** central approval sheet, **6-digit `AUTO_NUMBER` Job ID** (legacy kebab `Job Slug` retired), **Saturday→Friday** weeks, and **TEXT** recipient columns. Foundation Mission reference bumped v8 → v11.
+2026-06-07 — Deploy + as-built reconciliation (exec PRs #178–#189, verified against exec main `f3ad814`). v3 absorbs the 2026-06-06/07 deploy-session changes that postdate v2: **F22 approval authority = Safety Portal workspace membership** (the `authorized_approvers` allowlist retired — the workspace-as-approval-authority principle is now realized in code; §8); **find-or-create** week-sheet auto-provisioning at the `WORKSPACE_SAFETY_PORTAL` surface + **`ITS_Active_Jobs` → D1 job sync** (the portal job set is single-sourced from the sheet, pushed to D1); rendered PDFs **attached inline** on the reviewer rows; **version-on-conflict** for the recompiled weekly packet; the validation deploy on the operator's **mirror** environment (`safety.evergreenmirror.com`, declared as a Workers custom domain), explicitly distinct from the Evergreen cutover. The full deploy-session batch (PRs #178–#189) is now merged: **PR-K #189 Box-mirrors-Smartsheet** is **landed but config-gated/live-inert** (activates only when the operator sets `safety_reports.box.portal_root_folder_id` — see [brief §9](brief.md#9-filing-box-is-the-system-of-record)), and **Phase 7 admin + session revocation (PR-H #185) is landed** with a 3-part live-activation gate. Three operator activation tracks remain before production (§11). Companion: [2026-06-07 reconciliation session log](../../session-logs/2026-06-07_safety-portal-deploy-reconciliation.md).
+
+**2026-06-05 — As-built reconciliation (v2, retained for provenance).** Absorbed the 2026-06-04/05 design+build sessions (Phases 2–4 landed) and the architecture decisions that postdate v1: standalone `ITS — Safety Portal` workspace, Cloudflare **Workers + Static Assets** (not Pages), **Python Option-B** PDF rendering, the **`WSR_human_review`** central approval sheet, **6-digit `AUTO_NUMBER` Job ID** (legacy kebab `Job Slug` retired), **Saturday→Friday** weeks, and **TEXT** recipient columns. Foundation Mission reference bumped v8 → v11.
 
 **2026-06-05 WSR rewire code-complete (verified against exec `025215d`, PRs #173–#177):** Python-side Safety Portal pull model **fully landed**. `portal_poll.py` GATED pending deploy. WPR = decommission-by-doc (no live runtime reference). Remaining = deploy + live smoke (next session). See memory-archive §G25. · **2026-06-05 transport+clean-break delta (verified against exec `753f12f`, PR #171):** the v2 **email shim is retired** — transport is a **Python PULL model** (send-free Worker D1 queue → Mac-side `portal_poll.py`; §1, §7). Safety intake is **portal-only at launch** (clean break); `WPR_Pending_Review` is **decommissioned** in favor of `WSR_human_review`. Companion: [2026-06-05 transport+clean-break session log](../../session-logs/2026-06-05_safety-portal-transport-cleanbreak.md).
 
@@ -111,6 +113,19 @@ Two consequences are load-bearing doctrine:
 - **Workspace access = approval authority.** Sharing the `ITS — Safety Portal` workspace is the send-gate access control: the people who can review/edit/approve `WSR_human_review` are exactly the workspace's shared collaborators. There is no separate per-sheet ACL to maintain.
 - **The system ships independent of the Forefront/demo structures.** Safety-path code must not depend on non-safety sheets. The Safety Portal can be stood up, demoed, and handed over without the portfolio/operations/archive workspaces. This is why it is a *standalone* workspace rather than a folder inside the five-workspace audience-separated topology of [Operational Standards §23](../../doctrine/operational-standards.md). **Doctrine reconciliation — done:** [Operational Standards v17](../../doctrine/operational-standards.md) (2026-06-05) now acknowledges this sixth, standalone, approval-gated workspace in §23/§24 — doctrine and the as-built are aligned. (Resolves the flag raised in the [2026-06-05 blueprint-update session log](../../session-logs/2026-06-05_safety-portal-blueprint-update.md); the v17 bump was applied in the [transport+clean-break session](../../session-logs/2026-06-05_safety-portal-transport-cleanbreak.md).)
 
+### 8.1 F22 approval authority is realized as workspace membership (PR-E #183)
+
+As of PR-E (#183, exec `595a469`) the v2 principle above is **realized in code** — "sharing IS the gate" is no longer aspirational. The F22 send-gate predicate (`shared/approval_verification.py` `verify_approval` — match the `Approved for Send` cell-history modifier's email against the authorized set) is **unchanged**; what moved is the **source of the authorized set**:
+
+- The authorized-approver set is now resolved **live** from `ITS — Safety Portal` workspace membership — `smartsheet_client.list_workspace_share_emails(WORKSPACE_SAFETY_PORTAL)` reads `GET /workspaces/{id}/shares?includeAll=true` and returns the lowercased emails of every **USER** share (any access level), called by `weekly_send_poll._load_authorized_approvers`.
+- The former **`safety_reports.authorized_approvers` ITS_Config allowlist is retired** (seed removed 2026-06-06; no live code reads such a row). The mechanism is gone; only the *naming* survives (`_load_authorized_approvers`, which now resolves from shares), tombstone comments, and historical session logs.
+- **Fail-closed, never fail-open:** an empty resolved set → `EMPTY_ALLOWLIST` → all sends blocked.
+
+Two edge cases are load-bearing doctrine and must be recorded honestly:
+
+- **Group-share expansion is a known pre-prod gap.** Only USER shares carry an email; **GROUP shares are excluded** (no email field), so a workspace shared *only* to a Smartsheet group resolves to the empty set → all sends blocked. Mitigation today: share with **individuals**; group-membership expansion is a documented follow-up (helper docstring + cutover checklist + a unit test all record it).
+- **Workspace-owner inclusion is *not* handled in code.** The resolver injects no owner and filters no access level — whether the workspace **owner** appears in the approver set is an **unstated dependency on the Smartsheet `/shares` response shape**. This is an open question, not a guarantee; do not assert the owner is covered.
+
 ## 9. Decisions Locked
 
 v1 locked the Q1–Q10 grill-me decisions ([2026-05-25](../../session-logs/2026-05-25_safety-portal-grill.md)); v2 supersedes the rows the build sessions changed. Decisions are non-negotiable for the current phase unless explicitly revisited.
@@ -119,7 +134,7 @@ v1 locked the Q1–Q10 grill-me decisions ([2026-05-25](../../session-logs/2026-
 |---|---|
 | Hosting / deploy | **Cloudflare Workers + Static Assets** (single Worker serves the SPA + same-origin `/api/*`; Cloudflare Pages is in maintenance mode). **Requires Workers Paid (~$5/mo)** — the free plan's 10 ms CPU cap cannot run a secure bcrypt hash. Validation host `safety.evergreenmirror.com`; production on `evergreenrenewables.com`. Supersedes v1's "Cloudflare Pages + Workers." |
 | Authentication | Username + **bcrypt (bcryptjs, cost 10)** password hash, `nodejs_compat`. Long-lived (90-day) sessions, no MFA, no complexity rules. `SESSION_SIGNING_SECRET` is a Workers Secret. Plaintext storage rejected (Q2). |
-| Active-jobs source of truth | Smartsheet **`ITS_Active_Jobs`** in the standalone **`ITS — Safety Portal`** workspace, office-PM-maintained. **`Active / Inactive / Archived` picklist gates the per-job pipeline** — only `Active` jobs run and appear in the portal. Supersedes v1's "Operations workspace." |
+| Active-jobs source of truth | Smartsheet **`ITS_Active_Jobs`** in the standalone **`ITS — Safety Portal`** workspace, office-PM-maintained — the **single source of truth, no hardcoded fallback**. **`Active / Inactive / Archived` picklist gates the per-job pipeline** — only `Active` jobs run and appear in the portal. The portal's D1 dropdown is kept current by a **pipeline push** (`portal_poll` → bearer-gated `POST /api/internal/sync`, full-replace, never-wipe-on-empty; PR-D #182). Supersedes v1's "Operations workspace." |
 | Job key | **`Job ID` = 6-digit Smartsheet `AUTO_NUMBER`** (`JOB-000001`; UI-created — the API cannot make `AUTO_NUMBER` columns). It is the permanent key the pipeline resolves on. **Project Name** is display. The legacy kebab **`Job Slug` is retired** (vestigial). |
 | Recipient routing | Contacts are **TEXT** columns on `ITS_Active_Jobs` (Safety Reports Contact Name/Email + CC 1–5; one email per slot or comma-separated). `MULTI_CONTACT_LIST` is *not* used — it drops external emails on API read-back. `weekly_send` TO = the safety-reports contact; CC = the non-empty CC 1–5. |
 | Forms catalog | **`ITS_Forms_Catalog`** in the same standalone workspace. A **parent/variant catalog** (5 parents + 7 variants live): a no-variant parent renders its own definition; a variant parent collapses its variants under a **third picklist** (JHA supports future job-specific variants the same way). |
@@ -128,7 +143,7 @@ v1 locked the Q1–Q10 grill-me decisions ([2026-05-25](../../session-logs/2026-
 | Week bucketing | **Saturday→Friday** week (`[Job] — week of [date]`). Weekend work rolls to the following Friday; bucketing keys on the form work-date. Supersedes v1's ISO-week framing. |
 | Review + approval | **`WSR_human_review`** — one central sheet in the Safety Portal folder, one row per (job, week): compiled PDF, **editable email body (source of truth for send)**, recipients, `Approve for Scheduled Send` + `Send Now`, auto-stamped Approved By/At. **Review + edit + approve + send happen only here.** Supersedes v1's reliance on `WPR_Pending_Review` in `ITS — Human Review`. |
 | Submit pipeline | **Python PULL transport** (no email shim): send-free Worker D1 queue → Mac-side `portal_poll.py` drains bearer-gated `/api/internal/pending` → **HMAC-verified** (`shared/portal_hmac.py`) → `intake.py` portal-marker branch, **dedup on submission UUID** → files → `POST /api/internal/mark-filed` receipt (**fail-closed**) → portal shows "received & filed." Decision `decision_phase5-portal-transport`. |
-| System of record | **Box**, with a folder tree **mirroring** the Smartsheet job/week hierarchy. Smartsheet rows carry Box links; the compiled weekly PDF also attaches to the review row. Evergreen retains in Box as long as needed (no OSHA-floor gating in our code). |
+| System of record | **Box**, tree **mirrors the Smartsheet job/week hierarchy** (PR-K #189, via the shared `safety_naming` names): root → per-job → per-week → PDFs + packet, find-or-create. **Config-gated/live-inert** — activates only when the operator sets the `ITS_Config` root key `safety_reports.box.portal_root_folder_id`; unset → legacy per-job category fallback. Version-on-conflict is **packet-only** (per-submission keeps suffix-on-conflict). Smartsheet rows carry Box links; the compiled packet attaches inline to the review row. See [brief §9](brief.md#9-filing-box-is-the-system-of-record). Evergreen retains in Box as long as needed (no OSHA-floor gating in our code). |
 
 ## 10. Integration with safety_reports Workstream
 
@@ -142,7 +157,7 @@ v1 locked the Q1–Q10 grill-me decisions ([2026-05-25](../../session-logs/2026-
 | Per-submission **Python PDF render** (Option B), Box filing, week-sheet row write | `safety_reports` |
 | Weekly **compile** (Sat→Fri merge), dual-write to week sheet + `WSR_human_review` | `safety_reports` |
 | `weekly_generate` (draft) + `weekly_send` (gated send, 7 AM Pacific Monday) | `safety_reports` |
-| `shared/approval_verification.py` (F22 row-history check) | `shared/` — protects both workstreams |
+| `shared/approval_verification.py` (F22 cell-history check) + `smartsheet_client.list_workspace_share_emails` (authorized set = workspace membership, §8.1) | `shared/` — protects both workstreams |
 
 The Python pipeline holds the **only** write credentials for Smartsheet and Box; the portal holds none. See [safety_reports mission](../safety-reports/mission.md#mission-carried-forward-from-v5-substance-unchanged) for the end-to-end pipeline scope and [safety_reports brief §What Gets Built](../safety-reports/brief.md#what-gets-built-refreshed-in-v61) for the generation + send module detail. Under the clean break (§8.1), `WPR_Pending_Review` is **decommissioned** in favor of `WSR_human_review`, and the `safety_reports` mission/brief are reconciled accordingly this session. The email *infrastructure* (`graph_client`, `untrusted_content`, `header_forgery`) is **preserved** for the committed [Email Triage](../email-triage/mission.md) workstream — not torn down.
 
@@ -153,8 +168,11 @@ The Python pipeline holds the **only** write credentials for Smartsheet and Box;
 | Phase 2 — front-half | Login + SPA + Worker scaffold | **Landed** (PR #158) |
 | Phase 3 — job model | Live Job-ID resolution, Saturday→Friday rule, legacy slug retired, schema + contacts amendment | **Landed** (PR #160, #162) |
 | Phase 4 — forms | Meta-schema + parent/variant catalog + declarative form definitions; TS display runtime; Python Option-B renderer + equipment tri-state | **Landed** (PR #164, #166, #167) |
-| Phase 5 — submission pipeline | **PR 1** (WSR sheet + PDF merge + `sheet_ids`) **landed** (PR #168); **PR 2** (Worker pull transport + `shared/portal_hmac.py` contract) **landed** (PR #169). In-flight Python rewire (not on main): `portal_poll.py`, `intake.py` portal-marker branch, `weekly_*` rewire onto `WSR_human_review` | **In progress** |
-| Deploy | D1 sync, secrets, Workers Paid-plan upgrade, custom domains | **Pending** |
+| Phase 5 — submission pipeline | Worker pull transport (PR #169) + full Python-side WSR rewire: `portal_poll.py`, `intake.process_portal_submission`, deterministic `weekly_generate`, WSR-repointed `weekly_send`/`weekly_send_poll`, `week_sheet.py` | **Landed** (PRs #168, #169, #173–#177) |
+| Phase 6 — deploy wiring + as-built filing | `portal_poll` launchd + watchdog Check-C (PR-A #179); `wrangler.jsonc` → mirror D1 (PR-B #180); week-sheet filing → `WORKSPACE_SAFETY_PORTAL` find-or-create (PR-C #181); `ITS_Active_Jobs` → D1 sync (PR-D #182); F22 = workspace membership (PR-E #183); inline-PDF attach (PR-F #184); Compile-Now Box-409 → version-on-conflict (PR-G #186); sheet styling (PR-I #187); custom-domain declaration (PR-J #188) | **Landed** (PRs #178–#188) |
+| Phase 7 — admin + revocation | bearer-gated `/api/internal/admin/*` + Mac CLI `portal_admin.py` + server-side `requireSession` disabled-check + migration 0006 | **Landed** (PR-H #185, `f3ad814`) — live-inert until activation |
+| Box-mirror SoR | config-gated Box-mirrors-Smartsheet (`safety_naming` shared names) | **Landed** (PR-K #189, `ecb06d9`) — inert until the `ITS_Config` root key is set |
+| Deploy / activation | Three operator activation tracks remain (all merged-but-inert): (a) admin route — byte-equal tokens + migration 0006 before redeploy + redeploy; (b) Box mirror — create root Box folder + set `safety_reports.box.portal_root_folder_id`; (c) custom domain — `wrangler deploy`. Workers Paid-plan upgrade; Evergreen production cutover is a separate later step | **In flight** |
 
 ## 12. Risks
 
@@ -171,9 +189,9 @@ The Python pipeline holds the **only** write credentials for Smartsheet and Box;
 
 ## Authority
 
-ITS Safety Portal Mission v2, 2026-06-05 canonical. Supersedes v1 (2026-05-25). Companion brief at [`brief.md`](brief.md). Both Foundation invariants restated verbatim from [Foundation Mission v11](../../doctrine/foundation-mission.md).
+ITS Safety Portal Mission v3, 2026-06-07 canonical. Supersedes v2 (2026-06-05). Companion brief at [`brief.md`](brief.md). Both Foundation invariants restated verbatim from [Foundation Mission v11](../../doctrine/foundation-mission.md). Verified against exec main `f3ad814` (deploy-session batch PRs #178–#189 merged). Workstream missions are frontmatter-versioned (not git-tagged). The v3 trigger was met by the F22 approval-authority change (§8.1 — a change to the workspace-as-approval-authority model).
 
-v3 trigger: substantive scope change — authentication-model swap (e.g., SSO), deploy-platform change away from Cloudflare Workers, submission-pipeline replacement, or a change to the standalone-workspace / workspace-as-approval-authority model. Status-overlay updates (v2.1, v2.2) absorb phase progress without scope changes.
+v4 trigger: substantive scope change — authentication-model swap (e.g., SSO), deploy-platform change away from Cloudflare Workers, submission-pipeline replacement, or a further change to the standalone-workspace / workspace-as-approval-authority model. **Open as v3.x status overlays:** the three operator activation tracks (admin route, Box mirror tree, custom domain — all merged-but-inert) and the Evergreen production cutover. Status-overlay updates absorb activation/phase progress without scope changes.
 
 Cross-references:
 - [Foundation Mission v11](../../doctrine/foundation-mission.md) — invariants inherited (restated verbatim in §7).

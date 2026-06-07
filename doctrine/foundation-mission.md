@@ -39,7 +39,7 @@ Carries forward from v7 verbatim. Audience-based access boundaries (operator vs 
 
 - **Successor-Operator** — a trained operator (not a developer: writes no code, performs none of the §§37-41 developer-context operations) who **runs Claude Code himself**, follows the §43 remediation runbooks/checklists, and is trained to recognize and escalate the four HIGH-capability-class categories. He is not a Smartsheet-UI-only approver rubber-stamping Claude-driven actions; he operates CC to carry out the low-capability-class fault set (re-run a daemon, toggle an ITS_Config value, re-send an approval, re-seed a row, clear a stuck lock) and co-resolves the four high-class categories with the Developer-Operator until per-category clearance.
 
-Every use of "operator" in any ITS doc must be classifiable to exactly one of these roles. Developer-context operations are Developer-Operator-only by definition; a Successor-Operator cannot perform them. The operational mechanics of the two-role maintenance model — the three-tier fault model, the Tier-2/Tier-3 escalation boundary, and the per-capability successor-remediation runbook discipline — live in Operational Standards v16 (§§43–44) and the Handover Plan v8; this principle only fixes the role vocabulary and asserts that the distinction is load-bearing, not cosmetic.
+Every use of "operator" in any ITS doc must be classifiable to exactly one of these roles. Developer-context operations are Developer-Operator-only by definition; a Successor-Operator cannot perform them. The operational mechanics of the two-role maintenance model — the three-tier fault model, the Tier-2/Tier-3 escalation boundary, and the per-capability successor-remediation runbook discipline — live in Operational Standards v18 (§§43–44) and the Handover Plan v9; this principle only fixes the role vocabulary and asserts that the distinction is load-bearing, not cosmetic.
 
 # Invariants
 
@@ -151,11 +151,11 @@ v8 implication: trusted-contacts sheet is per-customer (each customer fork has i
 
 - Foundation Mission (this doc, v11) — invariants, principles (including the Developer-Operator / Successor-Operator maintenance-role distinction and the capability-gating-philosophy framing of the Tier-2 boundary), project-level architecture, per-customer-repo invariant.
 
-- Operational Standards v16 — cross-cutting patterns every workstream uses; §43 successor-remediation discipline + §44 Tier-2 repair path (training-enforced boundary).
+- Operational Standards v18 — cross-cutting patterns every workstream uses; §43 successor-remediation discipline + §44 Tier-2 repair path (training-enforced boundary).
 
 - Vision & Roadmap v9 — phase plan with the ship-and-leave / developer-departure threshold and the Phase 1.5 security-hardening precondition.
 
-- Handover Plan v8 — Phase 1.5 cutover + handover runbook with the three-tier fault-response model and operator-role abstraction.
+- Handover Plan v9 — Phase 1.5 cutover + handover runbook with the three-tier fault-response model and operator-role abstraction.
 
 - Permissions Ask v5 — cutover-phase admin grants; Successor-Operator (EDITOR) vs Developer-Operator (ADMIN) split.
 
@@ -177,4 +177,4 @@ v12 trigger: substantive invariant principle change, business-model change, any 
 
 v11.x status absorption (2026-06-01, verified against exec 585823d): the through-line's parenthetical Tier-1 self-heal reference is corrected. The mechanism earlier called "forensic-audit Check H" / "Check H heartbeat-staleness" was never built as a separate check; the implemented staleness floor is the watchdog **Check C marker-file** check, which already covers all four tracked daemons, and the external **UptimeRobot** ping (audit F16) is live. The lone residual is the weekly_generate Friday-crash **catch-up** (exec follow-on). Per the v12 trigger this is a Tier-1 self-heal **status update**, explicitly absorbed at v11.x with **no framing change and no version bump**; the prior "Check H" wording is recorded here for provenance.
 
-Companion to Op Stds v16, V&R v9, Handover Plan v8, Excellence Roadmap v4, FSU v6.5, Memory Archive v5.
+Companion to Op Stds v18, V&R v9, Handover Plan v9, Excellence Roadmap v4, FSU v6.5, Memory Archive v5.

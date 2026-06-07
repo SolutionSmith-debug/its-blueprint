@@ -2,8 +2,8 @@
 type: reference
 version: 5
 status: canonical
-last_verified: 2026-06-05
-last_verified_against: cf86a9e
+last_verified: 2026-06-07
+last_verified_against: f3ad814
 supersedes: references/memory-archive.md@v4
 workstream: null
 tags: [restoration, operational-detail, post-compaction-recovery]
@@ -1328,3 +1328,100 @@ The following must happen before the rewired code is live — the `portal_poll` 
 ### §G25.9 — week_sheet.py: Saturday-keyed per-(job,week) sheet
 
 `safety_reports/week_sheet.py` creates (idempotently) one Smartsheet sheet per (job_slug, week_saturday) with a stable, predictable title (`<Job Slug> — Week of <YYYY-MM-DD>`). Columns are built via the Smartsheet API at first creation; idempotent on re-run. The sheet is the UUID-dedupe surface AND the read-only Rollup snapshot written by `weekly_generate`. UUID column is TEXT (not AUTO_NUMBER — the AUTO_NUMBER constraint from §6 applies here too; the UUID is a portal-supplied string, not a system counter).
+
+## §G26 — 2026-06-07 Safety Portal deploy-session reconciliation (exec PRs #178–#189)
+
+### Summary
+
+Blueprint-side and execution-side reconciliation capturing the **deploy-session + Phase-7 batch** — exec PRs **#178–#189, all merged; exec main HEAD `f3ad814`** (PR-H #185 admin route merged last, after its 2 CodeQL `py/clear-text-logging` FPs were operator-dismissed). §§26.1–26.9 were verified against exec code by a 13-agent verification pass; §26.10 (PR-I/J/K) + §26.11 (PR-H merge roll-forward) are the closures. Several ledger statements were corrected, flagged ⚠. Blueprint docs reconciled this cycle: safety-portal mission v2→**v3** + brief v2→**v3**; safety-reports mission v5.4→**v5.5** + brief v6.4→**v6.5**; Operational Standards v17→**v18** (new §§45–49); Handover Plan v8→**v9** (the portal-user admin-CLI runbook, now that PR-H merged); this §G26; the email-triage forward-reference; info-gap; a 2026-06-07 planning session log. Workstream/reference docs are frontmatter-versioned (not git-tagged); doctrine tags this cycle: `operational-standards-v18`, `handover-plan-v9`.
+
+### §G26.1 — The PR ledger (#178–#189, all merged; exec main `f3ad814`)
+
+| PR | Slug | What landed | Exec SHA |
+|---|---|---|---|
+| #178 | — | UI: drop stray "+ Add row" button | `e7b564d` |
+| #179 | PR-A | `portal_poll` launchd plist + `install.sh` wiring + watchdog Check-C | `f858334` |
+| #180 | PR-B | `wrangler.jsonc` → live **mirror** D1 (`924f142b-…`, `its-safety-portal-db`, ENAM) | `df549df` |
+| #181 | PR-C | week-sheet filing → `WORKSPACE_SAFETY_PORTAL` surface (find-or-create) | `361bbb9` |
+| #182 | PR-D | `ITS_Active_Jobs` → D1 sync (`POST /api/internal/sync` + portal-poll push) | `053d627` |
+| #183 | PR-E | F22 approval authority = workspace membership (allowlist retired) | `595a469` |
+| #184 | PR-F | rendered PDFs attached inline on Submission/Rollup/WSR rows | `b320a24` |
+| #186 | PR-G | Compile-Now Box-409 → version-on-conflict (packet path) | `34e271d` |
+| #185 | PR-H | Phase 7 admin route + session revocation (merged last, after CodeQL FP dismissal) | `f3ad814` |
+| #187 | PR-I | Smartsheet sheet styling (`apply_column_styles`; `_formats` meta-key; `WEEK_SHEET_STYLES`; one-time styling pass) | `53c27ac` |
+| #188 | PR-J | `wrangler.jsonc` custom domain `safety.evergreenmirror.com` (NOT deployed) | `6c1993d` |
+| #189 | PR-K | `safety_naming.py` shared naming + config-gated Box mirror tree (`ROOT→per-job→per-week`) | `ecb06d9` |
+
+### §G26.2 — Deploy: mirror/validation, NOT the Evergreen cutover
+
+`wrangler.jsonc` binding `DB` points at the operator's **mirror/validation** D1 `its-safety-portal-db` (`database_id 924f142b-c812-49fd-a262-2eb6fb34fe95`, region ENAM); the all-zeros placeholder is gone (PR-B). The Cloudflare **account** is supplied at deploy via `CLOUDFLARE_ACCOUNT_ID` (no committed account id; "account = mirror" is asserted by the D1 comments + the `safety.evergreenmirror.com` custom-domain choice, not a hard-coded field). **"Live" = the mirror is functional + admin-controllable + edge-case-proven — NOT the Evergreen cutover.** Production (`evergreenrenewables.com`, Evergreen-owned fresh Cloudflare account, `safety.evergreenrenewables.com` via subdomain NS-delegation) remains a separate later step (unchanged from §G23.2). `portal_poll` is now a real launchd daemon (`org.solutionsmith.its.portal-poll`, `StartInterval` 60 s, `RunAtLoad=false`, Background, send-free), watchdog Check-C marker `safety_portal_poll.last_run` on a **5-min** window — **this closes §G25.8 item 4** (TRACKED_JOBS registration was a deferred item, done in PR-A; a stale "deferred" comment lags in `portal_poll.py:111-113`, exec tech-debt).
+
+### §G26.3 — Secret map (verified as-built; corrects the v2 brief names)
+
+Worker Secret ↔ macOS Keychain mirror (byte-equal where mirrored):
+
+| Worker Secret | Keychain | Purpose | Unset |
+|---|---|---|---|
+| `PORTAL_INTERNAL_API_TOKEN` | `ITS_PORTAL_INTERNAL_TOKEN` | `/api/internal/*` bearer (drain, mark-filed, sync) | 401 |
+| `HMAC_PAYLOAD_SECRET` | `ITS_PORTAL_HMAC_SECRET` | per-submission HMAC | 503 (fail-closed) |
+| `SESSION_SIGNING_SECRET` | Worker-only (no mirror) | session cookie | — |
+| `PORTAL_ADMIN_API_TOKEN` | `ITS_PORTAL_ADMIN_TOKEN` | **PR-H #185 (landed)** — admin route, privilege-separated from the poller token; set byte-equal at activation | 401 |
+
+⚠ The v2 safety-portal brief named these `HMAC_SECRET` / `INTERNAL_BEARER_TOKEN` — **stale**; the as-built names are above (v3 corrected). Send-leg seeds are **`ITS_Config` Smartsheet rows** (not files): `safety_reports.weekly_send.from_mailbox` (`safety@evergreenmirror.com`), `.scheduled_send_local` (`"MON 07:00"`, Pacific), `.polling_enabled` (`true`); the `.polling_enabled` suffix is per-daemon (`weekly_send` / `portal_poll` / `intake`).
+
+### §G26.4 — Box filing: as-built vs the planned PR-K mirror ⚠ (ledger corrected)
+
+⚠ The ledger described the Box-mirrors-Smartsheet model as if decided/known; it was **not in code at `34e271d`**. **As-built at `34e271d`:** per-submission PDF → existing email-path category subfolder (`PORTAL_FORM_CATEGORY` → `BOX_SUBPATH_BY_CATEGORY`, suffix-on-409); packet → per-week `ITS`-prefixed folder with version-on-conflict.
+
+**PR-K (`ecb06d9`) landed:** the Box mirror-tree model is now in code, config-gated. When `safety_reports.box.portal_root_folder_id` is set, **both** per-submission and packet filings use the new `ROOT→per-job→per-week` tree via `safety_naming.py` naming + `box_client.get_or_create_folder`. Category subfolders are dropped in the new path. The legacy path remains for email-intake. The **config key is `portal_root_folder_id`** (not `safety_portal_root_folder_id`); the planned folder id `388017263015` in the ledger was never set in code — the operator creates the Box root folder and provides the actual id at activation.
+
+### §G26.5 — F22 approval authority = workspace membership ⚠ (owner edge case corrected)
+
+PR-E (#183): the F22 send-gate predicate (`approval_verification.verify_approval`, cell-history modifier match) is **unchanged**; the **source** of the authorized set moved from the `safety_reports.authorized_approvers` ITS_Config allowlist (seed **removed** 2026-06-06; no live reader) to **live workspace membership** — `smartsheet_client.list_workspace_share_emails(WORKSPACE_SAFETY_PORTAL)` (`GET /workspaces/{id}/shares?includeAll=true`, lowercased USER-share emails, any access level), via `weekly_send_poll._load_authorized_approvers`. Empty set → `EMPTY_ALLOWLIST` → fail-closed. **Mechanism gone; naming survives** (`_load_authorized_approvers` resolves from shares now; `parse_authorized_actors` retained-unused; tombstone comments + historical logs). Edge cases: **(a) group-share expansion is a known pre-prod gap** — GROUP shares carry no email → excluded → a group-only share fail-closes (mitigation: share with individuals; documented in helper docstring + cutover checklist + a unit test). **(b) ⚠ workspace-OWNER inclusion is NOT handled in code** — no owner-injection, no access-level filter; whether the owner appears in the set is an **unstated dependency on the Smartsheet `/shares` response**. The ledger framed owner-inclusion as a recorded edge case; it is not — record it as an open question, not a guarantee.
+
+### §G26.6 — Email-intake path retained as the Email-Triage seed (load-bearing)
+
+The clean break retired **only** the safety email *input*, not the infrastructure. **Resident in `main`, do not decommission:** preserved-**dormant** (no live caller, parses, not tombstoned) = `week_folder.py` (+ `FIELD_REPORTS_FOLDER_BY_PROJECT` consumer), `intake.process_message` + Graph fetch/classify/extract stages, `graph_client.py` / `untrusted_content.py` / `header_forgery.py`; **actively LIVE shared infra** (reused by the *portal* path, so doubly load-bearing) = `project_routing.get_folder_id` + `defaults.BOX_PROJECT_FOLDERS` (the Box-folder routing with its deliberate hardcoded fallback — ⚠ distinct from `active_jobs`, which has none) and the report-category machinery (`BOX_SUBPATH_BY_CATEGORY` / `VALID_CATEGORIES` via `PORTAL_FORM_CATEGORY`). **Tombstoned (only one):** `intake_poll.py` (`NotImplementedError`, PR #171). Rationale (recorded in `intake_poll.py`'s own docstring + here + the email-triage forward-ref): the Graph plumbing is workstream-agnostic and seeds the committed **Email Triage** workstream — so no future session decommissions it as "clean-break cleanup."
+
+### §G26.7 — Doctrine generalizations this cycle (Op Stds v18, §§45–49)
+
+Five as-built patterns generalized into Operational Standards v17→**v18** (co-resolution bump; new §§): **§45 find-or-create-not-strand** (portal artifacts auto-provision; transient failure re-pulls, permanent surfaces to the Review Queue — never a silent write-to-nowhere; from PR-C/PR-K); **§46 workspace-membership = approval authority** (the F22 mechanism + the two edge cases above); **§47 Box version-on-conflict** (deterministic-name re-uploads → new Box version; distinct-document uploads keep suffix-on-conflict); **§48 CodeQL false-positive handling** ⚠ (per-alert dismissal with a recorded reason + a genuine-fix-not-blanket-suppression rule; the dismiss-block hook is **agent-scoped** in `codeql-fp-triager.md` frontmatter, **NOT** in `settings.json` which wires only `block-dangerous-git` globally — the ledger's "live dismiss-block" is real but agent-scoped; the per-alert/inline-comment/never-per-file-suppress rule was **previously uncodified** and is newly written, not as-built); **§49 preservation-for-future-workstream** (the §G26.6 email-retain rationale generalized — extends §14 preservation-over-refactor). See the doctrine for the canonical text.
+
+### §G26.8 — Confirmed invariants (grounded this cycle)
+
+- `active_jobs` is the **single source of truth** for the portal job set — **no hardcoded fallback** (read miss → empty set → portal-poll skips the push, never wipes the dropdown). Contrast `project_routing`/`BOX_PROJECT_FOLDERS`, which deliberately keeps a fallback.
+- **Recipient resolution** = sheet-sourced at send time (`active_jobs.get_job`; TO = Safety Reports Contact, CC 1–5) + **surface-not-strand**: unresolvable job or empty/invalid TO → `Send Status = HELD` + WARN, excluded from poller re-dispatch — never a silent send or crash.
+- `shared/safety_week.py` is the **single Saturday→Friday** week helper (`_SATURDAY=5`, walk-back-to-Saturday), used by intake / weekly_generate / week_sheet / watchdog — ⚠ distinct from the Monday-ISO `week_folder.py` scaffold (different concern; do not conflate).
+- Inline-PDF attaches (PR-F) are **supplementary + best-effort**; **Box stays SoR** (Box-link cells unchanged, compile still reads PDFs from Box; attach failure → WARN `row_pdf_attach_failed`, never fails the filing/compile).
+
+### §G26.9 — Phase 7 admin (PR-H #185): LANDED on exec main `f3ad814` (byte-equal to the verified branch)
+
+Merged into `main` (squash-merge; the 5 Phase-7 files are byte-identical to the verified branch commit `4916a57`): bearer-gated `POST/GET /api/internal/admin/users[/reset|/disable|/enable]` under `requireAdminToken` + the **separate** `PORTAL_ADMIN_API_TOKEN` (privilege separation); Mac CLI `portal_admin.py` with verbs **`add-user`/`reset-password`/`disable-user`/`enable-user`/`list-users`** (⚠ not the literal `provision/reset/disable/enable/list` of the ledger); backend `bcrypt.hash(pw,10)` (plaintext never stored/logged; the CLI prints status + known args only); `requireSession` per-request `SELECT disabled FROM users WHERE username=?` → `401 revoked` (fail-closed) = server-side session revocation; migration `0006_add_user_disabled.sql` (`disabled INTEGER NOT NULL DEFAULT 0`) with an **order dependency** (apply to live D1 BEFORE the reading Worker deploys, else every session 401s). **The merged code is live-inert until the 3-part activation gate:** (1) set `PORTAL_ADMIN_API_TOKEN` (Worker) + `ITS_PORTAL_ADMIN_TOKEN` (Keychain) byte-equal; (2) apply 0006 to live D1 before redeploy; (3) redeploy the Worker. The admin-CLI is the successor-operator's portal user provision/deprovision runbook — now codified in **[Handover Plan v9](../doctrine/handover-plan.md) Step 8**.
+
+**PR-H CodeQL block (resolved):** CI GREEN except 2 `py/clear-text-logging` FPs (`portal_admin.py:52` + `:148`) — interprocedural taint from bearer token through `admin_request`'s return value; refactor cleared 1 of 3 (stopped echoing raw response dict); remaining 2 unfixable without contorting correct code. Resolution (a clean live exercise of the §48 doctrine): operator ran `codeql-fp-triager` → applied the 2 dismissals in the GitHub UI (CC hook-blocked) → PR-H merged at `f3ad814`. Not one of the three auto-dismiss patterns; `codeql-fp-triager` evaluated it explicitly. The exec-side info-gap captured the pattern (interprocedural taint through a shared request fn on an operator CLI) + the merge-serialization gotcha (require-up-to-date-branch serialized the #185–#189 batch).
+
+### §G26.10 — PR-I/J/K landed (exec HEAD `ecb06d9`, 2026-06-07)
+
+The three PRs that were "in flight, not yet opened" at §G26.1 write time all landed this session:
+
+**PR-I (#187 `53c27ac`) — Smartsheet sheet styling:**
+- `smartsheet_client.apply_column_styles(sheet_id, col_specs)` — post-create column width + format. Key SDK-vs-Live finding: **column FORMAT string MUST be set via the model ATTRIBUTE** (`col.format = "..."`) not the dict constructor (silently dropped; column width is safe either way).
+- `_resolve_cells` additive `_formats` meta-key: per-cell format at write time (skip `_`-prefixed keys, attach `Cell.format`). Rows without `_formats` are byte-identical. Enables Status-cell coloring as a substitute for UI-only conditional-format rules.
+- Palette from `GET /2.0/serverinfo` `.formats.color`: index 38 = `#237F2E` (dark green), 7 = `#E7F5E9` (light green), 18 = `#E5E5E5` (gray).
+- `scripts/style_safety_portal_sheets.py` one-time pass — ran live: 3 static sheets (`ITS_Active_Jobs`, `ITS_Forms_Catalog`, `WSR_human_review`) + 7 week sheets.
+- `week_sheet.WEEK_SHEET_STYLES` constant (widths + bold dark-green primary + status-cell coloring Active=green/Superseded=gray) applied at `ensure_week_sheet` time going forward.
+
+**PR-J (#188 `6c1993d`) — custom domain:** `wrangler.jsonc` `routes` entry with `custom_domain: true` for `safety.evergreenmirror.com`. NOT deployed — operator activates via Cloudflare dashboard custom-domain add + `npm run deploy`.
+
+**PR-K (#189 `ecb06d9`) — Box schema mirrors Smartsheet schema:**
+- `safety_reports/safety_naming.py` — single source of truth for Box + Smartsheet naming (`job_folder_name`, `week_label`, `CFG_BOX_PORTAL_ROOT` key name). Both `intake` and `weekly_generate` import from it; `week_sheet` delegates to it.
+- Config-gate pattern: `safety_reports.box.portal_root_folder_id` in ITS_Config — unset/empty → legacy path (current behavior unchanged); set to the root folder ID → new `ROOT→per-job→per-week` Box mirror tree. **Merging and pulling is inert** until the operator creates the Box root folder and sets the config value.
+- `intake._resolve_portal_box_folder` + `weekly_generate._ensure_its_week_folder` both have the gated branch. Legacy `project_routing`/`BOX_PROJECT_FOLDERS` path preserved for the email-intake dormant path.
+- Live SDK-vs-Live nesting round-trip verified.
+- Pre-activation sandbox filings are orphans under the old category subfolders — tracked in `docs/tech_debt.md` ("Pre-mirror-tree portal Box filings are sandbox orphans").
+
+**Live actions this session:** one-time styling pass (10 sheets); JOB-000008 "ZZ Portal Proof" DEACTIVATED (Active → Inactive in ITS_Active_Jobs).
+
+### §G26.11 — PR-H merged; blueprint rolled forward to exec main `f3ad814` (2026-06-07 close)
+
+The §G26.1–§G26.10 capture above was written when PR-H (#185) was still OPEN at `ecb06d9`. PR-H then merged at **`f3ad814`** (the 2 `py/clear-text-logging` FPs were operator-dismissed per §48; CLI verbs `add-user`/`reset-password`/`disable-user`/`enable-user`/`list-users`, byte-equal to the verified branch — see §G26.9). So **all four deploy-batch PRs (#185 PR-H, #187 PR-I, #188 PR-J, #189 PR-K) are merged**, and the blueprint's `last_verified_against` for the safety docs + Op Stds + memory-archive is **`f3ad814`**. Net activation state: nothing is live yet — three operator **activation tracks** remain, all merged-but-inert: **(a) admin route** (set byte-equal admin tokens, apply migration 0006 to live D1 *before* redeploy, redeploy); **(b) Box mirror tree** (create the root Box folder, set `ITS_Config` `safety_reports.box.portal_root_folder_id`); **(c) custom domain** (`wrangler deploy` / dashboard add). PR-H merging realized the deferred Handover trigger: **Handover Plan v8 → v9** now carries the full successor-operator portal-user provision/deprovision runbook (Step 8). The earlier §G26.4 "as-built at `34e271d`" lines are retained as the pre-PR-K historical baseline.

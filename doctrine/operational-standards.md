@@ -1,19 +1,19 @@
 ---
 type: doctrine
-version: 17
+version: 18
 status: canonical
-last_verified: 2026-06-05
-last_verified_against: 753f12f
-supersedes: doctrine/operational-standards.md@v16
+last_verified: 2026-06-07
+last_verified_against: f3ad814
+supersedes: doctrine/operational-standards.md@v17
 workstream: null
-tags: [push-vs-record, picklist-hardening, attachment-screening, polling-daemon, sdk-vs-live, cc-tooling, fork-security, pii-logging, actions-version-discipline, code-self-documentation, successor-operator, tier-2-repair, successor-remediation, training-bounded-co-resolution, workspace-topology, standalone-workspace]
+tags: [push-vs-record, picklist-hardening, attachment-screening, polling-daemon, sdk-vs-live, cc-tooling, fork-security, pii-logging, actions-version-discipline, code-self-documentation, successor-operator, tier-2-repair, successor-remediation, training-bounded-co-resolution, workspace-topology, standalone-workspace, find-or-create, workspace-membership-approval, box-version-on-conflict, codeql-fp-handling, preservation-for-future-workstream]
 ---
 
-**ITS Operational Standards v17**
+**ITS Operational Standards v18**
 
-2026-06-05 — §23/§24 Workspace Topology: sixth standalone workspace (ITS — Safety Portal) acknowledged
+2026-06-07 — §§45–49 added: five as-built Safety Portal deploy-session patterns generalized to doctrine
 
-*v17 (2026-06-05): §23/§24 now acknowledge the Safety Portal's **standalone, approval-gated workspace** (`ITS — Safety Portal`) as an additive, deliberately-scoped exception to the five-workspace audience-separation model — its governing principle is **workspace-membership = approval authority**, and it is self-contained so the safety subsystem ships and hands over independently. Every other section and the audience-separation principle itself carry forward verbatim from v16. — v16 (2026-06-01): The Developer-Operator / Successor-Operator role split, §43, §44's repair-path/escalation structure, and the kill-switch reframe all carry forward. v16 removes the §44 "non-developer-safe enforcement layer" that v15 named as a hard pre-cutover BUILD GAP — there is no structural maintenance enforcement layer and none is built or required. The Tier-2 boundary holds by the trained operator's judgment, the both-rule, and co-resolution with the Developer-Operator until per-category clearance. The Successor-Operator is redefined as a trained operator who runs Claude Code himself (not a Smartsheet-UI-only approver). The Tier-1 self-heal gap survives as a standalone pre-cutover gate (its stale "Check H" status corrected to the implemented Check C marker-file floor in a v16.x absorption — see Authority). No execution-layer mechanism is asserted as built.*
+*v18 (2026-06-07, verified against exec main `f3ad814`): five new sections generalize patterns proven in the Safety Portal deploy-session cluster (exec PRs #178–#189, all merged). **§45 find-or-create-not-strand** (pipeline artifacts auto-provision; transient failure re-pulls, permanent surfaces to the Review Queue — never a silent write-to-nowhere). **§46 workspace-membership = approval authority** — the in-code F22 realization of the §23 principle (approver set resolved live from workspace shares; allowlist retired; fail-closed; the group-share gap and the unasserted owner-inclusion recorded honestly). **§47 Box version-on-conflict** for deterministic-name re-uploads (distinct-document uploads keep suffix-on-conflict). **§48 CodeQL false-positive handling** (per-alert dismissal with a recorded reason; never blanket/per-file suppression of a secret-logging rule; the propose-only triager + agent-scoped dismiss-block hook — newly codified, the rule was previously tooling+memory only). **§49 preservation-for-a-committed-future-workstream** (extends §14 — the Email-Triage email-path retain rationale). Every prior section and the audience-separation principle carry forward verbatim from v17. · v17 (2026-06-05): §23/§24 now acknowledge the Safety Portal's **standalone, approval-gated workspace** (`ITS — Safety Portal`) as an additive, deliberately-scoped exception to the five-workspace audience-separation model — its governing principle is **workspace-membership = approval authority**, and it is self-contained so the safety subsystem ships and hands over independently. Every other section and the audience-separation principle itself carry forward verbatim from v16. — v16 (2026-06-01): The Developer-Operator / Successor-Operator role split, §43, §44's repair-path/escalation structure, and the kill-switch reframe all carry forward. v16 removes the §44 "non-developer-safe enforcement layer" that v15 named as a hard pre-cutover BUILD GAP — there is no structural maintenance enforcement layer and none is built or required. The Tier-2 boundary holds by the trained operator's judgment, the both-rule, and co-resolution with the Developer-Operator until per-category clearance. The Successor-Operator is redefined as a trained operator who runs Claude Code himself (not a Smartsheet-UI-only approver). The Tier-1 self-heal gap survives as a standalone pre-cutover gate (its stale "Check H" status corrected to the implemented Check C marker-file floor in a v16.x absorption — see Authority). No execution-layer mechanism is asserted as built.*
 
 # Purpose
 
@@ -777,7 +777,62 @@ The guard hooks that exist today (`.claude/hooks/`: block-codeql-dismiss, block-
 
 The Tier-1 self-heal gap (the Check C marker-file staleness floor, §2 — earlier called "Check H") remains a real pre-cutover gate on its own — narrowed to the weekly_generate Friday-crash catch-up now that Check C covers all four tracked daemons and the F16 ping is live; it is no longer coupled to any Tier-2 enforcement layer (there is none). The Tier-2 pre-cutover readiness gate is instead the §44 low-capability-class action set implemented as discrete, tested, non-escalating operations + §43 runbooks for the top fault classes + the trained-operator / demonstrated-supervised-repair gate (Handover Plan v8 Pre-Cutover Conditions; V&R v9). Tracked in execution-layer tech debt (§36). (The "both" rule above — novel OR high-class escalates to Tier 3 — is the steady-state safety default.)
 
+# §45 (NEW) — Find-or-Create, Not Look-Up-or-Strand
+
+Pipeline artifacts a workflow depends on (Smartsheet folders + sheets, Box folders) are **auto-provisioned by find-or-create**, not looked up against a hardcoded map that strands the work on a miss. Canonical realization: the Safety Portal week-sheet path (PR-C #181, `safety_reports/week_sheet.py`) find-or-creates a per-job folder at the **surface of `WORKSPACE_SAFETY_PORTAL`** (a sibling of the `Safety Portal` / `Form Catalog` folders, not nested inside `FOLDER_SAFETY_PORTAL`), then the per-week sheet, then the row — replacing the `FIELD_REPORTS_FOLDER_BY_PROJECT` per-project map and its `KeyError → strand` branch.
+
+## Rules
+
+- **Re-find after create, tolerate races.** A concurrent create surfaces as a WARN-logged duplicate (`*_race_duplicate`), never a crash.
+- **Failure surfaces, never silent.** A transient provisioning failure (`SmartsheetError` / `BoxError` on create) soft-fails the unit of work so it **re-pulls / retries** next cycle; a permanent or structural refusal routes to `ITS_Review_Queue`. There is no silent write-to-nowhere.
+- **No hardcoded artifact map on the auto-provision path.** A *declared* per-customer-fork seed (e.g. `BOX_PROJECT_FOLDERS`, the Box-folder routing fallback) is the allowed, documented exception; the job roster (`active_jobs`) has none (a read miss returns the empty set → the consumer surfaces, never guesses).
+
+Generalizes the PR-C / PR-K provisioning pattern. Origin: [Safety Portal brief §3](../workstreams/safety-portal/brief.md).
+
+# §46 (NEW) — Workspace Membership = Approval Authority (F22 mechanism)
+
+For a self-contained, approval-gated workspace (§23 — the Safety Portal), the **authorized-approver set is resolved live from workspace share membership**, not a maintained allowlist: *sharing the workspace IS granting approval authority.* The F22 send-gate predicate (the cell-history modifier-email match, `shared/approval_verification.py`) is unchanged; only the **source** of the authorized set moves — to `smartsheet_client.list_workspace_share_emails(workspace_id)` (`GET /workspaces/{id}/shares`, the lowercased emails of every USER share, any access level). The former ITS_Config `safety_reports.authorized_approvers` allowlist is retired (PR-E #183).
+
+## Invariants
+
+- **Fail-closed, never fail-open.** An empty resolved set blocks all sends (`EMPTY_ALLOWLIST`).
+- **Group-share gap (known, pre-prod).** Only USER shares carry an email; GROUP shares are excluded — a workspace shared *only* to a Smartsheet group resolves to the empty set → all sends blocked. Mitigation today: share with **individuals**; group-membership expansion is a documented follow-up.
+- **Owner inclusion is not asserted.** The resolver injects no workspace owner and filters no access level — whether the owner appears in the set is a dependency on the Smartsheet `/shares` response shape, not a coded guarantee. Do not document the owner as covered; it is an open question.
+
+This is the in-code realization of the §23 *workspace-membership = approval authority* principle. Origin: [Safety Portal mission §8.1](../workstreams/safety-portal/mission.md#81-f22-approval-authority-is-realized-as-workspace-membership-pr-e-183).
+
+# §47 (NEW) — Box Version-on-Conflict for Deterministic-Name Re-Uploads
+
+Content re-generated under a **deterministic filename** (the weekly compiled packet — Compile-Now and late-submission recompiles produce the same name) uploads a **new Box version** on a 409 name-conflict (`box_client.upload_bytes_or_new_version` → resolve the existing file → `update_contents`), preserving Box's file-version history — the System of Record — rather than 409-failing the recompile or accumulating suffixed copies. A 409 whose conflicting file then vanishes **re-raises** (no silent swallow).
+
+## Boundary
+
+- **Distinct documents keep suffix-on-conflict.** The per-submission upload path retains `upload_bytes` + suffix-on-409 — each amend is a genuinely different document, not a new version of one. Version-on-conflict is for the *same logical artifact re-rendered*, not for distinct artifacts.
+
+Origin: PR-G #186, [Safety Portal brief §9](../workstreams/safety-portal/brief.md#9-filing-box-is-the-system-of-record).
+
+# §48 (NEW) — CodeQL False-Positive Handling
+
+Verified false positives are dismissed **per-alert with a recorded reason** (keeping the rule live); rules are **never blanket-suppressed**, and a secret-logging rule is **never** silenced via a per-file CodeQL config on a secrets-handling file. Prefer a **genuine fix over a suppression** wherever the alert points at real hygiene (e.g. the `_PortalCreds` named-dataclass refactor that resolved a `clear-text-logging-sensitive-data` HIGH — memory-archive §G25.5).
+
+## Mechanism (as-built)
+
+- **Per-alert dismissal:** `gh api -X PATCH .../code-scanning/alerts/<id> -f state=dismissed -f dismissed_reason=false_positive -f dismissed_comment="<pattern>: <rationale>"` — auditable, the rule stays enabled. Add an inline code comment at the FP site where it aids the next reader.
+- **`codeql-fp-triager` is PROPOSE-ONLY.** It surfaces candidate dismissals (the 3 known weekly FP patterns — see `references/claude-code-info-gap.md §5` / memory-archive §G7.4) with quoted evidence; the **operator applies** them. A `PreToolUse` hook (`.claude/hooks/block-codeql-dismiss.sh`) structurally blocks any `code-scanning … dismiss` command **inside that agent** — wired **agent-scoped in the agent frontmatter, not globally in `settings.json`** (which wires only `block-dangerous-git`), so it protects the subagent while the operator's own session can still dismiss manually (consistent with the §44 guard-hook note).
+
+Codified this cycle: the rule was previously enforced by tooling + memory but not stated as doctrine.
+
+# §49 (NEW) — Preservation for a Committed Future Workstream
+
+Extends §14 (preservation-over-refactor). When a clean-break retires an *input or trigger* but the underlying *infrastructure* is workstream-agnostic and a **committed future workstream** depends on it, the infrastructure is **retained in-tree, not decommissioned** — only the superseded entry-point is tombstoned. Record the retention rationale (which modules, why, for whom) so a later "cleanup" session does not delete the seed.
+
+## Canonical instance
+
+The Safety Portal clean-break retired the email-PDF *safety intake*: only `intake_poll.py` is tombstoned (`NotImplementedError`, PR #171). Retained as the **Email Triage** seed — `week_folder.py` + `intake.process_message` + the Graph fetch/classify/extract stages (preserved-dormant); `graph_client` / `untrusted_content` / `header_forgery` and `project_routing` / `BOX_PROJECT_FOLDERS` / the report-category machinery (actively-live shared infra, also reused by the portal Box path). Rationale recorded in `intake_poll.py`'s docstring, memory-archive §G26, and the [Email Triage mission](../workstreams/email-triage/mission.md) forward-reference.
+
 # Authority
+
+Operational Standards **v18**, 2026-06-07 (verified against exec main `f3ad814`; the full deploy-session batch PRs #178–#189 merged, including PR-H #185 admin route and PR-K #189 Box-mirror). §§45–49 added — find-or-create-not-strand (§45); workspace-membership = approval authority, the in-code F22 realization of the §23 principle (§46); Box version-on-conflict for deterministic-name re-uploads (§47); CodeQL false-positive handling (§48, newly codified — previously tooling+memory only); preservation-for-a-committed-future-workstream, extending §14 (§49). These generalize as-built patterns from the Safety Portal deploy-session cluster (exec PRs #178–#189); the verification corrected several ledger claims before codification (owner-inclusion is *not* asserted in §46; the §48 dismiss-block hook is agent-scoped, not global; PR-K's Box root is the `ITS_Config` key `safety_reports.box.portal_root_folder_id`, not a hardcoded id). **Every prior section (§§1–44) and the audience-separation principle itself carry forward verbatim from v17.** v17 retires on acceptance of v18. Canonical git tag: `operational-standards-v18`.
 
 Operational Standards **v17**, 2026-06-05 (verified against exec `753f12f`, PR #171). **§23/§24 sixth-workspace addition:** §23 now acknowledges the Safety Portal's **standalone, approval-gated workspace** (`ITS — Safety Portal`) as a deliberately-scoped, additive exception to the five-workspace audience-separation model — governing principle *workspace-membership = approval authority*; self-contained so the safety subsystem ships and hands over independently. §24's ID inventory gains the workspace, the moved `Safety Portal` folder (ID preserved), and `WSR_human_review`. This is a §23/§24 content change only — **every other section and the audience-separation principle itself carry forward verbatim from v16.** Originating workstream doctrine: [Safety Portal mission §8](../workstreams/safety-portal/mission.md#8-self-containment-and-workspace-as-approval-authority). v16 retires on acceptance of v17. Canonical git tag: `operational-standards-v17`.
 
@@ -789,7 +844,9 @@ v16 trigger: §44's Tier-2 protective basis recharacterized from structural (a "
 
 v17 trigger: substantive doctrine change, new §, or recharacterization of a mechanism's protective claim. The v13→v14 reframe established that recharacterizing what a mechanism *is* is bump-worthy; v14→v15 established that a doc-wide role abstraction + a new tier is; v15→v16 established that changing a tier's protective basis (structural → training/co-resolution) is. v16.x absorbs further status updates (e.g., per-category clearances granted to the Successor-Operator) without major revision. **Realized 2026-06-05** by the §23/§24 sixth-workspace addition (the Safety Portal standalone workspace) — a substantive doctrine change.
 
-v18 trigger: substantive doctrine change, new §, recharacterization of a mechanism's protective claim, or a further change to the workspace-topology model. v17.x absorbs status updates (e.g., additional per-customer Safety Portal workspaces at onboarding) without a major bump.
+v18 trigger: substantive doctrine change, new §, recharacterization of a mechanism's protective claim, or a further change to the workspace-topology model. v17.x absorbs status updates (e.g., additional per-customer Safety Portal workspaces at onboarding) without a major bump. **Realized 2026-06-07** by §§45–49 (new sections generalizing the Safety Portal deploy-session patterns).
+
+v19 trigger: substantive doctrine change, new §, recharacterization of a mechanism's protective claim, or a further change to the workspace-topology model. v18.x absorbs status updates without a major bump (e.g., the PR-K Box-mirror and PR-H admin route both landed in the same deploy batch and are absorbed at the workstream-doc + §G26 level — the §§45–49 patterns themselves are unchanged; further Safety Portal activation progress likewise absorbs at v18.x unless it recharacterizes a mechanism).
 
 v16.x status absorption (2026-06-01, verified against exec 585823d): the §2 / §44 Tier-1 self-heal characterization is corrected. The mechanism described as an unimplemented "Check H heartbeat-staleness" check (reading ITS_Daemon_Health, 2 × Interval) with "two of three daemons heartbeat-retrofit-pending" was **never built**; the implemented staleness floor is the watchdog **Check C marker-file** check, which already covers all four tracked daemons (safety_intake, safety_weekly_send_poll, safety_weekly_generate, safety_picklist_audit), and the external **UptimeRobot** ping (audit F16) is live. The lone residual is the weekly_generate Friday-crash **catch-up** (exec follow-on). This correction does **not** change what the Tier-1 self-heal mechanism *is* or its protective claim — Tier-1 is still "daemons recover, the watchdog catches staleness, no human acts" — it corrects the stale *implementation-state* claim, so per the v17 trigger it is a **status update absorbed at v16.x: no major bump, no new tag.** The prior "Check H" framing is recorded here (and at §2 / §44 / line 94) for provenance.
 

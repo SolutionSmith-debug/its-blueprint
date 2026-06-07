@@ -2,10 +2,10 @@
 type: mission
 version: 6
 status: canonical
-last_verified: 2026-06-05
-last_verified_against: 753f12f
+last_verified: 2026-06-07
+last_verified_against: f3ad814
 workstream: email_triage
-tags: [workstream-mission]
+tags: [workstream-mission, email-path-seed]
 ---
 
 **ITS — Email Triage Mission v6**
@@ -144,7 +144,7 @@ The classifier has no capability to send external email. Downstream workstreams 
 
 - **Inbound safety reports **from field PMs now arrive via the **Safety Portal** (portal-only at launch — the Safety Portal clean-break retired the email-PDF safety intake), so Email Triage does **not** route safety reports into the safety pipeline. Any safety mail still landing in a shared inbox post-cutover routes to a human queue.
 
-- **Preserved email infrastructure (inherited by this workstream): **the Safety Portal clean-break retired the *email-PDF safety intake* but deliberately **preserved** the shared email infrastructure — `shared/graph_client.py` (list_inbox / mark_read / MSAL), `shared/untrusted_content.py`, `shared/header_forgery.py` — precisely because Email Triage depends on it. This workstream is the committed consumer of that infra; `intake.py`'s Graph-driven `process_message` path also remains in-tree for reuse here. See [Safety Portal brief §8.1](../safety-portal/brief.md#81-clean-break-safety-intake-is-portal-only-at-launch).
+- **Preserved email infrastructure (the Email-Triage code seed — inherited by this workstream): **the Safety Portal clean-break retired the *email-PDF safety intake* but deliberately **preserved** the shared email infrastructure — `shared/graph_client.py` (list_inbox / mark_read / MSAL), `shared/untrusted_content.py`, `shared/header_forgery.py` — precisely because Email Triage depends on it. **This retention is load-bearing and recorded so no future session decommissions it as "clean-break cleanup"** (verified resident in exec `main` at `f3ad814`, 2026-06-07). The full seed set: **preserved-dormant** (no live caller, parses, not tombstoned) = `safety_reports/week_folder.py` (the Monday-ISO Field-Reports folder scaffold + its `FIELD_REPORTS_FOLDER_BY_PROJECT` consumer) and `intake.process_message` + the Graph fetch / classify / extract stages; **actively-live shared infra** (also used by the Safety Portal Box path today) = `shared/project_routing.get_folder_id` + `defaults.BOX_PROJECT_FOLDERS` and the report-category machinery (`BOX_SUBPATH_BY_CATEGORY` / `VALID_CATEGORIES`). Only `intake_poll.py` is tombstoned (`NotImplementedError`, exec PR #171). When this workstream starts, **build on this seed rather than re-implementing the Graph plumbing.** See [memory-archive §G26](../../references/memory-archive.md#g26-2026-06-07-safety-portal-deploy-session-reconciliation-exec-prs-178189), [Safety Reports brief §Email-intake path](../safety-reports/brief.md), and [Safety Portal brief §8.1](../safety-portal/brief.md#81-clean-break-safety-intake-is-portal-only-at-launch).
 
 - **Executed contracts **returning from subs route to Subcontracts' executed_intake.
 
@@ -179,3 +179,5 @@ Doctrine-version-reference sweep (2026-05-28 doc-reconciliation pass). The remai
 # Authority & Versioning
 
 This is the canonical mission for this sub-project (v6, 2026-05-28). It supersedes v5 (2026-05-28 portal-pivot reconciliation) and v4 (2026-05-13, which first centered Adversarial Input Handling as primary architecture and added the two Foundation invariants).
+
+**2026-06-07 forward-reference addition (no version bump — reference currency):** the Cross-Workstream "Preserved email infrastructure" bullet was expanded to record the full Email-Triage **code seed** retained by the Safety Portal clean-break (verified resident in exec `f3ad814`), so a future session builds on it rather than re-implementing or decommissioning it. `last_verified_against` set to `f3ad814`. See memory-archive §G26.
