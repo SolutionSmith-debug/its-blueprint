@@ -3,7 +3,7 @@ type: reference
 status: canonical
 workstream: null
 last_verified: 2026-06-08
-last_verified_against: f3ad814
+last_verified_against: b7bad5a
 ---
 
 # Claude Code Info Gap
@@ -464,5 +464,11 @@ CC has these via filesystem and doesn't need them re-stated here:
 - Code (read from `~/its/`)
 - Workstream missions and briefs (read from `its-blueprint/workstreams/`)
 - Operational detail covered in `memory-archive.md`
+
+## 2026-06-08 addendum — admin-dashboard + hardening session (CC-environment facts)
+
+- **Cloudflare Static Assets responses have IMMUTABLE headers.** `c.env.ASSETS.fetch()` responses can't be header-mutated in place (Hono `secureHeaders()` / `c.header()` throw); under `run_worker_first: true` that 500s the SPA document + every asset (only Hono-built `/api/*` survive). **Reconstruct** the response with a fresh mutable `Headers` copy instead. And `@cloudflare/vitest-pool-workers` does NOT serve the built assets, so the unit suite can't catch this — **verify asset/document paths with `wrangler dev` + curl**, not vitest. (Detail: [memory-archive §G29.2](memory-archive.md).)
+- **CC can run `npm run deploy` (wrangler deploy) in auto-mode** — it deployed the Safety Portal hotfix + CSP-flip + beacon-fix this session. But a live **D1 migration** (`wrangler d1 migrations apply --remote`) was classifier-**BLOCKED** for CC (the operator ran it). So: Worker deploys are CC-doable in auto-mode; live D1 migrations are operator-run.
+- **Background subagents were FS-sandboxed to `~/its` only** this session — they could not write sibling worktrees (`~/its-harden`, etc.) and correctly refused to edit the live `~/its` tree. Main-thread CC retained full sibling access. Do worktree-mutating work on the main thread, or probe FS write access before delegating it.
 
 This file is the **bridge** between chat-only context and what CC can reach on disk. If something belongs in a repo, move it there and remove it here.
