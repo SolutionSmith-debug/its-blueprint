@@ -28,9 +28,9 @@ Engineering complement to ITS — Subcontracts Mission v4 (2026-05-13). The prim
 
 # Architecture (ITS Standard)
 
-ITS — Subcontracts runs as a set of Claude Code scripts on the production MacBook, triggered by a draft-request trigger (Smartsheet column flag on a job line item, or a dedicated form). Claude Code handles both data movement (Smartsheet, Box, Outlook via API) and reasoning steps (Anthropic API for Exhibit A scope language drafting). See ITS Operational Standards v5 for the cross-cutting patterns.
+ITS — Subcontracts runs as a set of Claude Code scripts on the production MacBook, triggered by a draft-request trigger (Smartsheet column flag on a job line item, or a dedicated form). Claude Code handles both data movement (Smartsheet, Box, Outlook via API) and reasoning steps (Anthropic API for Exhibit A scope language drafting). See ITS Operational Standards v18 for the cross-cutting patterns.
 
-**Foundation Invariants implementation. **This workstream inherits two Foundation-level invariants: External Send Gate — no external transmission without explicit human approval; and Adversarial Input Handling — all external content treated as untrusted data. See Foundation Mission v4 for canonical definitions and Operational Standards v5 for implementation patterns.
+**Foundation Invariants implementation. **This workstream inherits two Foundation-level invariants: External Send Gate — no external transmission without explicit human approval; and Adversarial Input Handling — all external content treated as untrusted data. See Foundation Mission v4 for canonical definitions and Operational Standards v18 for implementation patterns.
 
 **Double-gate architecture: **this workstream layers Legal Review Status on top of the standard External Send Gate. Both gates must be APPROVED before any send. Enforced architecturally by subcontract_send.py.
 

@@ -1499,3 +1499,33 @@ The three tracks were executed in this order:
 - **Revert ZZ Portal Proof to Inactive** — once confidence in the pipeline is sufficient; keeps the proof row available without generating weekly send traffic.
 - **Worktree + branch cleanup** — `~/its-portal-fix*` worktrees + merged branches (`branch -D`); operator manual step.
 - **Load remaining daemons** — picklist-sync, watchdog, weekly-generate not yet loaded on the host.
+
+## §G28 — 2026-06-08 Blueprint reconciliation pass (Smartsheet-structure reference + doctrine-citation sweep; brief premises corrected)
+
+A blueprint-native reconciliation session driven by a chat brief whose current-state premises were **substantially stale** (verified via `brief-validator` + `doc-reconciliation-auditor` + a live Smartsheet MCP browse against exec `21bd909`). Recorded so a future session does not re-trust the stale premises. Re-scoped with the operator to the verifiable subset; **no demo content touched, no doctrine body edited, no git tag.**
+
+### §G28.1 — Brief premises that did NOT hold (corrected)
+
+- **"All demo Smartsheet architecture is abandoned"** — FALSE against live state. `WORKSPACE_DEMO = 4129485730670468` ("Forefront Portfolio — ITS Demo") is **live in exec `sheet_ids.py:22` ("customer-facing")**, with the Bradley/Brimfield/Huntley/Rockford **project folders under it** (Forefront / 01 — Active Projects), and Op Stds **§24 (doctrine)** documents it. Abandoning it blueprint-only would manufacture blueprint↔exec drift. **Re-scoped:** the abandonment is a cross-repo decision (exec `sheet_ids.py` + Op Stds §24, both Scope-OUT) that must land in exec/doctrine first/together — NOT a blueprint-only edit. Demo content left untouched.
+- **Phantom "old Safety Portal workspace ID `4021545954764676`"** — appears **nowhere** in either repo OR in the live Smartsheet workspace list. Nothing to sweep. The correct ID `194283417429892` was already in the blueprint (6 files) + exec `sheet_ids.py:34`.
+- **"Abandoned" Template Master `3333320395253636` + Demo Seed `685696395569028`** — exist as **live OWNER Smartsheet workspaces** ("Evergreen Portfolio Template (Master)" / "(Demo Seed)") but appear in **no code**; not abandoned.
+- **"Permissions v5"** — it is **v6** (`references/permissions.md`, a reference doc, not doctrine).
+- **`ITS_Active_Jobs` "spec/unbuilt" / WSR-WPR / safety-portal "to-build"** — all already correct: `ITS_Active_Jobs` built everywhere (`6223950341164932`, 2026-06-03); `WSR_human_review` supersession already reconciled (§G27 + handoff v8); safety-portal already v3.1 as-built (§G27).
+
+### §G28.2 — Live `ITS –– Safety Portal` workspace structure (verified 2026-06-08, exec `21bd909`)
+
+Captured in new reference `references/smartsheet-structure.md` (v1, ID-free per repo `CLAUDE.md` — names + `sheet_ids.py` constants only). Topology (workspace `194283417429892`):
+- `00_Safety Portal` (`FOLDER_SAFETY_PORTAL`) → `ITS_Active_Jobs` (`SHEET_ACTIVE_JOBS`) + `WSR_human_review` (`SHEET_WSR_HUMAN_REVIEW`).
+- **`00_Form Catalog`** (separate folder) → `ITS_Forms_Catalog` (`SHEET_FORMS_CATALOG`). **Discrepancy resolved:** the exec `sheet_ids.py` `FOLDER_SAFETY_PORTAL` comment ("holds ITS_Active_Jobs + ITS_Forms_Catalog + WSR_human_review") is **stale** — Forms_Catalog has its own folder. The brief's companion structure was right; the code comment is outdated. (Flagged for an exec comment refresh.)
+- Per-job folders **Bradley 1/2, Brimfield 1/2, Huntley, Rockford + ZZ Portal Proof** — created in this workspace by `find-or-create` (distinct from the like-named `FOLDER_PROJECT_*` under `WORKSPACE_DEMO`). Each holds per-week submission sheets named `"<Job> — week of <Saturday-date>"` (e.g. `ZZ Portal Proof — week of 2026-06-06`).
+- `ITS_Config` (`SHEET_CONFIG`) lives in `ITS — System`, not the Safety Portal workspace.
+- **Live workspace inventory (9):** Evergreen Portfolio Template Demo Seed `685696395569028` · Template Master `3333320395253636` · Forefront Portfolio — ITS Demo `4129485730670468` · **Forfront IL portfolio `2228567565199236`** (ADMIN, in no code — purpose unknown, flagged) · ITS –– Safety Portal `194283417429892` · ITS — Archive `5528280611743620` · ITS — Human Review `8561891980142468` · ITS — Operations `7217130472007556` · ITS — System `680592632244100`.
+
+### §G28.3 — Doctrine-citation currency sweep
+
+27 **present-tense** doctrine-version citations updated across 10 blueprint docs (Op Stds → **v18**, Handover → **v9**): `safety-reports/{brief,mission}.md`, `references/{daemon-health-schema,project-organization,extended-workstreams}.md`, and the frozen Phase-2/3 planning docs (`purchase-orders`, `subcontracts`, `ai-employee-capabilities` `{brief,mission}.md`, which were at Op Stds v5). **Provenance preserved** (NOT swept): all "What Changed"/changelog blocks, "new in v8"/"revised in v8"/"introduced in vN" origin-pins, `daemon-health` build-rationale §-cites (only its `Authority:` line updated), the `:128` "acknowledged in Op Stds v17" origin-pin, and **all of `email-triage/{mission,brief}.md`** (a coherent self-documented v8/v13 snapshot — left whole; recommend a dedicated currency touch). Judgment calls: `project-organization.md`'s canonical-doc-set block was fully refreshed (FM v11 / Op Stds v18 / V&R v9 / Handover v9 / Excellence v4) for internal coherence; FM/V&R/Excellence citations **elsewhere** were left per the brief's "don't churn" (a handful of stale `FM v4`/`v8` inheritance-boilerplate cites remain — flagged for a follow-up FM-currency pass).
+
+### §G28.4 — Process + named follow-ups
+
+- Process: blueprint CI = `lint_frontmatter` + `lint_crossrefs` only (no tests) — a "four-part verify" reduces to "those two lints pass" for a blueprint PR. Contacts roster (Finkhousen=Sr PM, Jechiah Stephens=Head of Eng, Tiffany Montastirsky=Head of Permitting; CEO = **Jacob** Stephens) is **exec-only** (`~/its/docs/operations/cutover_checklist.md`); NOT added to the blueprint (Customer-0 data per `CLAUDE.md`).
+- **Flagged (not acted on):** (1) demo-abandonment as a cross-repo exec+doctrine decision; (2) exec `sheet_ids.py` `FOLDER_SAFETY_PORTAL` comment refresh (Form Catalog split); (3) the residual stale `FM v4/v8` inheritance-boilerplate cites; (4) email-triage currency touch (v8/v13 → current); (5) `Forfront IL portfolio` workspace `2228567565199236` — unknown purpose, in no code.

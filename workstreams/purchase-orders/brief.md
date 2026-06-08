@@ -28,9 +28,9 @@ Engineering complement to ITS — Purchase Orders & Materials Mission v4 (2026-0
 
 # Architecture (ITS Standard)
 
-ITS — Purchase Orders & Materials runs as a set of Claude Code scripts on the production MacBook, triggered by an RFQ-request intake (form or email — mechanism per open question), with multi-supplier addressing handled in a single script run plus a separate gated send. See ITS Operational Standards v5 for the cross-cutting patterns this workstream inherits (kill switch, watchdog, error logging, review queue, structured outputs, sender allowlist, untrusted-content tagging, capability gating, anomaly logging, remote access, hardware lifecycle).
+ITS — Purchase Orders & Materials runs as a set of Claude Code scripts on the production MacBook, triggered by an RFQ-request intake (form or email — mechanism per open question), with multi-supplier addressing handled in a single script run plus a separate gated send. See ITS Operational Standards v18 for the cross-cutting patterns this workstream inherits (kill switch, watchdog, error logging, review queue, structured outputs, sender allowlist, untrusted-content tagging, capability gating, anomaly logging, remote access, hardware lifecycle).
 
-**Foundation Invariants implementation. **This workstream inherits two Foundation-level invariants: External Send Gate — no external transmission without explicit human approval; and Adversarial Input Handling — all external content treated as untrusted data. See Foundation Mission v4 for canonical definitions and Operational Standards v5 for implementation patterns.
+**Foundation Invariants implementation. **This workstream inherits two Foundation-level invariants: External Send Gate — no external transmission without explicit human approval; and Adversarial Input Handling — all external content treated as untrusted data. See Foundation Mission v4 for canonical definitions and Operational Standards v18 for implementation patterns.
 
 **Hardware lifecycle context: **by Phase 2 the system is in production at the customer site (post-handover). Build-phase work for new Phase 2 capabilities happens in sandbox; deployment via Tailscale.
 

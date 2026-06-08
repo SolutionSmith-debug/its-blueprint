@@ -24,7 +24,7 @@ ITS is being built with Evergreen Renewables as Customer 0 — the first deploym
 
 # Foundation Invariants Inherited
 
-This workstream inherits two Foundation-level invariants: External Send Gate — no external transmission without explicit human approval; and Adversarial Input Handling — all external content treated as untrusted data. See Foundation Mission v4 for canonical definitions and Operational Standards v5 for implementation patterns.
+This workstream inherits two Foundation-level invariants: External Send Gate — no external transmission without explicit human approval; and Adversarial Input Handling — all external content treated as untrusted data. See Foundation Mission v4 for canonical definitions and Operational Standards v18 for implementation patterns.
 
 **External Send Gate — implementation: **Subcontract_Pending_Review Smartsheet with Approved for Send (checkbox), Approved By, Approved At, Sent At, Send Status, Legal Review Status columns. Two-process model: subcontract_generate.py writes drafts (no send); subcontract_send.py reads approved rows (no AI). Subcontract send also requires Legal Review Status = APPROVED — belt-and-suspenders gating layered on top of External Send Gate.
 

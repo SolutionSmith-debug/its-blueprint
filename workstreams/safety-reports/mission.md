@@ -58,7 +58,7 @@ Adversarial Input Handling — implementation (6-layer per FM v8):
 
 - Layer 5 (Anomaly Logging): the LLM-**extraction-output** anomaly check is N/A in the deterministic/structured path (no extraction); a pattern tripwire on PM-entered text remains (see [Safety Portal mission §7 Layer 5](../safety-portal/mission.md#7-foundation-invariants-inherited)). `shared/anomaly_logger.py` re-applies on the preserved email-intake path.
 
-- Layer 6 (Attachment Screening — NEW v8): four sub-layers per Op Stds v11 §34: static signatures + structural inspection + ClamAV + optional VirusTotal. Cutover scheduled V&R v7.2 Phase 1.4.
+- Layer 6 (Attachment Screening — NEW v8): four sub-layers per Op Stds v18 §34: static signatures + structural inspection + ClamAV + optional VirusTotal. Cutover scheduled V&R v7.2 Phase 1.4.
 
 # Three Intake Document Types (Unchanged From v5)
 

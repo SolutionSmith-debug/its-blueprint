@@ -53,15 +53,15 @@ Source-of-truth principle: cross-cutting docs (Foundation Mission, Operational S
 
 Anchor docs for ITS as a whole. Lives in the parent Claude project.
 
-- Foundation Mission v8 — invariants, principles, product context.
+- Foundation Mission v11 — invariants, principles, product context.
 
-- Operational Standards v11 — cross-cutting patterns every workstream uses.
+- Operational Standards v18 — cross-cutting patterns every workstream uses.
 
-- Vision & Roadmap v7.2 — phase plan.
+- Vision & Roadmap v9 — phase plan.
 
-- Handover Plan v6.3 — Phase 1.5 cutover runbook.
+- Handover Plan v9 — Phase 1.5 cutover runbook.
 
-- Excellence Roadmap v2.3 — quality + reliability tracks.
+- Excellence Roadmap v4 — quality + reliability tracks.
 
 - Foundation Scaffold Update v6.5 — execution-layer state.
 
@@ -113,7 +113,7 @@ Phase 3. Reference docs: AI Employee Mission v4 + Brief v5 (pointer drift accept
 
 # Smartsheet Workspace Orientation (Carried Forward From v5 + Refreshed)
 
-Five-workspace audience-separated topology per Op Stds v11 §23 (refreshed from v5's three-workspace orientation), **plus a sixth standalone workspace added 2026-06-04/05** (see note below):
+Five-workspace audience-separated topology per Op Stds v18 §23 (refreshed from v5's three-workspace orientation), **plus a sixth standalone workspace added 2026-06-04/05** (see note below):
 
 - Forefront Portfolio — ITS Demo (4129485730670468) — customer-facing portfolio.
 

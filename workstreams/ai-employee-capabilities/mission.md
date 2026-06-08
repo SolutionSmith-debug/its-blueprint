@@ -26,7 +26,7 @@ ITS is being built with Evergreen Renewables as Customer 0 — the first deploym
 
 # Foundation Invariants Inherited
 
-This workstream inherits two Foundation-level invariants: External Send Gate — no external transmission without explicit human approval; and Adversarial Input Handling — all external content treated as untrusted data. See Foundation Mission v4 for canonical definitions and Operational Standards v5 for implementation patterns.
+This workstream inherits two Foundation-level invariants: External Send Gate — no external transmission without explicit human approval; and Adversarial Input Handling — all external content treated as untrusted data. See Foundation Mission v4 for canonical definitions and Operational Standards v18 for implementation patterns.
 
 **External Send Gate — implementation (primary concern for this workstream): **several capabilities produce content that could end up in external-bound messages — chat-drafted follow-up emails, daily briefing items that include drafted communications, meeting-notes-derived action items that produce follow-up emails. Every such path is gated by an explicit Pending_Review row before any external send. The capability surfaces (chat, briefing) can produce draft content visible internally without gating; the moment a draft is queued for external transmission, the gate applies.
 
