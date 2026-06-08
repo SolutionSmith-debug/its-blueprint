@@ -1425,3 +1425,77 @@ The three PRs that were "in flight, not yet opened" at §G26.1 write time all la
 ### §G26.11 — PR-H merged; blueprint rolled forward to exec main `f3ad814` (2026-06-07 close)
 
 The §G26.1–§G26.10 capture above was written when PR-H (#185) was still OPEN at `ecb06d9`. PR-H then merged at **`f3ad814`** (the 2 `py/clear-text-logging` FPs were operator-dismissed per §48; CLI verbs `add-user`/`reset-password`/`disable-user`/`enable-user`/`list-users`, byte-equal to the verified branch — see §G26.9). So **all four deploy-batch PRs (#185 PR-H, #187 PR-I, #188 PR-J, #189 PR-K) are merged**, and the blueprint's `last_verified_against` for the safety docs + Op Stds + memory-archive is **`f3ad814`**. Net activation state: nothing is live yet — three operator **activation tracks** remain, all merged-but-inert: **(a) admin route** (set byte-equal admin tokens, apply migration 0006 to live D1 *before* redeploy, redeploy); **(b) Box mirror tree** (create the root Box folder, set `ITS_Config` `safety_reports.box.portal_root_folder_id`); **(c) custom domain** (`wrangler deploy` / dashboard add). PR-H merging realized the deferred Handover trigger: **Handover Plan v8 → v9** now carries the full successor-operator portal-user provision/deprovision runbook (Step 8). The earlier §G26.4 "as-built at `34e271d`" lines are retained as the pre-PR-K historical baseline.
+
+## §G27 — 2026-06-08 Safety Portal mirror activation (operational session; exec HEAD `f3ad814` unchanged)
+
+### Summary
+
+The Safety Portal is **fully activated and live-validated on the mirror/validation environment** (`evergreenmirror.com`, Cloudflare account `sethsmithusmc`). This was a pure **operational session** — zero new commits to `~/its` (exec HEAD stays `f3ad814`). All three activation tracks from §G26.11 are now complete. End-to-end submit → pull → intake → Box → WSR-staged proven; a **real unattended timed send confirmed** (Mon 07:12 PT, Graph, `safety@evergreenmirror.com` → `seth@solutionsmith.org`, SENT + stamps, F22-verified, ITS_Errors forensic clean). **Next milestone: Evergreen production cutover.**
+
+### §G27.1 — Activation sequence (order-of-operations; migration 0006 MUST precede deploy)
+
+The three tracks were executed in this order:
+
+1. **Admin route activation** (track a):
+   - Applied migration `0006_add_user_disabled.sql` to the **live** D1 (`wrangler d1 migrations apply its-safety-portal-db --remote`) — MUST precede the Worker deploy. The reading Worker's `requireSession` does a `SELECT disabled FROM users`; without the column, every session 401s immediately after deploy.
+   - Set `PORTAL_ADMIN_API_TOKEN` via `wrangler secret put PORTAL_ADMIN_API_TOKEN`.
+   - Set `ITS_PORTAL_ADMIN_TOKEN` in Keychain via `security add-generic-password -U -a "$USER" -s ITS_PORTAL_ADMIN_TOKEN -w VALUE` (argv form — see §G27.3 Keychain gotcha).
+   - `npm run deploy` (Cloudflare); confirmed admin routes `/api/internal/admin/*` live (return 401-not-404 without token).
+   - `portal_admin list-users` + `portal_admin add-user seths PASSWORD` → user provisioned.
+   - **Session revocation proven**: disabled a user via `portal_admin disable-user seths`; the user's existing session then returned `401 revoked` on `GET /api/jobs` (requireSession intercepts at the per-request `SELECT disabled FROM users` check).
+   - Re-enabled the user for continued proof.
+
+2. **Box mirror tree** (track b):
+   - Created `ITS_Safety_Portal` Box root folder (owner: `seths@evergreenmirror.com`, collaborator: `daniels@evergreenmirror.com` editor).
+   - Box folder ID: **`388017263015`**.
+   - Set `safety_reports.box.portal_root_folder_id = 388017263015` in ITS_Config (Smartsheet row).
+   - Verified `get_or_create_folder` find-or-create logic via `portal_poll` drain cycle: per-job and per-week subfolders auto-provisioned; filed PDFs resolved to the `ROOT → job → week` tree.
+
+3. **Custom domain + worker_base_url repoint** (track c):
+   - `npm run deploy` (run again after migration + secrets were in place).
+   - The `custom_domain: true` route in `wrangler.jsonc` provisioned `safety.evergreenmirror.com` as a Cloudflare-hosted zone and simultaneously **disabled the `*.workers.dev` URL** (wrangler warning: "workers_dev will be disabled by default"). The old workers.dev URL immediately returned Cloudflare `error 1042` ("No Workers script was found for this host on workers.dev").
+   - ~15 `portal_pending_fetch_failed` ERROR rows wrote to ITS_Errors from `portal_poll` before diagnosis.
+   - Fixed by repointing `safety_reports.portal.worker_base_url` in ITS_Config to `https://safety.evergreenmirror.com` (the new canonical base URL).
+
+4. **Proof setup**: JOB-000008 "ZZ Portal Proof" set Active; `Safety Reports Contact Email = seth@solutionsmith.org`; `scheduled_send_local = "MON 07:00"`.
+
+### §G27.2 — Live daemon state after activation
+
+| Daemon | launchd job | Interval | Status |
+|---|---|---|---|
+| `portal_poll.py` | `org.solutionsmith.its.portal-poll` | 60 s | LIVE, heartbeat OK |
+| `weekly_send_poll.py` | `org.solutionsmith.its.weekly-send` | 900 s | LIVE, heartbeat OK |
+| picklist-sync | `org.solutionsmith.its.picklist-sync` | not loaded | NOT loaded |
+| watchdog | `org.solutionsmith.its.watchdog` | not loaded | NOT loaded |
+| weekly-generate | `org.solutionsmith.its.weekly-generate` | not loaded | NOT loaded |
+| safety-intake | retired/tombstoned | — | RETIRED (operator unloads manually) |
+
+`portal_poll` polling_enabled + `weekly_send_poll` polling_enabled both `true` in ITS_Config.
+
+### §G27.3 — Keychain gotcha: bare `-w` prompts TTY in interactive shell
+
+`security add-generic-password -U -a "$USER" -s NAME -w` — the **bare `-w` flag** (no value token following it) prompts the controlling TTY for a password and retype. In an interactive shell session (Warp, Terminal, zsh), **piped stdin is ignored**; only what is typed at the TTY prompt is stored. A 6-character garbage value was silently written this session because the operator used `echo VALUE | security add-generic-password -U -a "$USER" -s NAME -w`, trusting that stdin would be read — it was not.
+
+**Root-cause:** the Keychain was set to a garbage value → `portal_admin list-users` received a 401 → diagnosed by comparing the Worker token against the Keychain read-back.
+
+**Fix:** always use the argv form: `security add-generic-password -U -a "$USER" -s NAME -w VALUE` where VALUE is the next token on the command line. The `shared/keychain.set_secret` function (subprocess, no TTY, stdin explicitly written) is unaffected — this is a **manual shell use only** gotcha.
+
+### §G27.4 — Scheduled-send window semantics (live-verified)
+
+`weekly_send_poll._is_scheduled_window` logic: the window is **open iff today's Pacific weekday == configured weekday AND now >= configured time**, with **no upper-bound closure**. "MON 07:00" means all of Monday from 07:00 onward. An `Approve for Scheduled Send` row checked on Sunday or Monday before 07:00 waits; checked Monday after 07:00 it dispatches on the next poller cycle. `Send Now` bypasses the window entirely (dispatches any cycle). The scheduled-send spec is read live each cycle (hot-reloadable without daemon restart).
+
+**Live-confirmed (2026-06-08):** operator checked `Approve for Scheduled Send` on Sunday; on Monday 07:12 PT the `weekly_send_poll` poller dispatched the row → Graph send confirmed, `SENT` + `Approved By / Approved At` stamped (poller-stamped, not manually), F22 verify passed; ITS_Errors clean.
+
+### §G27.5 — Three tech-debt findings (now in exec `docs/tech_debt.md`)
+
+1. **`validateUser` does not gate on `users.disabled`** — `/api/login` (`auth.ts:50-67`) selects only `id, username, password_hash`; `disabled` is never checked. A disabled user with a valid password can still mint a session cookie. The cookie is useless (every downstream endpoint 401s at `requireSession`), so there is **no capability bypass** — the security boundary holds. But login appears to succeed (misleading UX + defense-in-depth gap). Proposed fix: add `disabled` to the `validateUser` SELECT; return `null` when `row.disabled`. ~15 min + a test. `[OPEN 2026-06-08]`.
+2. **`custom_domain` route disables `workers.dev` URL on deploy (Cloudflare `error 1042`)** — see §G27.1 track c. Decision: custom-domain-only end-state is fine for the mirror and future Evergreen deployment. If both routes are ever needed, add `"workers_dev": true` to `wrangler.jsonc`. `[OPEN 2026-06-08]`.
+3. **`scheduled_send_local` not in `seed_its_config.py` + silent fail-open on malformed value** — row was added manually to the mirror; a fresh tenant build would lack it and silently fall back to the `DEFAULT_SCHEDULED_SEND_LOCAL` constant (functionally OK, but undocumented in the seeder). A malformed value is coerced to MON 07:00 with no log. `[OPEN 2026-06-08]`.
+
+### §G27.6 — Named follow-ups (not done this session)
+
+- **Full edge-case matrix** — each scenario is proven by design (drain policy, HMAC verify, UUID dedupe, inactive-job routing, amend-supersede, empty-week-still-writes, Friday-skip, empty-TO HELD, F22 non-member, live-contact-wins, locked footers) but has NOT been exercised live. Separate session recommended before production cutover.
+- **Blueprint doctrine commit** — separate `~/its-blueprint` session required; the blueprint docs should be rolled forward through `f3ad814` activation (safety-portal mission/brief `last_verified_against` + CLAUDE.md daemon-state table update). Not done here (blueprint is clean at `0e85a1a`; the exec CLAUDE.md/tech_debt changes are uncommitted working-tree in `~/its`).
+- **Revert ZZ Portal Proof to Inactive** — once confidence in the pipeline is sufficient; keeps the proof row available without generating weekly send traffic.
+- **Worktree + branch cleanup** — `~/its-portal-fix*` worktrees + merged branches (`branch -D`); operator manual step.
+- **Load remaining daemons** — picklist-sync, watchdog, weekly-generate not yet loaded on the host.

@@ -6,7 +6,7 @@ named in kebab-case.
 | Subdir | Workstream tag | Phase | Status |
 |---|---|---|---|
 | [`safety-reports/`](safety-reports/) | `safety_reports` | 1 | active build |
-| [`safety-portal/`](safety-portal/) | `safety_portal` | 1.6+ | planning only |
+| [`safety-portal/`](safety-portal/) | `safety_portal` | 1.6+ | active build |
 | [`email-triage/`](email-triage/) | `email_triage` | 3 | planning only |
 | [`purchase-orders/`](purchase-orders/) | `purchase_orders` | 2 | planning only |
 | [`subcontracts/`](subcontracts/) | `subcontracts` | 2 | planning only |

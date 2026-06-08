@@ -1,20 +1,22 @@
 ---
 type: reference
-version: 7
+version: 8
 status: canonical
-last_verified: 2026-05-24
-last_verified_against: 3b7d56d
+last_verified: 2026-06-08
+last_verified_against: f3ad814
 workstream: null
 tags: [smartsheet, system-workspace, human-review, successor-operator, training-bounded-co-resolution]
 ---
 
-ITS — Smartsheet System & Human Review Handoff v7
+ITS — Smartsheet System & Human Review Handoff v8
 
-# ITS — Smartsheet System & Human Review Handoff v7
+# ITS — Smartsheet System & Human Review Handoff v8
 
 ITS — System and ITS — Human Review workspaces, schemas, bootstrap, API constraints, operational patterns
 
 Generated 2026-05-17 evening; **schemas corrected 2026-05-18 morning against live**** ****get_columns**** ****verification** — Solution Smith
+
+**v8 (2026-06-08) — WPR→WSR clean-break reconciliation (verified against exec `f3ad814`).** The Safety Reports human-review gate has **moved out of this workspace**: `WPR_Pending_Review` (sheet `3096105695793028`, in the *01 — Safety Reports* folder below) is **decommissioned-by-doc** under the Safety Portal clean-break (exec PR #171; `intake_poll.py` tombstoned), and the customer-facing weekly safety report is now reviewed / approved / sent through **`WSR_human_review`** in the **standalone `ITS — Safety Portal` workspace** (see [safety-reports mission v5.2+](../workstreams/safety-reports/mission.md) and the [safety-portal mission](../workstreams/safety-portal/mission.md)). The WPR sheet remains physically present until the operator deletes it (decommission-by-doc); its entry below is retained for provenance, marked **DECOMMISSIONED**. This v8 reconciliation is scoped to the safety review surface; the System / Human Review schemas below are otherwise unchanged since v7.
 
 # Authority and scope
 
@@ -22,9 +24,9 @@ Generated 2026-05-17 evening; **schemas corrected 2026-05-18 morning against liv
 
 **Smartsheet Handoff v4 remains canonical** for the customer-facing **Forefront Portfolio — ITS Demo** workspace — its 5 top-level folders, 12-sheet flat-per-project model, Bradley 1 source-of-truth template, FL flat-ledger design, Schedule and Closeout K-1 schemas, Vendor DB / Sub DB / Equipment DB seeding, and the production attachment plan. **Do not retire v4** when this document is filed; the two are sibling docs covering parallel workspaces.
 
-A future cascade event may merge the customer-portfolio handoff (v4) and this System + Human Review handoff into a single unified Smartsheet Handoff. That merge requires v4 in front of the author to faithfully carry the customer-portfolio detail. This document does not attempt that merge. (Note: this doc's version line advanced to v6 (2026-05-29 successor-model cascade) then v7 (2026-06-01 de-1b reconciliation); the unified merge will take the next integer available at merge time.)
+A future cascade event may merge the customer-portfolio handoff (v4) and this System + Human Review handoff into a single unified Smartsheet Handoff. That merge requires v4 in front of the author to faithfully carry the customer-portfolio detail. This document does not attempt that merge. (Note: this doc's version line advanced to v6 (2026-05-29 successor-model cascade), v7 (2026-06-01 de-1b reconciliation), then v8 (2026-06-08 — WPR_Pending_Review → WSR_human_review clean-break reconciliation); the unified merge will take the next integer available at merge time.)
 
-**Authority chain.** Foundation Mission v11 (operator-vs-customer-employee audience-separation principle, originated v6; plus the Developer-Operator / Successor-Operator maintenance-role distinction added in v10 and refined in v11 — Successor-Operator = trained CC operator) → Operational Standards v16 (workspace topology, sheet-ID bootstrap, MCP-gap REST-fallback, API constraints — originated v8; plus §§43-44 successor-maintenance discipline) → this document.
+**Authority chain.** Foundation Mission v11 (operator-vs-customer-employee audience-separation principle, originated v6; plus the Developer-Operator / Successor-Operator maintenance-role distinction added in v10 and refined in v11 — Successor-Operator = trained CC operator) → Operational Standards v18 (workspace topology, sheet-ID bootstrap, MCP-gap REST-fallback, API constraints — originated v8; plus §§43-44 successor-maintenance discipline) → this document.
 
 **Correction note.** The original 2026-05-17 evening cut drafted ITS_Time_Off, ITS_Config, and ITS_Errors schemas from the Cascade Unification Update’s seed-row tables rather than from live get_columns against the provisioned sheets. The Session Wrap Inventory (late evening 2026-05-17) caught the divergence. Schemas below match live state as of 2026-05-18 morning.
 
@@ -38,7 +40,7 @@ Three workspaces, separated by audience, not by data type:
 | ITS — Human Review | 8561891980142468 | Evergreen day-to-day (approvers, personnel admins) | This doc |
 | ITS — System | 680592632244100 | System-role-only (Developer-Operator = Seth at ADMIN; trained Successor-Operator at EDITOR for Tier-2 repair) | This doc |
 
-The split exists because the people who handle each surface play different roles in the three-tier successor-maintenance model. ITS — System surfaces (ITS_Review_Queue anomalies, security flags, low-confidence extractions, sender-allowlist violations) are worked by the **Successor-Operator** — a trained operator who **runs Claude Code himself** and follows the §43 runbooks, escalating to the **Developer-Operator** (Seth) when a fault is novel or high-capability-class. This is a Tier-2 role, not a developer role: the Successor-Operator does **not** need maintainer-level system understanding and is not a code-reader (writes no code; does no §§37-41 developer-context work). Day-to-day reviewers handle WPR_Pending_Review and future per-workstream approval queues and need no system role at all. Separating these workspaces makes the role boundary visible and enforceable.
+The split exists because the people who handle each surface play different roles in the three-tier successor-maintenance model. ITS — System surfaces (ITS_Review_Queue anomalies, security flags, low-confidence extractions, sender-allowlist violations) are worked by the **Successor-Operator** — a trained operator who **runs Claude Code himself** and follows the §43 runbooks, escalating to the **Developer-Operator** (Seth) when a fault is novel or high-capability-class. This is a Tier-2 role, not a developer role: the Successor-Operator does **not** need maintainer-level system understanding and is not a code-reader (writes no code; does no §§37-41 developer-context work). Day-to-day reviewers handle the per-workstream approval queues (the Safety Reports gate is now `WSR_human_review` in the standalone ITS — Safety Portal workspace; legacy `WPR_Pending_Review` is decommissioned — see the v8 note above) and need no system role at all. Separating these workspaces makes the role boundary visible and enforceable.
 
 The pattern generalizes to multi-tenancy: the System workspace stays singular across all customers. Each customer gets their own portfolio workspace and either their own Human Review workspace or shares a cross-customer one — that decision is deferred to Customer 2 onboarding.
 
@@ -176,7 +178,7 @@ get_setting() lives in shared/smartsheet_client.py and reads from SHEET_CONFIG (
 
 ITS — Human Review (8561891980142468)
 ├── 01 — Safety Reports (2486957285631876)
-│   └── WPR_Pending_Review (3096105695793028)
+│   └── WPR_Pending_Review (3096105695793028) — DECOMMISSIONED (clean-break 2026-06-05; safety review moved to WSR_human_review in the ITS — Safety Portal workspace)
 ├── 02 — Subcontracts (1924007332210564)
 │   └── (Subcontracts_Pending_Review — TBD)
 ├── 03 — Purchase Orders & Materials (2768432262342532)
@@ -188,9 +190,11 @@ ITS — Human Review (8561891980142468)
 └── 06 — Personnel (7377585005979524)
     └── ITS_Time_Off (1506418040459140)
 
-## WPR_Pending_Review (3096105695793028)
+## WPR_Pending_Review (3096105695793028) — DECOMMISSIONED
 
-**Purpose.** Weekly Performance Reports awaiting Teala’s (or backup reviewer’s) approval before external send. The primary path for the Safety Reports workstream’s human-review gate; cannot be bypassed except by deliberate operator override (which itself flags the External Send Gate invariant).
+**Status (v8, 2026-06-08): DECOMMISSIONED-by-doc.** Under the Safety Portal clean-break (exec PR #171), the Safety Reports human-review gate moved to `WSR_human_review` in the standalone `ITS — Safety Portal` workspace. This sheet has **no live runtime reference**; the operator deletes it when convenient. The description below is retained for provenance.
+
+**Purpose (historical).** Weekly Performance Reports awaiting Teala’s (or backup reviewer’s) approval before external send. The primary path for the Safety Reports workstream’s human-review gate; cannot be bypassed except by deliberate operator override (which itself flags the External Send Gate invariant).
 
 **Provenance.** Originally provisioned by smartsheet_migration/build_human_review.py at 2026-05-17 ~01:26 UTC. Moved 5/17 evening from the demo workspace’s 06 — Human Review folder to ITS — Human Review / 01 — Safety Reports. Schema unchanged from the build_human_review.py provisioning.
 
@@ -270,7 +274,7 @@ SHEET_QUARANTINE   = 8687740798324612
 SHEET_REVIEW_QUEUE = 7243317526876036
 
 # Human-review sheets
-SHEET_WPR_PENDING_REVIEW = 3096105695793028
+SHEET_WPR_PENDING_REVIEW = 3096105695793028   # DECOMMISSIONED (clean-break); the live safety-review surface is SHEET_WSR_HUMAN_REVIEW in the ITS — Safety Portal workspace (see shared/sheet_ids.py)
 SHEET_TIME_OFF           = 1506418040459140
 
 **Usage convention.** Any shared/* module that needs a Smartsheet ID imports from shared.sheet_ids. Never hardcode IDs in scripts. Tests can monkeypatch this module’s constants to point at test fixtures.
@@ -301,7 +305,7 @@ systemColumnType: AUTO_NUMBER is rejected at sheet creation regardless of primar
 
 Pre-existing constraint, carried forward from session 2026-05-17 morning discovery and Op Stds v6 §19. Not API-exposed. Build labor split: **data via API/scripts; UX layer via UI one-time per template sheet, then Save-as-New clones forms + CF + filters to project clones.**
 
-ITS_Config, ITS_Errors, ITS_Quarantine, ITS_Review_Queue do not need forms (operator surfaces). WPR_Pending_Review and ITS_Time_Off may want forms for the reviewer/admin UX — Seth’s UI work.
+ITS_Config, ITS_Errors, ITS_Quarantine, ITS_Review_Queue do not need forms (operator surfaces). ITS_Time_Off may want forms for the personnel-admin UX — Seth’s UI work. (The Safety Reports reviewer UX now lives on `WSR_human_review` in the ITS — Safety Portal workspace; legacy `WPR_Pending_Review` is decommissioned.)
 
 # Operational patterns
 
@@ -319,7 +323,7 @@ ITS_Config, ITS_Errors, ITS_Quarantine, ITS_Review_Queue do not need forms (oper
 
 **Examples from the 5/17 evening session:**
 
-- POST /sheets/{id}/move × 2 (WPR_Pending_Review, ITS_Review_Queue moves out of demo workspace)
+- POST /sheets/{id}/move × 2 (WPR_Pending_Review [since decommissioned], ITS_Review_Queue moves out of demo workspace)
 
 - DELETE /folders/{id} × 1 (delete 06 — Human Review from demo workspace after empty)
 
@@ -365,7 +369,7 @@ This is operator-tier knowledge — Seth performs Save-as-New manually when stan
 
 **Workstream-buildout:**
 
-- WPR_Pending_Review approval workflow (forms + conditional formatting + automation rules) — UI work per FL_Setup_Guide convention.
+- `WSR_human_review` approval workflow (forms + conditional formatting + automation rules) — UI work per FL_Setup_Guide convention, in the ITS — Safety Portal workspace. (Supersedes the legacy `WPR_Pending_Review` workflow, now decommissioned.)
 
 - Per-workstream Pending_Review sheets in the corresponding HR folders as workstreams are built.
 
