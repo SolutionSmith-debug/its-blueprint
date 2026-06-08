@@ -74,7 +74,7 @@ Foundation Invariants implementation: 6-layer Adversarial Input Handling per FM 
 
 632-line launchd-driven Python poller. Per-cycle: ITS_Config polling_enabled gate; fcntl file lock at ~/its/state/safety_intake.lock; graph_client.list_inbox with unread_only filter (top=50); per-message seen-set idempotency guard; call intake.process_message; mark_read on success; heartbeat write to ITS_Daemon_Health.
 
-Operator visibility: ITS_Daemon_Health sheet (4529351700729732, folder 04 — Daemons 2130046845511556 in System workspace). One row per daemon, update-in-place. ARCH-1/2/3 refinements per Op Stds v11 §32.
+Operator visibility: ITS_Daemon_Health sheet (4529351700729732, folder 04 — Daemons 2130046845511556 in System workspace). One row per daemon, update-in-place. ARCH-1/2/3 refinements per Op Stds v18 §32.
 
 ## Intake script (safety_reports/intake.py) — SHIPPED PR #57
 
@@ -100,7 +100,7 @@ Operator visibility: ITS_Daemon_Health sheet (4529351700729732, folder 04 — Da
 
 - Stage 9: Box upload (path determined by project + week + document type). SWO + Other skip Box (tag in Notes) per Q6 owner decision.
 
-- Stage 10: Attachment screening — to be added Phase 1.4 (Op Stds v11 §34 Layers 1-3).
+- Stage 10: Attachment screening — to be added Phase 1.4 (Op Stds v18 §34 Layers 1-3).
 
 - Stage 11: Capability-gated AST test verifies intake has no send capability.
 
@@ -134,7 +134,7 @@ This is the recorded reason these modules stay; see memory-archive §G26 and the
 
 - Error log decorator: @its_error_log on every script main function.
 
-- Confidence scoring: default threshold 0.85 per Op Stds v11 §5. Below threshold → ITS_Review_Queue.
+- Confidence scoring: default threshold 0.85 per Op Stds v18 §5. Below threshold → ITS_Review_Queue.
 
 - External Send Gate: per FM v8 Invariant 1. No generation script imports send capability.
 
@@ -146,13 +146,13 @@ This is the recorded reason these modules stay; see memory-archive §G26 and the
 
 # Risks (REFRESHED in v6.1)
 
-- MacBook off / sleeping: launchd doesn't fire. The watchdog Check C marker-file staleness floor (the staleness detector earlier called "Check H", successor to Check F per Op Stds v16 §2) plus the external UptimeRobot heartbeat ping (audit F16) catch stale-daemon / dead-host state. Tailscale-managed remote wake-up possible.
+- MacBook off / sleeping: launchd doesn't fire. The watchdog Check C marker-file staleness floor (the staleness detector earlier called "Check H", successor to Check F per Op Stds v18 §2) plus the external UptimeRobot heartbeat ping (audit F16) catch stale-daemon / dead-host state. Tailscale-managed remote wake-up possible.
 
 - Classification accuracy on three real intake types: unknown until benchmarked. Plan: pull 50-100 historical samples per type, run classifier, manually verify, tune.
 
 - Field PM compliance: if reports do not come in consistently, weekly summary has gaps. Not addressable in code; operator/customer process item.
 
-- Empty reviewer chain edge case: if Teala + Sam + Jacob all on PTO same week, workstream holds + emits out-of-band Resend alert. 14-day forward scan (Op Stds v11 §18) surfaces in advance.
+- Empty reviewer chain edge case: if Teala + Sam + Jacob all on PTO same week, workstream holds + emits out-of-band Resend alert. 14-day forward scan (Op Stds v18 §18) surfaces in advance.
 
 - Customer-side variability: per-customer WPR template variants. Defer to first real customer feedback.
 
@@ -164,11 +164,11 @@ This is the recorded reason these modules stay; see memory-archive §G26 and the
 
 # Engineering Decisions (REFRESHED in v6.1)
 
-- Trigger mechanism: launchd polling daemon (canonical per Op Stds v11 §31). Hot-folder Mail.app rule pattern retired.
+- Trigger mechanism: launchd polling daemon (canonical per Op Stds v18 §31). Hot-folder Mail.app rule pattern retired.
 
 - Polling cadence: 60s from safety_reports.intake.poll_interval_seconds ITS_Config row. Tunable. Trade-off: lower = faster intake response + more Graph API calls; higher = batchier processing + lower API spend.
 
-- Confidence threshold for classification: default 0.85 per Op Stds v11 §5. Tune from real Evergreen mail samples in first 30 days.
+- Confidence threshold for classification: default 0.85 per Op Stds v18 §5. Tune from real Evergreen mail samples in first 30 days.
 
 - Confidence threshold for extraction fields: default 0.85.
 
@@ -176,7 +176,7 @@ This is the recorded reason these modules stay; see memory-archive §G26 and the
 
 - Anomaly detection sentinels: Phase 1 sentinel list covers system_*, role_*, ignore_*, recipient_override. SUSPICIOUS_FIELD_PATTERNS FP risk tracked in docs/tech_debt.md.
 
-- Quarantine review cadence: daily watchdog includes ITS_Quarantine summary. Operator reviews periodically; senders added to trusted-contacts explicitly per Op Stds v11 §33.
+- Quarantine review cadence: daily watchdog includes ITS_Quarantine summary. Operator reviews periodically; senders added to trusted-contacts explicitly per Op Stds v18 §33.
 
 - Reviewer chain configuration source: DEFAULT_REVIEWER_CHAINS["safety_reports"] in shared/defaults.py + ITS_Time_Off PTO fetcher overlay.
 

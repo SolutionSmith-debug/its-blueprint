@@ -18,7 +18,7 @@ Date: 2026-05-21
 
 Scope: Smartsheet-side scaffolding for polling-daemon operator visibility across all current and future runners.
 
-Authority: Op Stds v10 §23 (5-workspace topology), §3.1 (Push-vs-Record Separation), §30 (SDK-vs-Live Integration Test).
+Authority: Op Stds v18 §23 (5-workspace topology), §3.1 (Push-vs-Record Separation), §30 (SDK-vs-Live Integration Test).
 
 # 1. Live IDs
 

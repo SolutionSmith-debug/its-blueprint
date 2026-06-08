@@ -26,7 +26,7 @@ ITS is being built with Evergreen Renewables as Customer 0 — the first deploym
 
 # Foundation Invariants Inherited
 
-This workstream inherits two Foundation-level invariants: External Send Gate — no external transmission without explicit human approval; and Adversarial Input Handling — all external content treated as untrusted data. See Foundation Mission v4 for canonical definitions and Operational Standards v5 for implementation patterns.
+This workstream inherits two Foundation-level invariants: External Send Gate — no external transmission without explicit human approval; and Adversarial Input Handling — all external content treated as untrusted data. See Foundation Mission v4 for canonical definitions and Operational Standards v18 for implementation patterns.
 
 **External Send Gate — implementation: **RFQ_Pending_Review Smartsheet with Approved for Send (checkbox), Approved By, Approved At, Sent At, Send Status columns. Two-process model: rfq_generate.py writes drafts to the sheet (no send capability); rfq_send.py reads approved rows and sends (no AI step). Every RFQ requires explicit human approval before going to suppliers — permanent, not time-bounded.
 

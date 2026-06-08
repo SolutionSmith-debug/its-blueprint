@@ -28,7 +28,7 @@ Engineering complement to ITS — AI Employee Capabilities Mission v4 (2026-05-1
 
 # Architecture (Tier 3 Additions)
 
-All five capabilities run on the standard MacBook + Claude Code + Apple automation stack (see ITS Operational Standards v5). Tier 3 introduces three architectural additions beyond the foundation workstreams:
+All five capabilities run on the standard MacBook + Claude Code + Apple automation stack (see ITS Operational Standards v18). Tier 3 introduces three architectural additions beyond the foundation workstreams:
 
 - **Chat surface: Microsoft Teams bot. **Confirmed by owner May 10, 2026. Holds conversation state in a per-user Smartsheet, calls Claude Code on demand to query Smartsheet/Box, renders responses naturally with citations.
 
@@ -36,7 +36,7 @@ All five capabilities run on the standard MacBook + Claude Code + Apple automati
 
 - **Audio + embeddings infrastructure **for voice intake and semantic search. Whisper or Anthropic-native audio for transcription. Vector store for semantic indexing of Box content.
 
-**Foundation Invariants implementation. **This workstream inherits two Foundation-level invariants: External Send Gate — no external transmission without explicit human approval; and Adversarial Input Handling — all external content treated as untrusted data. See Foundation Mission v4 for canonical definitions and Operational Standards v5 for implementation patterns.
+**Foundation Invariants implementation. **This workstream inherits two Foundation-level invariants: External Send Gate — no external transmission without explicit human approval; and Adversarial Input Handling — all external content treated as untrusted data. See Foundation Mission v4 for canonical definitions and Operational Standards v18 for implementation patterns.
 
 **Hardware lifecycle context: **by the time Phase 3+ work starts, hardware handover is complete. The production MacBook is customer-owned, sitting at customer site, with Solution Smith maintaining via Tailscale. All Tier 3 surfaces deliver to / interact with the owner directly through this customer-owned device.
 

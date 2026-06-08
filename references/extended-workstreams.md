@@ -39,7 +39,7 @@ v4 retires on acceptance of v4.1; v4.1 is operative reference. v5 trigger remain
 
 Captures workstreams beyond the original four (Safety Reports, POs/Materials, Subcontracts, Email Triage) plus AI Employee Capabilities. Two groups: Tier 1 extensions of existing workstreams, and Tier 2 construction/renewables-specific workstreams that stand alone.
 
-Architecture (refreshed in v4.1): every automation here follows ITS Operational Standards v11, including the two Foundation invariants per FM v8 (External Send Gate, Adversarial Input Handling with 6-layer defense including attachment screening). Each runs as a Claude Code script on the MacBook, triggered by launchd-driven polling daemons (canonical pattern per Op Stds v11 §31) with Shortcuts for manual operator-triggered jobs. No new architectural patterns; everything reuses the foundation stack.
+Architecture (refreshed in v4.1): every automation here follows ITS Operational Standards v18, including the two Foundation invariants per FM v8 (External Send Gate, Adversarial Input Handling with 6-layer defense including attachment screening). Each runs as a Claude Code script on the MacBook, triggered by launchd-driven polling daemons (canonical pattern per Op Stds v18 §31) with Shortcuts for manual operator-triggered jobs. No new architectural patterns; everything reuses the foundation stack.
 
 Format: compact "automation cards" rather than full briefs. Each card is enough to scope and prioritize. A full brief gets created when a card is promoted to active build.
 
