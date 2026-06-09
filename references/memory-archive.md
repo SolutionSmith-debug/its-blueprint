@@ -1626,3 +1626,52 @@ The Worker needed `"resolveJsonModule": true` in `tsconfig.worker.json` for the 
 Exec `b7bad5a` → `b736691` (PRs #203–#216, #218; #217 closed/not merged). All four-part verified. `~/its` is currently on branch `publish/req-5-incident-report` (publish daemon stranded it before `_reset_to_main` was added; the next daemon cycle will recover it, or `git -C ~/its checkout main && git pull` manually). Remaining operator actions: pull `~/its` to `main`, clean worktrees from this session, load the publish-daemon launchd job (`RunAtLoad false` — operator-gated; HIGH-capability-class, Tier-3 escalation per §43).
 
 Blueprint: no new doc updates required this session (the Phase-2 design brief in §G29.3 is the spec; fold into `workstreams/safety-portal/mission.md` when starting Phase-3).
+
+## §G31 — 2026-06-09 Publish-pipeline hardening + WSR ABSTRACT_DATETIME timestamps (exec `b736691` → `2aa2061`)
+
+### Summary
+
+Five fix/feat PRs closed bugs introduced during the Form Manager build and added operator-requested date+time precision to the WSR. Exec HEAD advanced from `b736691` to `2aa2061`. All five PRs four-part verified. The publish pipeline now runs publish + retire end-to-end without manual intervention. The publish daemon IS loaded (live as of this session).
+
+### §G31.1 — PRs and root causes
+
+| PR | Commit | Root cause / fix |
+|---|---|---|
+| #236 | `8b29ee9` | `generate_form_archive.py` keyed blank-PDF filenames on `form_name` (not unique across version bumps or same-named variants). Two defs with the same name silently overwrote on write. `test_script_render_only_writes_all_pdfs` asserted `len == len(DEF_PATHS) + 1` → RED on a same-named-form tree → blocked every version-bump publish at the `tested` CI gate. Fix: key by `definition_id` (file stem — always unique). |
+| #241 | `880c535` | `publish_daemon._regenerate_archive` shelled out with a bare `"python"` string. macOS has no `python` in PATH (only `python3`); launchd's minimal PATH makes it worse. Every publish reached `archived` stage and died `FileNotFoundError: 'python'`. Fix: `sys.executable`. |
+| #242 | `ff249f4` | `PublishMonitor.tsx` used publish-only stepper labels (`…Live·Archived`) for ALL ops including Retire. A Retire does not go "live" and does not remove the form from the Box archive. Fix: export `stepsForOp(op)` — Retire op gets `Queued·Validated·Tested·Removed·Done`. |
+| #244 | `241cd64` | Retiring an already-retired form is a no-op manifest diff → `_commit_test_merge`'s `git commit` exits 1 ("nothing to commit / untracked files present") → failed at `tested`. Two-part fix: `apply_publish` rejects a redundant delete at validate ("is already retired"); `_commit_test_merge` adds `git diff --cached --quiet` backstop for any no-op apply. `form_archive_out/` added to `.gitignore`. |
+| #245 | `2aa2061` | Operator requested WSR timestamps carry date AND time (not date-only). New `wsr_review.to_wsr_datetime()` writes naive Pacific `YYYY-MM-DDTHH:MM:SS`; `weekly_send.py` Sent At + `weekly_send_poll.py` Approved At route through it; `build_wsr_human_review_sheet.py` schema updated DATE→ABSTRACT_DATETIME. Decision: code-first sequencing — land the naive writers BEFORE retyping live columns; a running daemon writing `+00:00` into a retyped ABSTRACT_DATETIME column → errorCode 5536 → CRITICAL double-send path. |
+
+### §G31.2 — Smartsheet ABSTRACT_DATETIME: live-verified facts
+
+Verified live via `update_column` on `WSR_human_review` (id `5035670127988612`):
+
+- `ABSTRACT_DATETIME` (the Smartsheet "Date/Time" user type) CAN be created and live-retyped to via `update_column`. It is NOT the same as `DATETIME` (which remains rejected with errorCode 4000 at sheet-creation and via column update — the existing tech-debt entry stands).
+- `update_column` retypes an existing `DATE` column to `ABSTRACT_DATETIME` in-place. The two live rows survived the retype; existing date-only values coerced to midnight (no nulls).
+- `ABSTRACT_DATETIME` accepts a naive `YYYY-MM-DDTHH:MM:SS` string (stored and displayed literally — no timezone conversion by the platform).
+- `ABSTRACT_DATETIME` REJECTS any timezone offset or `'Z'` suffix → errorCode 5536.
+- Columns retyped: "Approved At" (col `7944658226548612`), "Sent At" (col `5129908459442052`) — both on sheet `5035670127988612`.
+- PRODUCTION `WSR_human_review` built from the updated `build_wsr_human_review_sheet.py` builder gets ABSTRACT_DATETIME from creation (no live retype needed).
+
+Operator preference: Pacific local time (tz-naive, no UTC). Represents the wall-clock the approver / sender sees.
+
+### §G31.3 — Self-defeating CI test class (captured as §5 trap)
+
+The publish daemon's own CI gate was self-defeating: hardcoded form-count assertions and fixture identities in `test_form_archive.py`, `test_form_definitions.py`, `test_form_catalog.py`, and `publish.test.ts` coupled directly to the live catalog inventory. A new-form publish increments the count + adds a catalog entry → red CI → the daemon's `_wait_for_ci` stalls forever. Root-cause surfaced via the `incident-report-v1` stranded-tree sequence (#236) and the req-8 live test.
+
+Fix (PRs #222/#228, the CI-gate hardening session): all count assertions made dynamic (`len(all_defs)`); `test_publish_manifest.py` decoupled from live `catalog.json` via a frozen in-memory fixture; Worker `publish.test.ts` "brand-new parent type" fixture uses reserved sentinel `zztest-brand-new-type` (not a real identity). Added to §5 Known Traps in the info-gap doc.
+
+### §G31.4 — Operational state after this session
+
+- **Exec HEAD:** `2aa2061` (main).
+- **`~/its` branch:** `main` (recovered; no longer stranded).
+- **Publish daemon:** `org.solutionsmith.its.publish-daemon` — LOADED + live (first launchd load 2026-06-09).
+- **`compile_now_poll`:** on disk, NOT yet loaded (operator activation pending).
+- **Orphaned Reports:** `SHEET_ORPHANED_REPORTS = 0` (config-gated OFF); operator activates: run `scripts/migrations/build_orphaned_reports_sheet.py` → flip ID in `shared/sheet_ids.py` → deploy.
+- **WSR_human_review mirror columns:** "Approved At" + "Sent At" retyped to ABSTRACT_DATETIME live.
+- **Known open items:** Portal admin still offers Retire on already-retired forms (frontend-only UX gap; backend rejects cleanly). `README.md:111` doc-drift (weekly-send idempotency key described as "Sent At non-empty"; code keys on `Send Status == SENT`). `form_archive_out/` written to `~/its` per cycle (gitignored; temp-dir cleanup deferred).
+
+### §G31.5 — Process
+
+Exec `b736691` → `2aa2061` (PRs #236, #241, #242, #244, #245; #243 + #238–#240 are daemon-created chore commits between sessions — jha v2/v3, equipment-skid-steer-test lifecycle). All five PRs four-part verified. Blueprint: no new doc updates required this session.
