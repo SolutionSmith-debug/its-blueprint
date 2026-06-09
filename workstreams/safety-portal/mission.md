@@ -2,8 +2,8 @@
 type: mission
 version: 3
 status: canonical
-last_verified: 2026-06-08
-last_verified_against: b7bad5a
+last_verified: 2026-06-09
+last_verified_against: b736691
 supersedes: workstreams/safety-portal/mission.md@v2
 workstream: safety_portal
 tags: [workstream-mission, customer-facing, external-input-surface, external-send-gate, standalone-workspace, pull-transport, clean-break, workspace-membership-approval, find-or-create, box-mirror]
@@ -178,7 +178,7 @@ The Python pipeline holds the **only** write credentials for Smartsheet and Box;
 | Box-mirror SoR | config-gated Box-mirrors-Smartsheet (`safety_naming` shared names) | **Landed** (PR-K #189, `ecb06d9`) — **live on the mirror (2026-06-08)**; root key set |
 | Deploy / activation | **All three operator activation tracks closed on the mirror (`evergreenmirror.com`, 2026-06-08):** (a) admin route live (migration 0006, byte-equal tokens, session revocation proven); (b) Box mirror live (`portal_root_folder_id` set, `ROOT → job → week`); (c) custom domain `safety.evergreenmirror.com` live. End-to-end + a **real unattended timed send** confirmed (forensic-clean, F22-verified). Workers Paid active. The **Evergreen production cutover** remains a separate later step (sole open v3.x track) | **Done on mirror (2026-06-08)** — §G27 |
 | Phase 8 — admin dashboard | Role model (migrations 0007/0008) + per-request `requireRole` + two-tab admin SPA (submit-as + account mgmt, atomic last-admin guard) + first Worker-TS CI + security audit/hardening (**CSP enforcing**) | **Landed + live on the mirror** (PRs #193–#202, `b7bad5a`) — §G29 |
-| Phase 9 — form editor + session hardening | Admin form create/edit/version/delete + Mac-daemon auto-publish pipeline + status monitor + Box DR archive + role-aware session hardening (#7) | **Designed, not built** (exec brief + §G29; **C12 = A** + guard-rails/detect-alert mandate) |
+| Phase 9 — form editor + session hardening | Admin form create/edit/version/delete + Mac-daemon auto-publish pipeline (`publish_daemon.py`) + status monitor (`PublishMonitor.tsx`) + Box DR archive + role-aware session hardening (#7 `session_epoch` + 5-min admin idle) | **Fully built** (PRs #203–#216 + #218, exec `b736691`) — §G30; daemon NOT loaded (operator-gated, HIGH-capability Tier-3; plist on disk `org.solutionsmith.its.publish-daemon`); rollback UI picker + S1 per-item scale/comment authoring deferred |
 
 ## 12. Risks
 

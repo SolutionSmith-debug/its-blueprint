@@ -1562,3 +1562,67 @@ Grilled + red-teamed (Workflow, 46 findings). Exec design brief on exec main: **
 - Exec main `f3ad814` → `b7bad5a` (PRs #193/#194/#195/#197/#198/#200/#201/#202 + exec-docs #199 brief). All four-part verified; live mirror Worker `80ec62ea`.
 - **Operator cleanup pending:** exec worktrees `~/its-admin`/`~/its-formarchive`/`~/its-submitas`/`~/its-harden`/`~/its-brief`; pull `~/its` → main (it was stale at the session-start commit — which tripped the red-team agents into the stale-context findings).
 - Background **AGENTS were FS-sandboxed to `~/its` only** this session (couldn't write sibling worktrees); main-thread CC retained full access — so CC ran the worktree edits on the main thread.
+
+## §G30 — 2026-06-09 Safety Portal Phase-2 Form Manager — full build (exec `b7bad5a` → `b736691`)
+
+### Summary
+
+The entire Phase-2 **Form Manager** — schema-driven form editor + automated publish pipeline — was designed in §G29.3 and **fully built this session** (exec PRs #203–#216, #218; PR #217 was a daemon-created failed-attempt PR, CLOSED). Exec HEAD advanced from `b7bad5a` to `b736691`. All PRs four-part verified. The publish daemon is the first ITS component that **commits code, merges, and deploys autonomously** under a per-category clearance (C12=A).
+
+### §G30.1 — Components shipped
+
+| Component | PR(s) | Notes |
+|---|---|---|
+| `safety_portal/catalog.json` + `catalog.schema.json` | #203 | The active-set manifest contract; CI consistency check (`scripts/check_catalog_consistency.py`); append-only on disk — manifest is the ONLY active-set gate |
+| `safety_reports/publish_manifest.py` (`apply_publish`) | #213 | Pure transform: create/edit/add_version/delete/rollback; enforces identity uniqueness, monotonic version, variant-mixing rule, rollback target |
+| `FormEditor.tsx`, `FormsPage.tsx`, `editorModel.ts`, `editorValidation.ts` | #211 | B8 sectioned form editor + create/edit/add-version/retire ops |
+| `PublishMonitor.tsx` | #211 | Queued→Validated→Tested→Live→Archived status monitor; red+reason on failure |
+| Phase-2 8a: `users.session_epoch` | #206 | Real session revocation — logout + password-change bump the epoch; `requireSession` rejects stale cookies. D1 migration 0009. |
+| Phase-2 8b: admin 5-min idle window | #215 | Sliding 5-minute idle timeout for admin sessions (role-aware; submitter sessions unchanged) |
+| Worker publish enqueue (`POST /api/admin/publish`) + `publishValidation.ts` | #209 | Send-free enqueue + hand-rolled Worker-side validator (meta-schema + renderer-contract + reserved-key denylist + `validateParentGrouping` vs the deployed `catalog.json`; needed `resolveJsonModule` in `tsconfig.worker`) |
+| Daemon queue endpoints (pull/claim/stamp) | #212 | `/api/admin/publish-status`, `/api/admin/publish-dismiss`, `/api/admin/publish-request` |
+| `safety_reports/publish_daemon.py` | #214 | Privileged Mac actuator: claim → re-validate vs git HEAD → commit → CI render-smoke → `_wait_for_ci` (polls `mergeStateStatus`) → `gh pr merge --squash` → deploy → Box archive → stamp each milestone; `_reset_to_main` Stage-0 recovery (see §G30.2); new launchd job `org.solutionsmith.its.publish-daemon` (StartInterval 120, RunAtLoad false) |
+| D1 migration 0010 | #214 | `publish_requests` table |
+| 3-renderer render-smoke net (3c) — Python half | #208 | Pytest suite covering the Python renderer path |
+| 3-renderer render-smoke net (3c) — SPA half | #210 | `jsdom` FormRenderer smoke (third leg) |
+| Parent-grouping guard (#216) | #216 | Client editor `checkParentGrouping` + Publish Monitor "Clear finished" button |
+| `_wait_for_ci` + `_edit_failed_publish` (#218) | #218 | Daemon polls `mergeStateStatus == CLEAN` before merge (no `--auto`); `portal_admin edit-publish` verb to requeue a failed request |
+
+### §G30.2 — Publish daemon: architecture + two critical operational facts
+
+**Architecture:** the daemon is the **sole privileged actor** — the portal enqueues a send-free D1 publish-request; the daemon claims it, re-validates vs the authoritative git HEAD copy of `catalog.json`, runs the 3-renderer CI smoke, waits for CI to go CLEAN (polling `mergeStateStatus`), then `gh pr merge --squash`, deploys via local `wrangler deploy` (CF credential never leaves the Mac), fast-forwards `~/its` so `load_definition` sees the file, archives a blank-fillable to Box, and stamps "Live."
+
+**Critical fact 1 — GitHub auto-merge DISABLED.** `gh pr merge --auto` is rejected by the repo with a GraphQL `enablePullRequestAutoMerge` error. This is a permanent repo setting. The daemon therefore polls CI itself (`mergeStateStatus`) then calls `gh pr merge --squash` directly (PR #218). `--auto` was also problematic because it merges ASYNCHRONOUSLY — the daemon needs to know the merge commit OID before it deploys. Never re-add `--auto` to the publish daemon without addressing both constraints.
+
+**Critical fact 2 — the daemon operates on the live `~/its` tree and can strand it on a `publish/*` branch.** A failed publish cycle (CI red, merge error, crash mid-cycle) can leave `~/its` on `publish/req-<N>-<identity>`. This happened during development (left on `publish/req-5-incident-report`). PR #218 added `_reset_to_main()` as Stage-0 recovery: on daemon startup and before claiming a new request, it stashes any uncommitted changes and force-checks out `main` + fast-forwards. The daemon NEVER touches operator untracked files (stash is a safety net; untracked are left). After an incident, verify: `git -C ~/its branch` should be `main` after the next daemon cycle.
+
+### §G30.3 — Parent-grouping rule: three-layer enforcement
+
+The rule — a form's sections must all have the same parent grouping scheme, i.e., no mixing of a `parent`-keyed section with a non-parent-keyed sibling — is enforced at THREE layers:
+
+1. **Client editor** (`checkParentGrouping` in `editorValidation.ts`) — immediate UI feedback.
+2. **Worker enqueue** (`validateParentGrouping` in `publishValidation.ts`, evaluated against the deployed `catalog.json` imported via `resolveJsonModule` in `tsconfig.worker`) — server-side gate at submission.
+3. **Daemon** (`apply_publish` in `publish_manifest.py`) — authoritative check vs git HEAD.
+
+The Worker needed `"resolveJsonModule": true` in `tsconfig.worker.json` for the static `catalog.json` import — this was the blocking gotcha during PR #213/#209 authoring.
+
+### §G30.4 — ITS_Config additions this session
+
+- Row added to Smartsheet `ITS_Config` (sheet `3072320166907780`, row 41): `safety_reports.publish_daemon.polling_enabled = true`, Workstream `safety_reports`.
+- The daemon reuses existing Keychain key `ITS_PORTAL_INTERNAL_TOKEN` + ITS_Config key `safety_reports.portal.worker_base_url` (shared with `portal_poll`).
+
+### §G30.5 — Deferred / tech-debt
+
+- **Rollback UI picker** — the backend is DONE (`apply_publish` rollback op + daemon rollback path + `PublishOp` type carrying rollback target); only the retired-version-history PICKER UI in the editor is missing. The rollback op can be triggered via API today; the UI is the deferred piece.
+- **S1 — per-item scale/comment authoring** — survives an edit today (existing `hsse` items carry `scale`/`comment`); no new-item authoring UI in the editor. Only `hsse` uses it.
+- **Daemon privileged ops are operator-validated-live only** — `git/gh/wrangler` subprocess chains are mocked in unit tests per Op Stds §30 (mock at the subprocess boundary); #218's `_wait_for_ci` + `_reset_to_main` are running live for the first time on the operator's recovery. A dedicated integration test harness for the commit→merge→deploy chain does not exist; operator's live smoke is the gate.
+
+### §G30.6 — §43 coverage
+
+`safety_reports/README.md` carries the §43 successor-remediation entry for the publish daemon (symptom, low-class repair steps, escalate-to-Seth boundary). Publish-daemon operations (git/merge/deploy) are HIGH-capability-class (category 4: code changes) — the §43 entry exists for SYMPTOM recognition and escalation, not for Tier-2 repair.
+
+### §G30.7 — Process
+
+Exec `b7bad5a` → `b736691` (PRs #203–#216, #218; #217 closed/not merged). All four-part verified. `~/its` is currently on branch `publish/req-5-incident-report` (publish daemon stranded it before `_reset_to_main` was added; the next daemon cycle will recover it, or `git -C ~/its checkout main && git pull` manually). Remaining operator actions: pull `~/its` to `main`, clean worktrees from this session, load the publish-daemon launchd job (`RunAtLoad false` — operator-gated; HIGH-capability-class, Tier-3 escalation per §43).
+
+Blueprint: no new doc updates required this session (the Phase-2 design brief in §G29.3 is the spec; fold into `workstreams/safety-portal/mission.md` when starting Phase-3).
