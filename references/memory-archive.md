@@ -2,8 +2,8 @@
 type: reference
 version: 5
 status: canonical
-last_verified: 2026-06-07
-last_verified_against: f3ad814
+last_verified: 2026-06-09
+last_verified_against: 8c1600d
 supersedes: references/memory-archive.md@v4
 workstream: null
 tags: [restoration, operational-detail, post-compaction-recovery]
@@ -1675,3 +1675,44 @@ Fix (PRs #222/#228, the CI-gate hardening session): all count assertions made dy
 ### §G31.5 — Process
 
 Exec `b736691` → `2aa2061` (PRs #236, #241, #242, #244, #245; #243 + #238–#240 are daemon-created chore commits between sessions — jha v2/v3, equipment-skid-steer-test lifecycle). All five PRs four-part verified. Blueprint: no new doc updates required this session.
+
+## §G32 — 2026-06-09 Form Editor UX fixes + draft caching + live SPA deploy (exec `2aa2061` → `8c1600d`)
+
+### Summary
+
+Two fix/feat PRs closed the final Form Editor UX gaps from the Phase-2 build. Exec HEAD advanced from `2aa2061` to `8c1600d`. Both PRs four-part verified. The updated SPA was deployed live to `safety.evergreenmirror.com` (version `71428941-53e5-46fc-8d8b-3570232d58d7`, bundle `index-B3GEp7P5.js`). All three fixes are LIVE on the mirror.
+
+### §G32.1 — PRs and root causes
+
+| PR | Commit | Root cause / fix |
+|---|---|---|
+| #249 | `d5e9442` | Two UX bugs. (a) Checklist "Response scale" was a controlled comma-separated `<input>` that split/trimmed/filtered on every keystroke — a trailing comma was erased (couldn't add a 4th option) and an option that briefly emptied mid-edit vanished. Fix: reuse the existing per-option `OptionsEditor` (added a `label` prop), the same control used for select/circle_one options. (b) `FormsPage.explainPublish` fell through to a contentless "Publish was rejected. Please review and try again." for any unmapped error, notably the 401 admin 5-minute idle-timeout (a fully-built form takes >5 min; the session idles; the publish POST 401s). Fix: map 401 → "Session expired — sign in again"; map bad_request; final fallback names the code + HTTP status so a rejection is never contentless. Exported + unit-tested. |
+| #250 | `8c1600d` | Form Editor draft lived only in React state. The admin idle logout (`useIdleLogout` → `auth.tsx setUser(null)` → editor unmounts) or any reload lost a WIP form. New `src/lib/draftCache.ts`: localStorage, per-username key `its-portal-draft:v1:<username>`, best-effort try/catch (unavailable store never blocks editing), editor-modes-only, corrupt/stale-"view"-entry guard. `FormsPage`: autosave on every editor change; auto-restore once per mount with a "Restored your unsaved draft" banner; "Discard draft" button (with confirm) + a successful publish clear the draft; **Cancel keeps it** (recoverable). Account = `useAuth().user.username`. Tests: per-account round-trip / isolation / clear + corrupt/stale/empty guards (in-memory localStorage stub — jsdom env). |
+
+### §G32.2 — Draft-cache design decisions (operator-ratified)
+
+- **Auto-restore on reopen:** when the editor mounts and finds a cached draft for that account, it restores automatically and shows a "Restored your unsaved draft" banner. The admin does not need to do anything.
+- **Clear on: Discard (with confirm) OR successful publish.** A confirmed discard wipes the slot; a successful publish also wipes it so the next open starts clean.
+- **Cancel keeps it:** if the admin navigates away without discarding, the draft survives. This is intentional — navigating away is not the same as "I'm done with this."
+- **One slot per account:** starting a new form replaces the cached draft. Acceptable because the operator builds one form at a time. Tracked in `docs/tech_debt.md`.
+
+### §G32.3 — Live deploy record
+
+`npm run deploy` (vite build + wrangler deploy) run from `safety_portal/` against the `safety.evergreenmirror.com` Worker. Post-deploy liveness verified: SPA index (`/`), the JS bundle (`/assets/index-B3GEp7P5.js`), and a deep SPA route (`/forms`) all HTTP 200; the live index references the new bundle. No D1 migration needed (schema unchanged).
+
+- **Cloudflare version ID:** `71428941-53e5-46fc-8d8b-3570232d58d7`
+- **New bundle:** `index-B3GEp7P5.js` (replaces prior `index-*.js`)
+
+CC ran `npm run deploy` in auto-mode (no operator token step needed — token already resident from the 2026-06-08 session). Consistent with the precedent in §G29.4 (CC can deploy Workers; live D1 migrations require operator).
+
+### §G32.4 — Operational state after this session
+
+- **Exec HEAD:** `8c1600d` (main, origin/main).
+- **`~/its` branch:** `main` (publish daemon self-healed after `_unstrand_if_needed` landed in the hardening session; no manual intervention needed this session).
+- **Mirror SPA:** `safety.evergreenmirror.com` live on `8c1600d` bundle.
+- **Publish daemon:** loaded + live (unchanged from §G31.4).
+- **Known open items (carried):** Portal admin still offers Retire on already-retired forms (frontend UX gap; backend rejects cleanly). `README.md:111` doc-drift. `form_archive_out/` temp-dir cleanup. Draft cache one-slot-per-account limitation.
+
+### §G32.5 — Process
+
+Exec `2aa2061` → `8c1600d` (PRs #249, #250; both four-part verified). Live deploy: `71428941-53e5-46fc-8d8b-3570232d58d7`. Blueprint: info-gap §8 + memory-archive §G32 updated this session-close.
