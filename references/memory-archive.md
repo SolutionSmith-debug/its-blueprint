@@ -1854,3 +1854,85 @@ Two new test files added:
 ### §G34.6 — Process
 
 Exec `298496d` → `23c04e6` (PR #258; four-part verified). Blueprint: info-gap §8 + memory-archive §G34 updated this session-close. Session log to be written separately by session-log-writer.
+
+## §G35 — 2026-06-10 Blueprint reconciliation: safety-portal mission→v4 + brief→v4 (exec `f3ad814..ab920bc`)
+
+### §G35.1 — What this session did
+
+Blueprint-scoped reconciliation pass. Local commit `429d377` on `~/its-blueprint` (`docs(safety-portal): reconcile mission→v4 + brief→v4 to as-built (exec ab920bc)`). Exec window: `f3ad814..ab920bc`, PRs #190–#258 (62 commits), brief-validator-checked.
+
+Files changed in `429d377`:
+
+- `workstreams/safety-portal/mission.md` — v3.2 → v4 (see §G35.2)
+- `workstreams/safety-portal/brief.md` — v3.1 → v4 (see §G35.3)
+- `references/claude-code-info-gap.md` — §3 gained candidate-doctrine-flags note
+- `workstreams/README.md` — safety-portal status text refreshed
+- `audits/2026-06-10_doc-reconciliation.md` — doc-reconciliation-auditor findings (propose-only verdict: accurate, no new drift, held doctrine line; single actionable item = pre-existing M9 in exec CLAUDE.md)
+
+Prior memory-archive sections §G29–§G34 were already current (written by prior session-closes). No §G section was needed until this pass.
+
+### §G35.2 — Mission v3.2 → v4 changes
+
+Four substantive additions:
+
+**§2 audience expansion.** Added the in-browser admin dashboard as the second audience surface (alongside field crews on mobile). Recognizes that the Safety Portal now has a two-surface UX: field view (public submit form) and admin view (protected dashboard for form management, account administration, submission review).
+
+**§13 — Admin dashboard + account model.** New section documenting the admin subsystem: bcryptjs auth, D1 `users` table + `user_sessions`, HMAC session cookie, sliding idle window (30 min post-#258), per-session revocation via `users.session_epoch` (migration 0009), `GET/POST /api/admin/*` endpoint tree (accounts CRUD, form-catalog query, publish-request enqueue/status, idle session keep-alive). The admin surface is shared by both `portal_poll` and `publish_daemon` — both use the internal bearer token (`ITS_PORTAL_INTERNAL_TOKEN` Keychain / `PORTAL_INTERNAL_TOKEN` Worker secret).
+
+**§14 — Form-publish pipeline as a second privileged code-actuation gate.** New section formalizing the publish pipeline's architecture. The form-publish pipeline is the **second instance** of a privileged code-actuation pattern (Invariant 1's two-process model applied to code, not just data). The gate structure: cloud-only queuing side (`POST /api/admin/publish-request` enqueues to D1; Worker has zero git/deploy capability) + Mac-daemon actuation side (`publish_daemon.py` claims from D1, re-validates vs git HEAD, commits, CI-gates, merges, deploys, archives). No cloud process holds git credentials or Cloudflare deploy tokens. This is a generalization of Invariant 1's two-process model: the cloud can only *request* an action; the local Mac daemon is the *sole actuator* holding the credentials.
+
+**§11 phase-status rows** refreshed to reflect: pipeline live (PRs #212/#214 built; publish daemon loaded); operator-exercised via `incident-report` create→v2→v3 (reqs 16/17/18, PRs #254/#255/#257); Part A (core portal), Part B (form manager), Part C (#235 activated) all live on mirror; idle-timeout hardened to 30 min (#258). M1/M2/M4/M5/M6/M7 open (§12 risk pointers added).
+
+**Verify-before-fix corrections folded in:** mission was v3.2 (`b736691`) not v3.1 (`f3ad814`); admin idle window is 30 min not 5 (#258); `_actuate` is the orchestrator (`apply_publish` is the manifest helper it calls); the internal bearer token is shared by `portal_poll` + `publish_daemon`; `+GET /api/admin/publish-request` endpoint; Part C activated #235; M2/M9 also open; publish status vocabulary is `queued→validated→tested→merged→live→archived|failed`; §G28 already exists.
+
+### §G35.3 — Brief v3.1 → v4 changes
+
+The brief had pinned at Phase 7 / exec `f3ad814`. Four major new sections + one amended:
+
+**§3 Smartsheet surface map.** Added: `ITS_Active_Jobs` (id `6223950341164932`), `ITS_Forms_Catalog` (id `423274885369732`), `WSR_human_review` (the weekly-send review sheet). Orphaned Reports table added (config-gated OFF, `SHEET_ORPHANED_REPORTS=0`).
+
+**§17 — Endpoints + migrations 0007–0010 + gate map.** Complete HTTP endpoint inventory for the Worker (public submit, internal pull/mark-filed/sync, admin auth/accounts/forms/publish-request/session keep-alive). D1 migrations 0007 (per-submission attachments table), 0008 (pending-submissions D1 queue), 0009 (session_epoch for per-session revocation), 0010 (accounts table restructure). Gate map: which endpoints are gated by which auth (bearer vs. session-cookie vs. open).
+
+**§18 — Publish state machine + daemon chain.** State vocabulary: `queued→validated→tested→merged→live→archived` + `failed` terminal. Each state mapped to the daemon stage that drives it: claim (queued→validated), re-validate+commit+CI (validated→tested), merge+deploy (tested→merged→live), Box-archive+stamp (live→archived). `_reset_to_main` Stage-0 recovery path. The daemon's `_actuate` orchestrator vs `apply_publish` pure transform clarified.
+
+**§19 — Part A/B/C + send-leg hardening + bugfix chain.** Three-part rollout narrative absorbed:
+- Part A: core portal PRs (submissions, portal_poll, intake wiring, WSR rewire).
+- Part B: form manager build (PRs #203–#218, catalog.json + CI consistency check + render-smoke + publish pipeline + form editor + session revocation + idle window + parent-grouping guard + no-auto-merge daemon loop).
+- Part C: activated with PR #235 (`_wait_for_ci` loop, publish daemon live).
+- Send-leg hardening: write-ahead SENDING marker (PR #247), append-only compile (PR #248), portal-poll fail-loud (PR #252), SENDING registry fix (PR #253).
+- Bugfix chain: `generate_form_archive.py` keyed by `definition_id` not `form_name` (PR #236); `sys.executable` not bare `python` (PR #241); redundant-retire guard (PR #244); WSR ABSTRACT_DATETIME timestamps (PR #245).
+
+**§16 open-questions refresh.** Carried / resolved questions updated to reflect as-built state.
+
+### §G35.4 — Doctrine flags raised (no doctrine/* edit)
+
+Two candidate doctrine changes surfaced. Doctrine is high-capability-class — flags only. Recorded in `mission.md §"Doctrine flags raised"` + `references/claude-code-info-gap.md §3` + this section. Pending Seth co-resolution.
+
+**Flag 1 — Candidate Op Stds §50: "privileged code-actuation gate."**
+Generalize Invariant 1's two-process External Send Gate model to *code changes*: the cloud side can only queue a publish request (via D1, no git/deploy capability); the local Mac daemon is the sole actuator (holds git + Cloudflare deploy credentials, CI-gated synchronous merge). This is structurally identical to the data-send two-process model: cloud proposes, Mac executes, human approval implicit in the operator having loaded and started the daemon. The form-publish pipeline is the first instance; the PO + Subcontracts document-generation workstreams will likely want the same shape. Promoting this to an Op Stds section (§50) would give future workstreams a named reference pattern.
+
+**Flag 2 — Form-maintenance principle promotion.**
+Promote *"operator + Claude maintained, with critical invariants enforced in code, not just documented"* to foundation doctrine. The portal realizes this mechanically: the `catalog.json` + CI consistency check + daemon-side `apply_publish` validator together enforce form-definition invariants (identity uniqueness, monotonic version, variant-mixing rule, rollback-target existence) in code, regardless of what a human editor does to the YAML. This is a general principle worth elevating: ITS's maintenance model is operator + Claude, and the code enforces the invariants so the operator can't accidentally violate them.
+
+### §G35.5 — Doc-reconciliation-auditor verdict
+
+`audits/2026-06-10_doc-reconciliation.md` — propose-only, written by the doc-reconciliation-auditor agent.
+
+**Verdict:** The v4 reconciliation is accurate. Introduced NO new drift. Held the doctrine line (flags-only; `git show --stat 429d377 -- doctrine/` is empty). Nine fact-classes cross-checked against exec as-built at `ab920bc` — all confirmed clean.
+
+**Single actionable finding:** pre-existing in exec `~/its/CLAUDE.md` — the incomplete v16→v18 sweep (M9, already tracked in `docs/tech_debt.md`). `CLAUDE.md:131` still says `(the Op Stds v16 / FM v11 reframe)`; proposed fix is `(the Op Stds v18 / FM v11 reframe)`. Two false positives in the mechanical tier (`CLAUDE.md:65/81` historical citations correct; `docs/tech_debt.md:1720` checker header_re mismatch). Out of scope for this blueprint/flags-only pass — exec fix needed.
+
+### §G35.6 — Operational state after this session
+
+- **Blueprint HEAD (local, not yet pushed):** `429d377` (ahead of `origin/main` by 1 commit).
+- **Exec HEAD (`origin/main`):** `23c04e6` (PR #258; four-part verified).
+- **Blueprint reconciliation verified against exec:** `ab920bc` (PR #258 is `23c04e6`; the reconciliation window was `f3ad814..ab920bc` = PRs #190–#258, which includes `23c04e6`).
+- **Safety-portal mission:** v4 (was v3.2).
+- **Safety-portal brief:** v4 (was v3.1).
+- **Doctrine flags:** 2 open (candidate §50 code-actuation gate + form-maintenance principle). No `doctrine/*` edit made.
+- **M9 (CLAUDE.md v16→v18):** still open in exec `docs/tech_debt.md`. Auditor confirmed fix = one-line `131` update.
+- **Known open items (carried):** all §G34.5 items + M9 exec fix.
+
+### §G35.7 — Process
+
+Blueprint `429d377` (local, ahead of origin/main by 1 commit — auto-mode classifier gates the blueprint-main push). Blueprint: info-gap §8 + memory-archive §G35 updated this session-close. Session log warranted (≥1 commit + non-obvious doctrine decisions: code-actuation-gate framing + two flags). Operator invokes `session-log-writer` directly.
