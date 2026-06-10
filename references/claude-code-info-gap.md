@@ -92,6 +92,11 @@ Restate these in every brief touching external-bound code OR external content in
 - PR #86 drift: §A1 already delivered, §A4 named nonexistent `shared/alert.py`, §A5/§B3 wrong specifics. CC caught all of it.
 - Briefs making code-shape claims get a code read first.
 
+### Candidate doctrine flags (pending Seth co-resolution — raised 2026-06-10, Safety Portal v4 reconciliation)
+The Safety Portal as-built surfaced two candidate doctrine changes. Doctrine is high-capability-class → **flags only**, no `doctrine/*` edit. Recorded in [safety-portal mission §Doctrine flags](../workstreams/safety-portal/mission.md) + the 2026-06-10 blueprint session log.
+1. **Candidate Op Stds §50 — "privileged code-actuation gate."** Generalize Invariant 1's two-process model to *code* changes: cloud can only queue / the local Mac daemon is the sole actuator / state-machine-stamped / CI-gated synchronous merge / the operator toolchain holds the credentials. First instance = the Safety Portal form-publish pipeline (`publish_daemon.py`); the PO + Subcontracts document-generation workstreams will want the same shape.
+2. **Form-maintenance principle promotion.** Promote *"operator + Claude maintained, with critical invariants enforced in code, not just documented"* to foundation doctrine, now that the portal realizes it mechanically.
+
 ---
 
 ## 4. PR Workflow Discipline

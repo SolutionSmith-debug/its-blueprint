@@ -1,15 +1,17 @@
 ---
 type: brief
-version: 3
+version: 4
 status: canonical
-last_verified: 2026-06-08
-last_verified_against: f3ad814
-supersedes: workstreams/safety-portal/brief.md@v2
+last_verified: 2026-06-10
+last_verified_against: ab920bc
+supersedes: workstreams/safety-portal/brief.md@v3
 workstream: safety_portal
-tags: [workstream-brief, cloudflare-workers, static-assets, d1, hmac, pull-transport, python-option-b, standalone-workspace, parent-variant-forms, clean-break, workspace-membership-approval, job-sync, find-or-create, mirror-deploy, box-mirror]
+tags: [workstream-brief, cloudflare-workers, static-assets, d1, hmac, pull-transport, python-option-b, standalone-workspace, parent-variant-forms, clean-break, workspace-membership-approval, job-sync, find-or-create, mirror-deploy, box-mirror, admin-dashboard, form-publish-pipeline, code-actuation-gate, publish-requests]
 ---
 
-# ITS Safety Portal — Brief v3.1
+# ITS Safety Portal — Brief v4
+
+**2026-06-10 — v4: admin dashboard + form-publish pipeline engineering (exec `f3ad814` → `ab920bc`, PRs #190–#258; brief-validator-checked).** This is the brief's biggest jump: it last pinned at `f3ad814` (Phase 7), so v4 absorbs **both** Phase 8 (admin dashboard) **and** Phase 9 (form editor / publish pipeline) — which the companion [mission](mission.md) already reached at v3.2 → v4. New engineering: the in-browser admin SPA + account/role model (migrations **0007** role+audit_log, **0008** submit-as attribution, **0009** `session_epoch`; §17); the **form-publish pipeline** — `publish_requests` (migration **0010**), the Worker enqueue/queue endpoints, and the Mac `publish_daemon.py` sole-actuator chain (§18); Part A/B/C + send-leg + bugfix-chain hardening (§19); the Smartsheet surface as-built map + Orphaned Reports (§3); and the portal CI job + blocking gitleaks (§17). Every engineering specific is verified against the live code at `ab920bc` (a 62-commit `brief-validator` pass) — notably the publish status vocabulary **`queued → validated → tested → merged → live → archived | failed`**, the `_actuate` orchestrator vs the `apply_publish` manifest helper, the two-bearer-token gate map (`PORTAL_INTERNAL_API_TOKEN` is **shared** by `portal_poll` + `publish_daemon`; `PORTAL_ADMIN_API_TOKEN` is separate), and the admin idle window now **30 min** (#258). The companion [mission v4](mission.md) §§13–14 carries the *doctrine* framing (the code-actuation gate + the two flags raised); this brief carries the *engineering*.
 
 2026-06-07 — Deploy + as-built reconciliation (exec PRs #178–#189; verified against exec main `f3ad814`). Companion to [mission.md](mission.md). v3 supersedes v2 on every point the 2026-06-06/07 deploy sessions changed: week-sheet filing **auto-provisions** at the surface of `WORKSPACE_SAFETY_PORTAL` (per-job folder → per-week sheet, find-or-create; the legacy `FIELD_REPORTS_FOLDER_BY_PROJECT` map is dropped from the portal path — §3); **`ITS_Active_Jobs` → D1 job sync** (bearer-gated `POST /api/internal/sync`, portal-poll push — §3, resolves the §16 sync Q); **F22 approval authority = Safety Portal workspace membership** (the `authorized_approvers` ITS_Config allowlist is retired — see [mission §8](mission.md#8-self-containment-and-workspace-as-approval-authority)); rendered PDFs **attached inline** on the Submission / Rollup / WSR rows (§8, supplementary — Box stays SoR); **version-on-conflict** for the recompiled weekly packet (§8/§9); the validation deploy points at the operator's **mirror D1** (`its-safety-portal-db`, custom domain `safety.evergreenmirror.com` declared in `wrangler.jsonc` — §11); the **secret map** is corrected to the as-built names (`HMAC_PAYLOAD_SECRET` / `PORTAL_INTERNAL_API_TOKEN`, not the v2 `HMAC_SECRET` / `INTERNAL_BEARER_TOKEN` — §11). **The full deploy-session batch (PRs #178–#189) is now merged:** PR-I #187 sheet styling, PR-J #188 custom domain, **PR-K #189 Box-mirrors-Smartsheet** (merged but **config-gated/live-inert** until the operator sets `safety_reports.box.portal_root_folder_id` — §9), and **PR-H #185 Phase 7 admin + server-side revocation** (now **landed**, with a 3-part live-activation gate — §4, §14). Three operator-gated **activation tracks** remain before production (§14).
 
@@ -101,6 +103,26 @@ Per-job folders → week sheets (`[Job] — week of [date]`, **Saturday→Friday
 ### `ITS_Active_Jobs` → D1 job sync (PR-D #182)
 
 The portal serves its job dropdown from D1, never Smartsheet — and as of PR-D (#182, exec `053d627`) that D1 cache is kept current by a **push from the Python side**, resolving the v2 "Sync Now mechanism TBD" open question (§16). `portal_poll.py` (`_push_active_jobs`, each cycle, best-effort/fenced so a sync failure never blocks intake) reads `active_jobs.list_all_jobs()` and POSTs `[{job_id, project_name, active}]` to the bearer-gated **`POST /api/internal/sync`** (`shared/portal_client.push_jobs`, `SYNC_PATH`). The Worker does a **full-replace** in one `DB.batch()` (upsert each row + deactivate any active D1 `job_id` absent from the payload), with a **never-wipe guard** (empty payload → `400 empty_jobs`; the Mac side also skips an empty set). `GET /api/jobs` then serves `WHERE active = 1` to the SPA. So a new `ITS_Active_Jobs` row reaches the dropdown within one poll cycle. This is a **control-plane write to our own Worker's D1**, not a customer-facing transmission — outside the [External Send Gate](mission.md#7-foundation-invariants-inherited) (Invariant 1), which governs external sends. `active_jobs` has **no hardcoded job fallback** (a read miss returns the empty set → portal-poll skips the push → the dropdown is never wiped; contrast `project_routing`'s `BOX_PROJECT_FOLDERS`, which deliberately *does* keep a fallback).
+
+### Orphaned Reports sheet (Part C)
+
+A portal submission whose `Job ID` is unknown (`job_not_found`) or not Active (`job_inactive`) is rerouted — in `intake.process_portal_submission` (the **LIVE** portal flow, **not** `resolve_project`, which the original reconciliation note mis-cited) — from the generic `ITS_Review_Queue` to a dedicated **Orphaned Reports** sheet + Box folder: render the PDF (reuse `form_pdf`), file to Box (version-on-conflict), write an Orphaned-Reports row (`Status=Pending`). A *structurally*-bad submission (PDF / Box failure) still falls back to `ITS_Review_Queue` with a note — never silently drained. An **empty** `job_id` (`no_job_id`) stays in `ITS_Review_Queue` (structurally ambiguous → human review), not Orphaned Reports. **Config-gated** on `SHEET_ORPHANED_REPORTS` (default `0` = OFF → reroute is a no-op; also the safe-revert switch); **activated #235 (`fbeef44`)** by flipping the constant to the live sheet. `intake.py` stays in `GATED_SCRIPTS` (send-free).
+
+### Workspace structural snapshot (as-built map — validation mirror; `sheet_ids.py` is the authority)
+
+The deliberate doctrine-side map requested by the 2026-06-08 state-reconciliation audit. These are the **validation-mirror** (`evergreenmirror.com`) IDs; `shared/sheet_ids.py` remains the in-repo bootstrap authority, and the brief's general no-Customer-0-IDs altitude note is relaxed **for this map only**. Every ID cross-checked against `sheet_ids.py` at `ab920bc` (`brief-validator` pass):
+
+| Surface | Constant | ID (mirror) |
+|---|---|---|
+| Workspace `ITS — Safety Portal` | `WORKSPACE_SAFETY_PORTAL` | `194283417429892` |
+| `Safety Portal` folder (ITS_Active_Jobs + ITS_Forms_Catalog) | `FOLDER_SAFETY_PORTAL` | `6663869084002180` |
+| `ITS_Active_Jobs` | `SHEET_ACTIVE_JOBS` | `6223950341164932` |
+| `ITS_Forms_Catalog` | `SHEET_FORMS_CATALOG` | `423274885369732` |
+| `WSR_human_review` | `SHEET_WSR_HUMAN_REVIEW` | `5035670127988612` |
+| `Orphaned Reports` (Part C) | `SHEET_ORPHANED_REPORTS` | `2577084374273924` |
+| `ITS_Config` (in `ITS — System`, read by ID) | `SHEET_CONFIG` | `3072320166907780` |
+
+Plus per-job folders + week sheets (find-or-create, above) and the **`ZZ Portal Proof`** validation job set (a mirror-only cleanup candidate at cutover). **WSR datetime columns** (`Approved At` / `Sent At`) were retyped DATE → **ABSTRACT_DATETIME** on the mirror (§19); the production cutover defers the same retype.
 
 ## 4. Authentication
 
@@ -223,7 +245,7 @@ All portal secrets are **Cloudflare Workers Secrets** (never committed; `.dev.va
 
 | Worker Secret | macOS Keychain mirror | Purpose | Fail-mode if unset |
 |---|---|---|---|
-| `PORTAL_INTERNAL_API_TOKEN` | `ITS_PORTAL_INTERNAL_TOKEN` | bearer gate on `/api/internal/*` (queue drain, mark-filed, job sync) | `401` |
+| `PORTAL_INTERNAL_API_TOKEN` | `ITS_PORTAL_INTERNAL_TOKEN` | bearer gate on `/api/internal/*` (queue drain, mark-filed, job sync, **+ publish claim/stamp**) — **shared** by `portal_poll` AND `publish_daemon` (privilege-separated only from the admin token below; see §17 gate map + §18) | `401` |
 | `HMAC_PAYLOAD_SECRET` | `ITS_PORTAL_HMAC_SECRET` | HMAC-signs each `/api/submit` payload; the poller re-verifies | `503 server_misconfigured` (fail-closed) |
 | `SESSION_SIGNING_SECRET` | **Worker-only** (no Mac mirror) | signs the 90-day session cookie | — |
 | `PORTAL_ADMIN_API_TOKEN` | `ITS_PORTAL_ADMIN_TOKEN` | **PR-H #185 (landed):** bearer gate on `/api/internal/admin/*`, **separate** from the poller token (privilege separation); set byte-equal at activation (§4) | `401` |
@@ -273,6 +295,9 @@ The as-built phase plan supersedes v1's speculative Phase 0–10 breakdown:
 - **Phase 7 — admin + revocation (LANDED, PR-H #185, exec `f3ad814`):** bearer-gated `/api/internal/admin/*` under `PORTAL_ADMIN_API_TOKEN` + Mac CLI `portal_admin.py` + server-side `requireSession` disabled-check + migration `0006` (§4). Merged; **live on the mirror (2026-06-08)** — the 3-part activation gate is satisfied (v3.1 overlay; session revocation proven).
 - **Box-mirror SoR (LANDED, PR-K #189, exec `ecb06d9`):** config-gated Box-mirrors-Smartsheet (§9). Merged; **live on the mirror (2026-06-08)** — root Box folder created + `safety_reports.box.portal_root_folder_id` set; `ROOT → job → week` filing active (v3.1 overlay).
 - **All three operator activation tracks CLOSED on the mirror (`evergreenmirror.com`, 2026-06-08; v3.1 overlay):** **(a) Admin route** — byte-equal tokens set, migration 0006 applied to live D1 before redeploy, redeployed; session revocation proven. **(b) Box mirror tree** — root Box folder created, `ITS_Config` key set; `ROOT → job → week` filing live. **(c) Custom domain** — `safety.evergreenmirror.com` provisioned (disabled `*.workers.dev` → `error 1042` until `worker_base_url` repointed). End-to-end + a real unattended timed send confirmed (forensic-clean, F22-verified). Pre-activation portal Box filings (legacy category layout) are pre-launch sandbox orphans (no migration; validation-tenant). The **Evergreen production** cutover (Evergreen-owned Cloudflare account, fresh D1, re-provisioned PMs, `safety.evergreenrenewables.com` via subdomain NS-delegation) remains a separate, later step (§11 production cutover).
+- **Phase 8 — admin dashboard (LANDED + live on mirror, PRs #193–#202, exec `b7bad5a`):** role model (migrations 0007/0008) + per-request `requireRole` + a two-tab admin SPA (submit-as + account management, atomic last-admin guard) + the first Worker-TS CI + a security audit / 11-finding hardening pass (CSP enforcing). Engineering in §17; [memory-archive §G29](../../references/memory-archive.md).
+- **Phase 9 — form editor + publish pipeline (BUILT + LIVE + operator-exercised, PRs #203–#218, exec `b736691`):** the B8 Form Editor + `PublishMonitor` + `publish_requests` (migration 0010) + Worker enqueue/queue endpoints + the Mac `publish_daemon.py` sole-actuator chain + session_epoch revocation (0009) + the admin idle window. Daemon **LOADED + live**; the **incident-report create→v2→v3** chain (reqs 16–18) exercised editor→publish→deploy→submit→file end-to-end (errors=0). Engineering in §18; [memory-archive §G30](../../references/memory-archive.md).
+- **Phase-9 hardening + Parts A/B/C + send-leg (LANDED + live, exec → `ab920bc`):** the publish bugfix chain (#222/#224/#236/#241/#242/#244, §G31); Part A login/session + daily D1 prune (#230, §G31); Part B `compile_now_poll` (#232/#233); Part C Orphaned Reports (#234 build / **#235** flip, §3); Form Editor UX + draft cache (#249/#250, §G32); send-leg hardening + the 12-dimension forensic audit (#247/#248/#252/#253/#245, §G33); and the admin idle window **5 → 30 min** + bounded keep-alive (#258, §G34). Engineering in §19.
 
 ## 15. Sequencing Dependencies
 
@@ -285,15 +310,83 @@ The as-built phase plan supersedes v1's speculative Phase 0–10 breakdown:
 
 - ~~**Smartsheet "Sync Now" / catalog→D1 sync mechanism**~~ — **RESOLVED (PR-D #182):** the job sync is a **pipeline push** — `portal_poll` POSTs the full `ITS_Active_Jobs` set to the bearer-gated `POST /api/internal/sync` each cycle (full-replace, never-wipe-on-empty); see §3. (Form/catalog → D1 sync remains an execution-brief detail; the doctrine fact is unchanged — the portal reads D1, never Smartsheet.)
 - ~~**Form-specific Box subfolders vs a single per-week folder**~~ — **RESOLVED (PR-K #189, §9):** the merged Box-mirror **drops** the category subfolders for a per-job → per-week tree (config-gated); the legacy category layout survives only as the gate-OFF / dormant-email fallback.
-- **`WSR_human_review` exact schema + automation** (auto-stamp rules, Send-Now vs Scheduled semantics) — execution-brief detail; the send leg + F22 gate are landed.
+- **`WSR_human_review` exact schema + automation** (auto-stamp rules, Send-Now vs Scheduled semantics) — execution-brief detail; the send leg + F22 gate are landed **and exercised end-to-end** (the incident-report E2E + a real unattended timed send), and `Approved At` / `Sent At` now carry time (ABSTRACT_DATETIME, #245, §19). Remaining is operator UI work (conditional formatting / Smartsheet automation rules), not a code gap.
 - **F22 workspace-owner inclusion** — whether the workspace **owner** appears in the resolved approver set is an **unstated dependency on the Smartsheet `/shares` response** (no owner-injection logic exists in code); group-share member expansion is a known pre-prod gap (group shares yield no email → excluded → fail-closed). See [mission §8](mission.md#8-self-containment-and-workspace-as-approval-authority).
 - **Production D1 backfill of receipt state at cutover** — lazy vs bulk.
+- **Form publish-queue resilience** *(new, v4)* — the `publish_requests` lease columns have **no reclaim path** (a dead lease is not reclaimed) and `/api/internal/publish/stamp` enforces **no state-machine transition** (**M5**); the publish daemon has **no watchdog / `ITS_Daemon_Health` row** (**M6**) and runs git on the live tree (**M7**). The code-actuation gate's *correctness* is in place; its *resilience* layer is the open work. Tracked exec-side (Brief-1 PR-2/PR-3 + [`../its/docs/tech_debt.md`](../../../its/docs/tech_debt.md)).
+- **Per-identity required-content manifest** *(new, v4)* — the legal-invariants-in-code commitment (§6; [mission §14](mission.md#14-form-management-and-publish-pipeline-as-built)) is **partially realized**: structural validation + the CI render-smoke gate are live; enforcing the JHA "if conditions change…" footer / equipment lock-tag-out line as **required content on every version** (not merely present in a seed) is **Brief-1 PR-1** (exec).
+
+## 17. Admin dashboard & account model (as-built engineering)
+
+Companion to [mission §13](mission.md#13-admin-dashboard-and-account-model-as-built) (doctrine). Verified against `safety_portal/worker/index.ts` + `migrations/` at `ab920bc`.
+
+**Migration delta (0007–0010)** — each carries the same ORDER-DEPENDENCY rule as 0006 (apply to live D1 **before** the Worker redeploys, else `requireSession`'s read errors and 401s every session):
+
+- **0007** `users.role TEXT NOT NULL DEFAULT 'submitter' CHECK (role IN ('submitter','admin'))` + `CREATE TABLE audit_log`.
+- **0008** `submissions.actor_username` + `submissions.submitted_as` (submit-as attribution).
+- **0009** `users.session_epoch INTEGER NOT NULL DEFAULT 0` (revocation).
+- **0010** `CREATE TABLE publish_requests` with `lease_owner` / `lease_at` lease columns (§18).
+
+**Worker endpoint inventory** (verified verbatim against `worker/index.ts`):
+
+- **Public / session:** `POST /api/login`, `GET /api/session`, `POST /api/logout`, `GET /api/jobs`, `GET /api/recent`, `POST /api/submit`.
+- **In-app admin (`adminGate` = session + role):** `GET|POST /api/admin/users`, `POST /api/admin/users/credentials`, `POST /api/admin/users/role`, `POST /api/admin/users/delete`, `POST /api/admin/publish`, `GET /api/admin/publish-status`, `POST /api/admin/publish-dismiss`, `GET /api/admin/publish-request`.
+- **Internal (bearer `PORTAL_INTERNAL_API_TOKEN`):** `GET /api/internal/pending`, `POST /api/internal/mark-filed`, `POST /api/internal/sync`; publish: `GET /api/internal/publish/pending`, `POST /api/internal/publish/claim`, `POST /api/internal/publish/stamp`.
+- **Operator-CLI admin (bearer `PORTAL_ADMIN_API_TOKEN`, separate):** `GET|POST /api/internal/admin/users`, `POST /api/internal/admin/users/role`, `POST /api/internal/admin/users/reset`, `POST /api/internal/admin/users/disable`, `POST /api/internal/admin/users/enable`. (Password reset here is `/users/reset` — distinct from the in-app `/api/admin/users/credentials`.)
+
+**Gate map — three gates, TWO bearer secrets:**
+
+- `adminGate` = cookie session (`requireSession`'s single fail-closed D1 `SELECT disabled,role,session_epoch`) + D1 role.
+- `requireInternalToken` = `PORTAL_INTERNAL_API_TOKEN` — **shared** by `portal_poll` (drain / receipt / sync) AND `publish_daemon` (publish claim / stamp).
+- `requireAdminToken` = `PORTAL_ADMIN_API_TOKEN` — operator provisioning CLI only (the poller/daemon token cannot create/reset/disable users; last-admin guard bypassed here as break-glass — [mission §13](mission.md#13-admin-dashboard-and-account-model-as-built)).
+
+**Account-model mechanics.** Role authoritative from D1 (not the cookie) → demotion immediate; `coerceRole` fails safe (unknown → submitter); `session_epoch` bumped on logout + password-change (captured-cookie kill); last-admin guard atomic in-WHERE; account mutation + `audit_log` row in one atomic D1 batch.
+
+**Prune / retention** (`worker/prune.ts`, daily cron `0 9 * * *` via `scheduled()`): filed submissions >90 d, `audit_log` >365 d, **`box_verified=0` (unfiled) NEVER evicted**, terminal publish rows via `/api/admin/publish-dismiss`.
+
+**CI** (`.github/workflows/ci.yml`): a **`portal`** job — `tsc` (SPA + Worker) + vitest workerd pool (`@cloudflare/vitest-pool-workers` vs real Miniflare D1) + jsdom pool + SPA render-smoke (the third renderer leg) — and a separate **blocking `secrets`** gitleaks job over full history. Because the publish daemon merges on a CLEAN `mergeStateStatus`, **branch-protection required checks are load-bearing** (the Python `test` job, the `portal` job, and the `secrets` job must all be required).
+
+## 18. Form-publish pipeline (as-built engineering)
+
+Companion to [mission §14](mission.md#14-form-management-and-publish-pipeline-as-built) (doctrine: the code-actuation gate). Verified against `safety_reports/publish_daemon.py` + `publish_manifest.py` + `worker/index.ts` at `ab920bc`.
+
+**State machine.** `publish_requests.status CHECK (status IN ('queued','validated','tested','merged','live','archived','failed'))` (migration 0010) is the **authoritative** vocabulary. The SPA Status Monitor renders operation-aware stepper labels via `stepsForOp(op)` (Publish → *Live · Archived · Done*; Retire → *Removed · Done*; #242).
+
+**Enqueue → actuate.**
+
+- **Worker** `POST /api/admin/publish` runs `publishValidation.ts` (closed vocabulary + reserved-key denylist + cross-section-unique keys + hard bounds + the parent/variant grouping guard) and, only if valid, INSERTs a `publish_requests` row. The Worker **never** touches git, the filesystem, or a deploy.
+- **Daemon** `publish_daemon.py` (`org.solutionsmith.its.publish-daemon`, `StartInterval 120`, on the live `~/its` tree): `_unstrand_if_needed()` (unconditional Stage-0 self-heal, #224) → claim (`POST /api/internal/publish/claim`) → **`apply_publish`** (the pure manifest transform in `publish_manifest.py` — create / edit / add_version / delete / rollback; identity uniqueness, monotonic version, variant-mixing, rollback target) re-validated vs **live git HEAD** → **`_actuate`** (the orchestrator) commits the **append-only** form file (design **C1**) on a per-request branch + PR → `_wait_for_ci` polls `mergeStateStatus == CLEAN` (`CI_TIMEOUT_S = 900`) → `gh pr merge --squash --delete-branch` + verify merge-commit OID → `npm run deploy` (local wrangler) → liveness ping → `_regenerate_archive` (Box blank-archive, **`sys.executable`** not bare `python`, #241) → stamp (`POST /api/internal/publish/stamp`). Per-request deploy serialized per parent (design **C8**). Any error → row `failed` + monitor updated; `definition_json` retained for **"Edit & re-publish."**
+- **No `--auto`:** repo auto-merge is disabled (`gh pr merge --auto` silently no-ops) and would break deploy-after-merge ordering — the daemon polls CI then merges directly (#218).
+
+**Capability gating.** `publish_daemon.py` is in the **generation** list of `tests/test_capability_gating.py` (no Graph / Resend / SMTP / AI) — the code-actuation gate is verified at the import level exactly as the External Send Gate is.
+
+**Open engineering gaps (tracked exec-side, [`../its/docs/tech_debt.md`](../../../its/docs/tech_debt.md)):** lease columns exist but there is **no reclaim path** (a dead lease isn't reclaimed — Brief-1 PR-2/PR-3); `/api/internal/publish/stamp` has **no state-machine transition guard** (the shared internal token can forge/revert a status — **M5**); the daemon has **zero watchdog / `ITS_Daemon_Health` coverage** (**M6**); it runs destructive git on the live tree without a lock/worktree (**M7**, mitigated by `_unstrand_if_needed`). The per-identity required-content manifest (legal-invariants-as-required-content) is **Brief-1 PR-1**.
+
+## 19. Part A/B/C + send-leg & bugfix-chain hardening (as-built engineering)
+
+The remainder of the window, engineering-level (Part C reroute is in [§3](#orphaned-reports-sheet-part-c)).
+
+**Part A — login/session + idempotency (#230).** `useSubmissionId` keeps `submission_uuid` **stable across a lost-ACK retry** (A1) — the Worker `INSERT OR REPLACE` is idempotent only on a reused id; renewed on success-reset. Daily D1 prune cron (A3, §17). Poison-pill resistance already held (A4 — per-row fence + one-shot HMAC-reject). **A2 rate-limiting + A5 PBKDF2 deferred to cutover** as operator-gated config, not code (`safety_portal/README.md` "Production hardening").
+
+**Part B — on-demand compile (#232/#233).** `compile_now_poll.py` (`org.solutionsmith.its.compile-now-poll`, 90 s) compiles a triggered job-week on demand by **reusing** `weekly_generate._compile_job_week` via an additive `selection` param (default `None` = Friday-fire-identical; non-None = partial compile of selected rows). The `Compile Now` checkbox is row-type-dependent (Rollup = compile trigger; Submission = opt-into-partial); an empty Rollup placeholder is pre-created at `ensure_week_sheet` (#233, best-effort) so the checkbox shows on a never-compiled week. Single-flight fcntl lock; fail-loud; capability-gated; watchdog Check-C marker `safety_compile_now_poll`.
+
+**Send-leg hardening.**
+
+- **Write-ahead SENDING marker (#247):** `weekly_send` writes `Send Status=SENDING` *before* `send_mail` (aborts if that write fails), then `SENDING → SENT` after confirmed delivery. `SENDING` is excluded from `weekly_send_poll.DISPATCH_STATUSES`, so a failed post-send stamp leaves the row stuck in `SENDING` (one delivery, never re-dispatched) instead of re-dispatchable `PENDING`. Surfaced by watchdog **Check N** (`_check_stuck_wsr_send`, hourly WARN, cap 10).
+- **Append-only compilations (#248):** a recompile never overwrites a durable (possibly already-SENT) record — Box timestamped filename, WSR `add_wsr_row` (was `upsert`), week sheet `append_rollup_row` (was in-place); no-new-docs skip preserved.
+- **WSR datetime (#245):** `Approved At` / `Sent At` retyped DATE → ABSTRACT_DATETIME; written **naive Pacific** `YYYY-MM-DDTHH:MM:SS` (`wsr_review.to_wsr_datetime()`). **Sequencing rule (not git-reversible):** retype the live columns *first*, then merge the writer — else the 15-min poller writes a naive string into a DATE column and silently truncates. ABSTRACT_DATETIME rejects offset/`Z` strings (errorCode 5536).
+- **Portal filing fails LOUD (#252):** `portal_poll` no longer writes the Check-C marker on a no-creds/auth-failed cycle (which masked the 2026-06-07 1042 storm); CRITICAL fires immediately on missing-creds / `PortalAuthError`; a 5-consecutive-transport-failure counter escalates ERROR → CRITICAL; `resend_client` gained an explicit `(10,30)` timeout.
+- **Picklist registry regression (#253):** #247's new `SENDING` value was missing from `shared/picklist_validation.py` REGISTRY → `validate_row` rejected it → `weekly_send_poll` went DEGRADED (fail-closed) until `_WSR_SEND_STATUS_VALUES |= {SENDING}`. The mocks-pass-but-live-fails class (Op Stds §30) — a new bounded-enum value must enter the REGISTRY in the same PR that writes it.
+
+**Publish bugfix chain (one line each):** `sys.executable` archive (#241, bare-`python` died at `archived` under launchd PATH after the form was already live); op-aware stepper (#242); redundant-retire empty-commit guard at `apply_publish` + `git diff --cached --quiet` backstop (#244); id-keyed blank archives so same-`form_name` defs don't collide (#236); self-defeating-CI-gate fix — 9 hardcoded count/inventory assertions made dynamic + frozen-fixture behavior tests (#222/#227/#228); `PublishMonitor.fmtTime` ×1000 scaling (#222).
+
+**Forensic audit (12-dimension).** Both invariants **INTACT**; H2 (double-send) fixed (#247); H1 (auto-merge + deploy under branch protection) **accepted by-design** under C12=A. Deferred medium/low findings **M1 / M2 / M4 / M5 / M6 / M7 / M9** + ITS_Daemon_Health observability drift + half-applied-publishes backfill — pointers only; bodies in [`../its/docs/tech_debt.md`](../../../its/docs/tech_debt.md).
 
 ## Authority
 
-ITS Safety Portal Brief v3, 2026-06-07 canonical. Supersedes v2 (2026-06-05). Companion to [mission.md](mission.md). Verified against exec main `f3ad814` (the full deploy-session batch PRs #178–#189 merged). Workstream briefs are frontmatter-versioned (not git-tagged).
+ITS Safety Portal Brief v4, 2026-06-10 canonical. Supersedes v3 (2026-06-07; status overlay v3.1 carried forward). Companion to [mission.md](mission.md) (v4). Verified against exec main `ab920bc` (a 62-commit reconciliation `f3ad814..ab920bc`, `brief-validator`-checked). Workstream briefs are frontmatter-versioned (not git-tagged). **The v4 trigger was met** by absorbing Phase 8 (admin dashboard, §17) + Phase 9 (form-publish pipeline, §18) — the brief had pinned at Phase 7 / `f3ad814`.
 
-v4 trigger: substantive engineering-architecture change — deploy-platform change away from Cloudflare Workers, a return to client-side PDF rendering, an authentication-model swap, or a change to the portal-never-touches-Smartsheet boundary. **Open as v3.x status overlays:** the three operator **activation tracks** (admin route, Box mirror tree, custom domain — all merged-but-inert, §14) and the Evergreen production cutover. Status-overlay updates (v3.1, v3.2) absorb activation/phase progress.
+v5 trigger: substantive engineering-architecture change — deploy-platform change away from Cloudflare Workers, a return to client-side PDF rendering, an authentication-model swap, a change to the portal-never-touches-Smartsheet boundary, or doctrine adoption of the §50 code-actuation-gate flag ([mission §14 + Doctrine flags](mission.md#14-form-management-and-publish-pipeline-as-built)). **Open track:** the Evergreen production cutover (the three mirror activation tracks closed at v3.1); status-overlay updates absorb activation/phase progress.
 
 Cross-references:
 - [Mission](mission.md) — invariants (restated verbatim), audience, decisions, self-containment, phase status, risks.
