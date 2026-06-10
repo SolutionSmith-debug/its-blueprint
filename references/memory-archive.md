@@ -1716,3 +1716,76 @@ CC ran `npm run deploy` in auto-mode (no operator token step needed — token al
 ### §G32.5 — Process
 
 Exec `2aa2061` → `8c1600d` (PRs #249, #250; both four-part verified). Live deploy: `71428941-53e5-46fc-8d8b-3570232d58d7`. Blueprint: info-gap §8 + memory-archive §G32 updated this session-close.
+
+## §G33 — 2026-06-09 Forensic audit + E2E validation + double-send closure (exec `8c1600d` → `298496d`)
+
+### Summary
+
+Six PRs closed acute bugs surfaced by a 12-dimension forensic audit of the Safety Portal and a subsequent Playwright E2E validation smoke. Exec HEAD advanced from `8c1600d` to `298496d`. All six PRs four-part verified. The `incident-report` form type now exists in the catalog (v1 + v2). The weekly_send_poll recovered from DEGRADED → OK. Nine audit findings are deferred to `docs/tech_debt.md`.
+
+### §G33.1 — PRs and root causes
+
+| PR | Commit | Root cause / fix |
+|---|---|---|
+| #247 | `f135305` | `weekly_send.py` had no write-ahead marker before the Graph send — a crash or error after send but before `Send Status=SENT` would re-send on the next poll cycle. Fix: write `Send Status=SENDING` atomically before calling `graph_client.send_mail`; revert to FAILED on error. Closes the double-send race window. |
+| #248 | `586d308` | `weekly_generate.py` lacked append-only guards: it could overwrite an existing Box PDF (same filename), overwrite an existing WSR row, and overwrite the week-sheet Rollup record. Each now has a distinct guard: Box uses `upload_bytes_or_new_version`; WSR uses find-or-skip-if-exists; Rollup upserts instead of blindly writing. |
+| #252 | `689e310` | `portal_poll.py` soft-failed on a stalled HTTP puller (returned None rows, logged a WARN, and continued) instead of raising loud. Also: the Resend alert leg had no explicit timeout, so a Graph outage could hang the poll cycle indefinitely at the alert step. Fix: stalled-puller raises `CriticalPortalPollError`; Resend leg gets an explicit timeout. |
+| #253 | `65e5954` | `shared/picklist_validation.py` REGISTRY was missing `SENDING` (added by #247). `smartsheet_client.update_rows` calls `validate_row` before payload construction; `SENDING` was rejected with `PicklistViolationError`. Unit tests mock `update_rows` and never ran the registry. Live smoke revealed the gap. Fix: add `SENDING` to `SendStatus` in REGISTRY. See §G33.2 for the class-of-bug detail. |
+| #254 | `886e65e` | Publish daemon req 16: `incident-report-v1` created via the full publish pipeline (claim → CI → merge → deploy → Box archive). |
+| #255 | `298496d` | Publish daemon req 17: `incident-report` bumped to v2 via the full publish pipeline. |
+
+### §G33.2 — Picklist registry class-of-bug (load-bearing lesson)
+
+`shared/picklist_validation.py` contains a `REGISTRY: dict[tuple[str,str], type[StrEnum]]` keyed by `(sheet_title, column_title)`. `smartsheet_client.update_rows` calls `validate_row` BEFORE constructing the API payload. Any value for a registered column that is not a member of the corresponding StrEnum raises `PicklistViolationError` and blocks the write.
+
+This check fires **independently of whether the live Smartsheet column has `validation=false`** — it is a code-side gate, not a server-side gate.
+
+The trap: a new bounded-enum value (e.g., `SENDING`) requires TWO changes in the same PR: (1) the business logic that writes the new value AND (2) adding the value to the StrEnum in `REGISTRY`. PR #247 performed only step 1. The omission was invisible in unit tests because they mock `update_rows` at the SDK boundary and never reach `validate_row`. Only a live smoke (running `weekly_send_poll` against the mirror) revealed the `PicklistViolationError`.
+
+**Rule:** any PR that writes a new value to a PICKLIST column must update `REGISTRY` in the same PR. The `feedback_mandatory-live-smoke` memory entry is the procedural enforcement; this is the root cause to remember.
+
+### §G33.3 — Playwright E2E validation record
+
+A Playwright smoke was run against the live mirror (`safety.evergreenmirror.com`) to validate the full pipeline after the forensic fixes:
+
+- Created `incident-report` form (admin editor) → published via daemon (req 16 → PR #254).
+- Bumped `incident-report` to v2 (req 17 → PR #255).
+- Submitted a JHA as a PM user → `portal_poll` pulled + HMAC-verified → `intake.py` filed to Box + Smartsheet with errors=0.
+- `weekly_send_poll` recovered from DEGRADED (caused by the pre-#253 SENDING registry gap) → status OK on next cycle.
+
+No JS console errors. No ITS_Errors anomalies post-fix.
+
+Forms-tab intermittent input-miss observed during smoke: switching to Forms/Accounts tab from the admin submit view intermittently delivered zero DOM events to the tab button (confirmed via Playwright) despite `elementFromPoint` returning the correct element, no overlay, no JS error, no AdminApp re-mount. A direct `element.click()` DOM call switched reliably. Could not root-cause to an application defect — possible headless-automation timing quirk. No real-user report of needing a second click. Filed as low-confidence open item; do not chase as a publish bug.
+
+### §G33.4 — 12-dimension forensic audit findings summary
+
+A read-only forensic audit across 12 security/reliability dimensions was run this session. The core posture held: External Send Gate intact, adversarial-input layers functional, HMAC-verified transport secure, no capability bypass. Fixed in-session: H2 (double-send, PR #247), M3 (append-only compile, PR #248), M8 (portal-poll fail-loud, PR #252), and the SENDING-registry regression (PR #253).
+
+Deferred to `docs/tech_debt.md` (see entries added 2026-06-09 evening):
+
+| ID | Severity | One-line description |
+|---|---|---|
+| M1 | Medium | Authenticated submitter can overwrite peer's PENDING submission via client-controlled UUID + INSERT OR REPLACE |
+| M2 | Low | Capability gate is static-AST-import-only; transitive + dynamic paths unchecked |
+| M4 | Low | Bad-HMAC rows are immortal in the D1 pending queue; wedge the 50-row window |
+| M5 | Medium | `/api/internal/publish/stamp` enforces no state-machine transition |
+| M6 | Medium | Publish daemon has zero watchdog/health coverage |
+| M7 | Medium | Publish daemon runs destructive git on live `~/its` tree without lock or worktree |
+| M9 | Low | CLAUDE.md asserts Op Stds v16 as governing; actual canonical is v18 |
+| — | Medium | ITS_Daemon_Health observability drifted (retired row present; 3 active daemons have no row) |
+| — | Low | Reqs 11/12/13 Box archive PDFs missing (bare-python bug pre-#241); one-time backfill needed |
+
+### §G33.5 — Operational state after this session
+
+- **Exec HEAD:** `298496d` (main, origin/main).
+- **`~/its` branch:** `main` (publish daemon recovered via `_unstrand_if_needed` each cycle).
+- **Mirror SPA:** `safety.evergreenmirror.com` live at `8c1600d` bundle (no redeploy this session — Python-only changes).
+- **Publish daemon:** loaded + live.
+- **`incident-report`:** v2 in catalog, live in portal.
+- **`weekly_send_poll`:** DEGRADED → OK (SENDING registry fixed).
+- **Known open items (new this session):** M1/M2/M4/M5/M6/M7/M9 + ITS_Daemon_Health drift + half-applied-publishes backfill. All in `docs/tech_debt.md`.
+- **Known open items (carried):** CLAUDE.md v16 claim (M9); `compile_now_poll` not loaded; Orphaned Reports config-gated OFF; portal admin Retire UI gap; `README.md:111` doc-drift; `form_archive_out/` temp-dir; draft-cache one-slot-per-account.
+
+### §G33.6 — Process
+
+Exec `8c1600d` → `298496d` (PRs #247, #248, #252, #253, #254, #255; all six four-part verified). Blueprint: info-gap §5/§8 + memory-archive §G33 + `docs/tech_debt.md` updated this session-close. Session log to be written separately by session-log-writer.
