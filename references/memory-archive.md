@@ -1789,3 +1789,68 @@ Deferred to `docs/tech_debt.md` (see entries added 2026-06-09 evening):
 ### §G33.6 — Process
 
 Exec `8c1600d` → `298496d` (PRs #247, #248, #252, #253, #254, #255; all six four-part verified). Blueprint: info-gap §5/§8 + memory-archive §G33 + `docs/tech_debt.md` updated this session-close. Session log to be written separately by session-log-writer.
+
+## §G34 — 2026-06-10 Admin idle-timeout widening + bounded dirty-editor keep-alive (exec `298496d` → `23c04e6`)
+
+### Summary
+
+Single PR (#258) hardened the Safety Portal admin session UX: widened the idle window from 5 to 30 minutes, added a dirty-editor keep-alive that slides the server cookie while the admin is actively editing a form, and bounded the keep-alive so an abandoned dirty tab still dies at ~30 min (closing an unbounded-session hole identified in adversarial review). Exec HEAD advanced from `298496d` to `23c04e6`. PR #258 four-part verified. Worker deployed to `safety.evergreenmirror.com` as version `276322a3`.
+
+### §G34.1 — What changed (PR #258, `23c04e6`)
+
+Three coordinated changes shipped as one PR:
+
+**A — Idle window 5→30 min.**
+- Single-source constant: `ADMIN_IDLE_S = 1800` in `worker/index.ts` (was `300`); `IDLE_MS = 30 * 60 * 1000` in `src/lib/useIdleLogout.ts` (was `5 * 60 * 1000`).
+- Cascades to: login cookie `max-age=1800` (`worker/index.ts:217`), slide-on-activity cookie `max-age=1800` (`:296`).
+- Test: `test/admin-idle.test.ts` max-age assertions updated `300→1800` (vitest-pool-workers, real workerd+D1).
+
+**B — Dirty-editor keep-alive (bounded).**
+- `useIdleLogout(onIdle, paused=false)` gained a `paused` boolean arg. When `paused=true`, a 240s wall-clock interval fires `fetch /api/session` to slide the server cookie while editing.
+- `AdminApp.tsx` holds an `editing: boolean` state (`useState(false)`). `FormsPage.tsx` sets it `true` while a dirty draft is open; `AccountsPage.tsx` sets it `true` while a login editor is open. Both have an **unmount-reset effect** (`editing → false`) so a tab-switch cannot pin `editing=true` shell-wide.
+- Proactive logout fires in BOTH modes (`paused` and not) — ensures the hook still fires `onIdle` after 30 min of no real input even while paused; the keep-alive only slides the server cookie, it does not suppress the proactive timeout.
+- No worker/auth/D1 changes — purely client-side.
+
+**C — Stale "5-minute" copy.**
+- Updated across: `worker/index.ts` error message, `src/lib/useIdleLogout.ts` comment, `src/pages/FormsPage.tsx` publish-401 UX message ("Session expired — sign in again" now cites 30 min), `safety_portal/README.md:282`.
+
+### §G34.2 — Non-obvious decision: bounded vs. unbounded keep-alive
+
+The adversarial review (3-lens workflow + skeptic-verify pass) identified an UNBOUNDED session hole in a naive implementation:
+
+- A naive keep-alive fires a fixed interval forever regardless of real user presence.
+- `SessionClaims` has no absolute-lifetime field; `iat` is re-stamped on each slide → even the 90-day `MAX_AGE` is pushed forward on every `/api/session` hit. An unattended backgrounded dirty-editor tab would have slid the window indefinitely — defeating the idle-timeout's intent for an unattended workstation.
+- Verified medium severity: not a remote-captured-cookie break, but a real unattended-workstation risk (an attacker with physical access to an unlocked Mac has an open admin session forever).
+
+The operator chose the bounded approach: proactive logout fires in both PAUSED and normal modes. The keep-alive runs only inside the idle window. An abandoned dirty tab dies at ≈30 min of no real input; a tab with active keystrokes is never bounced mid-edit.
+
+`draftCache.ts` preserves the in-progress form draft regardless of logout (per §G32), so a 30-min eviction of a genuinely unattended session loses no work.
+
+### §G34.3 — Test gap closed: unmount-reset coverage
+
+The adversarial review also flagged that the unmount-reset (the mechanism preventing `editing=true` from being pinned shell-wide across tab switches) had zero test coverage — deleting the effect left the suite green.
+
+Two new test files added:
+
+- `src/pages/__tests__/FormsPage.editing.test.tsx` — renders `FormsPage`, triggers a dirty draft edit, unmounts the component (simulates tab-switch away), verifies `editing` is reset to `false`. Fails if the unmount effect is removed.
+- `src/lib/__tests__/useIdleLogout.test.ts` — 6 cases: NORMAL proactive logout fires; no timer pings in NORMAL mode; PAUSED mode slides (240s interval fires); PAUSED+abandoned still fires proactive logout after 30 min; active-editing-not-bounced (pings extend but timeout reset keeps firing); transition from PAUSED→not-PAUSED stops the keep-alive interval.
+
+### §G34.4 — Deploy facts
+
+- PR #258 squash-merged to main, merge commit `23c04e6`, `mergedAt=2026-06-10T13:25:51Z`.
+- Four-part verify: `state=MERGED` / `mergedAt` non-null / `mergeCommit.oid=23c04e6563f6629a6df638eec6edc98891e76dae` / main-branch `ci` run on `23c04e6` = SUCCESS (`test` job: ruff+mypy+pytest green; `portal` job: typecheck+worker-tests+SPA-render-smoke green).
+- `npm run deploy` → `safety.evergreenmirror.com`, Worker version `276322a3`.
+- Post-deploy smoke: SPA `200` + enforcing CSP; `GET /api/session` unauth `401 unauthenticated`.
+- Post-deploy note: existing admins hold a 300s-maxAge cookie until their next request upgrades it to 1800s — worst case one re-login before the widened window takes effect.
+
+### §G34.5 — Operational state after this session
+
+- **Exec HEAD:** `23c04e6` (main, origin/main).
+- **Mirror SPA:** `safety.evergreenmirror.com` live at Worker version `276322a3`.
+- **Admin idle timeout:** 30 min (was 5 min).
+- **Dirty-editor keep-alive:** BOUNDED (proactive logout fires in both modes; keep-alive slides within the window only).
+- **Known open items (carried from §G33):** M1/M2/M4/M5/M6/M7/M9 + ITS_Daemon_Health drift + half-applied-publishes backfill + compile_now_poll not loaded + Orphaned Reports config-gated OFF + CLAUDE.md v16→v18 + portal admin Retire UI gap + README.md:111 doc-drift + form_archive_out/ temp-dir.
+
+### §G34.6 — Process
+
+Exec `298496d` → `23c04e6` (PR #258; four-part verified). Blueprint: info-gap §8 + memory-archive §G34 updated this session-close. Session log to be written separately by session-log-writer.
