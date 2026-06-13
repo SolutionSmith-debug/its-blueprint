@@ -2,8 +2,8 @@
 type: reference
 version: 5
 status: canonical
-last_verified: 2026-06-09
-last_verified_against: 8c1600d
+last_verified: 2026-06-12
+last_verified_against: 44370e1
 supersedes: references/memory-archive.md@v4
 workstream: null
 tags: [restoration, operational-detail, post-compaction-recovery]
@@ -2045,3 +2045,67 @@ This directly deletes the ref without triggering the hook. Safety signal for cle
 ### §G36.9 — Process
 
 Exec `ab920bc` → `213d076` (PRs #271–#276; all four-part verified). Blueprint: info-gap §8 (`last_verified_against` → `213d076`, recently-landed + open-queue + on-the-horizon updated) + memory-archive §G36 appended + tech-debt entries (PR-5 deployment pending, 7 preserved branches, PR-5 doctrine flag). Session log warranted (≥6 commits + non-obvious decisions: requester-bound download model, branch-cleanup methodology, operator Pit Wall pivot). Operator invokes `session-log-writer` directly (exec-side log; blueprint-side log optional — no new doctrine decisions beyond the doctrine flags recorded here).
+
+## §G37 — 2026-06-12 Blueprint reconciliation: safety-portal mission → v5 (the photo/download/Form-Request program; exec `ab920bc`..`44370e1`)
+
+### §G37.1 — What this session did
+
+Blueprint-scoped reconciliation pass, worktree `~/its-blueprint-v5` on branch `doctrine/safety-portal-v5` (per `references/worktree-discipline.md` — never a second doctrine session on the shared checkout). Folded the six-PR photo/download/Form-Request program (#271–#276) into `workstreams/safety-portal/mission.md` v4 → v5, resolving the **three exec-side doctrine flags** the v4 window had opened (`../its/docs/tech_debt.md` lines 25 / 2117 / 2166). Pinned `last_verified_against` to current exec `origin/main` **`44370e1`** (≥ `13ef2bc`, per brief). A verification fan-out (one agent per delta) stood in for the `brief-validator` agent — **unreachable from a home-rooted (`/Users/sethsmith`) CC session** because the blueprint `.claude/agents` symlink targets `../../its/.claude/agents` (registry not loaded as session agents). Every code-shape claim was checked against merged exec code with PR + SHA cited.
+
+Files changed (blueprint, branch `doctrine/safety-portal-v5`):
+
+- `workstreams/safety-portal/mission.md` — v4 → v5 (see §G37.2)
+- `references/memory-archive.md` — this §G37 + frontmatter `last_verified`/`last_verified_against` → `2026-06-12` / `44370e1`
+- `references/claude-code-info-gap.md` — §3 candidate-doctrine-flags refresh + `Last refreshed:` + pin (targeted; §8 was already current)
+- `session-logs/2026-06-12_safety-portal-v5-reconciliation.md` — new (carries the propose-only doctrine drafts)
+- *(exec-side, separate small PR in `~/its`)* — CLAUDE.md scaffold table (`photo_screen.py` row + intake/portal_poll/weekly_send refresh + Layer-6 note), tech_debt mission-flag closes + Layer-6 SUPERSEDED refresh, doctrine_manifest pin
+
+### §G37.2 — Mission v4 → v5 changes
+
+New dated v5 Authority reconciliation block + frontmatter (v5, supersedes @v4, pin `44370e1`, +8 tags). Five deltas folded:
+
+1. **Site photos (PRs #271/#272)** — new **§15**; §7 Layer-6 updated ("N/A — no attachments" → image-constrained attachment class, §34-screened in code); §7 HMAC note (photos ride `payload_json`, canonical unchanged, regression-locked).
+2. **Request-driven download (PR #274) + in-portal Form Request (PR #276)** — new **§16**; §9 "System of record" filing-principle amended ("Worker never holds documents" → "…except a transient, request-driven, 24 h filed-PDF receipt cache; Box remains SoR").
+3. **Two-mode send transport (PR #275)** — amended in place in **§7 Invariant 1** (transport changed, gate did not).
+4. **Crane & Rigging Critical Lift Plan (PR #273)** — §9 Forms-catalog row (`lifting-plan`, display_order 7) + §14 legal-invariants-in-code upgraded ◐ → realized (`required-content.json`); strict entry ratified Tier-3/Seth-only.
+5. **Owner-decision log** recorded in the v5 Authority block + §9 rows (incl. the **declined email-delivery Form Request** as an owner decision); §11 phase rows + §12 risk rows added; new **v5 doctrine-flags** subsection (propose-only).
+
+### §G37.3 — Brief-validator corrections folded in (verify-before-fix)
+
+The per-delta verification corrected five brief overstatements before any text landed:
+
+- **Download post-back is in `portal_poll._service_pdf_requests`, NOT `intake`** — intake makes zero `portal_client` calls (capability/preservation). The "never blocks filing" property holds; it just lives in the daemon.
+- **Live download mechanism is the `pdf_requests` table (migration 0012, PR-5)**, superseding PR-4's per-submission `pdf_requested` flag — a "current behavior" doc must cite `pdf_requests`, not `pdf_requested`.
+- **Weekly-send timing split** — the oversized → `held_oversized_packet` refusal is evaluated **before** the write-ahead `SENDING` marker; the inline-vs-upload-session **switch** runs **after** it (the brief said "before" for both). Threshold `UPLOAD_SESSION_THRESHOLD_BYTES = 2,621,440`; ceiling `UPLOAD_SESSION_MAX_BYTES = 157,286,400`.
+- **Lifting Plan signature table** is a Section-12 *Authorizations* `signature_table` (`min_rows` 4, `allow_add`, one signature column), **not "four named parties."** Checklist is **28 items** (brief/pre-build estimate said 26). The `required-content.json` rule is verbatim "*…Tier-3/Seth only — the Successor-Operator must NOT edit this file*" (the brief's "operator commission" phrasing is not in the file).
+- **Declined email-delivery Form Request has NO repo artifact** (no ADR/decision-record/tech_debt note). The Worker is send-free by Invariant 1 (no email path at all), so in-portal delivery is the architectural default; recorded as an **owner decision** in the mission only, flagged as such.
+
+Also caught at pin time: `213d076..44370e1` is **not docs-only** — it carries #279 (Form Editor accepts `photo`), #280 (PR-6 Form Request month/form-type filter), #281 (`photo-test-v1` publish, req 19). The verification read the tree at `44370e1`, so the pin is honest; these thin follow-ons are noted in the Authority where they extend a delta.
+
+### §G37.4 — Doctrine drafts raised (propose-only, no `doctrine/*` edit)
+
+Two new propose-only drafts, delivered as a draft block in the v5 session log + recorded in mission §"Doctrine flags raised — v5" + info-gap §3:
+
+1. **Op Stds §34 image-class screening sub-pattern** — magic → Pillow `verify()`/bomb-cap/forced metadata-destroying re-encode → ClamAV-on-raw (config-gated), with screen-before-render + MALICIOUS-pages-and-refuses-before-filing as the load-bearing ordering. Canonical instantiation = `photo_screen.py`.
+2. **FM Invariant-2 Layer-6 wording touch (optional)** — Layer 6 status "N/A — no attachments" → "image-constrained attachment class, §34-screened in code."
+
+The two **v4 flags** (candidate Op Stds §50 code-actuation gate + form-maintenance principle promotion) remain open, carried in mission + info-gap §3.
+
+### §G37.5 — Verify-before-write findings (no redundant writes)
+
+- **`§G36` already archives the program** (#271–#276, per-PR subsections, deploy state). This §G37 records the **reconciliation pass**, not the program — it references §G36 rather than re-archiving it (the §G28–§G34 / §G35.1 lesson).
+- **info-gap §8 was already refreshed today** (HEAD `2938c7a`: pin `213d076`, "Last refreshed 2026-06-12 … PRs #271–#276", "On the horizon (1) blueprint mission v4→v5"). Only targeted edits made: §3 doctrine-flags + the flag-status / mission-v5-done status flips + pin. No wholesale rewrite.
+- **`required-content.json` already exists with strict entries** (jha, equipment-preinspection, toolbox-talk, incident-report, lifting-plan) — the v4 "manifest pending ◐" is now realized; §14 upgraded accordingly (not re-flagged as pending).
+
+### §G37.6 — Operational state after this session
+
+- **Blueprint HEAD:** branch `doctrine/safety-portal-v5` (worktree `~/its-blueprint-v5`); worktree removal is a Developer-Operator action (hook-blocked inside CC; `references/worktree-discipline.md`).
+- **Exec HEAD (`origin/main`):** `44370e1` (PR #281). Reconciliation verified against it.
+- **Safety-portal mission:** v5 (was v4). Brief unchanged (v5 brief scoped to mission only).
+- **Doctrine flags:** 2 new propose-only (§34 image-class + Layer-6 wording) + 2 carried (§50 code-actuation gate + form-maintenance). No `doctrine/*` edit.
+- **PR-5 Worker NOT deployed** — migration 0012 + `npm run deploy` pending even on the mirror; `FormRequestPage` + requester-bound download not live until then. Evergreen production cutover unaffected.
+- **Known open items (carried from §G36):** M9 (CLAUDE.md v16→v18), ITS_Daemon_Health drift, half-applied-publishes backfill, compile_now_poll not loaded, Orphaned Reports config-gated OFF, 7 preserved stale branches; plus the pre-existing M2 drift — the "Safety Portal Phase 5 — deploy prerequisites" [OPEN] entry in exec `docs/tech_debt.md` (body asserts completion, unrelated to this work).
+
+### §G37.7 — Process
+
+Exec `ab920bc` → `44370e1` (PRs #271–#276 + #279/#280/#281; all four-part verified upstream). Blueprint v5 reconciliation in worktree `~/its-blueprint-v5`. Session log warranted (mission version bump + non-obvious decisions: the five brief-validator corrections + the declined-email owner decision + two new propose-only doctrine drafts). Op Stds is canonically **v18** / FM **v11** (the home-memory "Op Stds v13" note is stale — corrected against the repos this session).
