@@ -2,8 +2,8 @@
 type: reference
 version: 5
 status: canonical
-last_verified: 2026-06-12
-last_verified_against: 44370e1
+last_verified: 2026-06-13
+last_verified_against: e75c5a7
 supersedes: references/memory-archive.md@v4
 workstream: null
 tags: [restoration, operational-detail, post-compaction-recovery]
@@ -2109,3 +2109,79 @@ The two **v4 flags** (candidate Op Stds §50 code-actuation gate + form-maintena
 ### §G37.7 — Process
 
 Exec `ab920bc` → `44370e1` (PRs #271–#276 + #279/#280/#281; all four-part verified upstream). Blueprint v5 reconciliation in worktree `~/its-blueprint-v5`. Session log warranted (mission version bump + non-obvious decisions: the five brief-validator corrections + the declined-email owner decision + two new propose-only doctrine drafts). Op Stds is canonically **v18** / FM **v11** (the home-memory "Op Stds v13" note is stale — corrected against the repos this session).
+
+## §G38 — 2026-06-13 Safety Portal: 50-char Smartsheet sheet-name cap + permanent-400 drain (PR #283)
+
+### §G38.1 — The bug
+
+A field PM submitted a portal form for JOB-000013 ("I don't know project name Montgomery", 36 chars). `portal_poll` pulled the pending submission, handed it to `intake.process_portal_submission`, which reached `week_sheet.ensure_week_sheet`. That call:
+
+1. Created the **per-job Smartsheet folder** successfully (folder names are not subject to the 50-char cap).
+2. Tried to `create_sheet_in_folder` with the week-of sheet name `"I don't know project name Mon — week of 2026-06-13"` (57 chars). Smartsheet returned **HTTP 400 `errorCode 1041`** ("sheet.name must be 50 characters or less").
+3. The 400 propagated as a generic `SmartsheetError` (no typed subclass for HTTP 400 existed).
+4. `process_portal_submission` caught it as a generic (transient) `SmartsheetError` → status=`error` → **looped**: the submission re-queued on every 60s pull cycle, writing an ERROR row to ITS_Errors each time. It was never drained or marked filed.
+
+Nothing downstream of the week sheet (Box folder, rendered PDF, weekly compile) was reached. The operator saw: a per-job Smartsheet folder existed (empty), and ITS_Errors accumulated repeated `SmartsheetError` rows — no PDF, no Box folder, no WSR row.
+
+**Why it had never surfaced before:** the test suite and integration tests always use short sandbox project names. Real Evergreen projects ("Bradley 1", "BBCHS", etc.) are all short. The 50-char cap was known and guarded in the test suite (tests shorten sandbox names) but the production `week_sheet_name` builder **never enforced it**. A latent gap that only triggers on a long (≥30-char) project name.
+
+### §G38.2 — The fix (PR #283, `e75c5a7`)
+
+Three-part fix + runbook:
+
+**Part 1 — `safety_reports/week_sheet.py`:**
+```python
+SHEET_NAME_MAX = 50
+# suffix is always " — week of <Sat>" (21 chars)
+```
+`week_sheet_name(project_name, work_date)` now truncates the project prefix to `SHEET_NAME_MAX - len(suffix)` characters, preserving the `" — week of <Sat>"` suffix **whole**. Rationale: the suffix is what disambiguates weeks within the per-job folder (the folder already carries the full project name, so no identity is lost). Names already ≤50 are byte-identical to before — existing sheets resolve unchanged on the find-before-create path.
+
+**Part 2 — `shared/smartsheet_client.py`:**
+New typed subclass `SmartsheetValidationError(SmartsheetError)` mapped for HTTP 400 in BOTH translate paths:
+- SDK path: `_translate()` — `smartsheet.exceptions.ApiError` with HTTP 400 → `SmartsheetValidationError`
+- REST path: `_translate_smartsheet_error()` — `requests.Response` with `status_code == 400` → `SmartsheetValidationError`
+
+Being a subclass of `SmartsheetError`, every existing `except SmartsheetError` block is unchanged.
+
+**Part 3 — `safety_reports/intake.py` `process_portal_submission`:**
+Catches `SmartsheetValidationError` BEFORE the generic `SmartsheetError`:
+```python
+except SmartsheetValidationError as exc:
+    # permanent — drain to Review Queue, do NOT re-queue
+    _drain_to_review_queue(submission, machine_reason="smartsheet_validation",
+                           reason=ReviewReason.STRUCTURED_OUTPUT_EDGE)
+    return  # mark-filed NOT posted — leave in D1 "pending" for operator
+```
+A permanent validation failure (400) must never loop. The submission is drained to ITS_Review_Queue; the Worker's `/api/internal/pending` keeps serving it (mark-filed is NOT posted) — it waits for operator intervention (shorten the job name, then re-file manually).
+
+**Part 4 — `safety_reports/README.md` §43 runbook:**
+New row: `reason=smartsheet_validation` → symptom (submission visible in Review Queue, no week sheet / Box folder / PDF), low-class repair (shorten `Project Name` in ITS_Active_Jobs to ≤29 chars; re-filing from the payload is a developer task → escalate to Seth), explicit escalate-to-Seth boundary (any other 400 cause beyond over-long name).
+
+### §G38.3 — Live smoke procedure for a fix that changes the find-or-create key
+
+The fix changes the sheet name that `ensure_week_sheet` looks up and creates. If the old code ran and created a sheet at the OLD name, the new code would create a SECOND sheet at the NEW (truncated) name on the next cycle. The correct smoke procedure for this class of change:
+
+1. **Unload the launchd daemon** — `launchctl unload ~/Library/LaunchAgents/org.solutionsmith.its.portal-poll.plist` — to prevent the still-old-code live daemon from racing with the worktree smoke run.
+2. **Run `portal_poll.poll_once()` from a worktree venv** with the fixed code. This is the single correct invocation: it pulls the pending submission, runs the full fixed `intake.py` path, posts `mark-filed` on success.
+3. **Verify artifacts** — week sheet exists with the truncated name, Box folder + PDF exist, WSR row exists.
+4. **Reload the daemon** — `launchctl load ~/Library/LaunchAgents/org.solutionsmith.its.portal-poll.plist`.
+
+The stuck submission `51ecb7cc` filed end-to-end:
+- Week sheet: `"I don't know project name Mon — week of 2026-06-13"` (exactly 50 chars, id `3271853182242692`)
+- Box mirror PDF: `https://app.box.com/file/2283463171068`
+- WSR row staged, queue drained
+
+Once `mark-filed` is posted, the Worker's `/api/internal/pending` stops serving the submission on the next pull — so **reloading the still-old-code live daemon was harmless** (scanned=0 for that submission on the next cycle). No split-brain risk.
+
+**Worktree venv requirement:** because `its` is installed editable (`__editable__.its-0.1.0.pth`), the live `.venv` resolves all imports to `~/its` even under `PYTHONPATH`. A worktree editing Python SOURCE needs its OWN venv (`cp -R ~/its/.venv ~/its-<worktree>/.venv && pip install -e . --no-deps`). The existing `reference_worktree-venv-for-python-source-edits` auto-memory entry captures this pattern.
+
+### §G38.4 — Operational state after this session
+
+- **Exec HEAD (`origin/main`):** `e75c5a7` (PR #283; four-part verified, `mergedAt=2026-06-13T18:59:21Z`, main-branch CI SUCCESS).
+- **Orphan per-job folder:** "I don't know project name Montgomery" in `ITS — Safety Portal` workspace — empty, harmless; operator deletes via Smartsheet UI.
+- **PR-5 Worker** — still NOT deployed (migration 0012 + `npm run deploy` pending; unchanged from §G37).
+- **Known open items (carried from §G37):** M9 (CLAUDE.md v16→v18), ITS_Daemon_Health drift, half-applied-publishes backfill, compile_now_poll not loaded, Orphaned Reports config-gated OFF, 7 preserved stale branches.
+
+### §G38.5 — Process
+
+Session log warranted (1 commit + non-obvious decisions: the permanent-400 drain pattern, the find-or-create-key live-smoke procedure). Operator invokes `session-log-writer` directly. Exec-side log only — no blueprint-side doctrine decisions this session.
