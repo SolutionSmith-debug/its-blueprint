@@ -3,14 +3,14 @@ type: reference
 status: canonical
 workstream: null
 last_verified: 2026-06-12
-last_verified_against: 213d076
+last_verified_against: 44370e1
 ---
 
 # Claude Code Info Gap
 
 **Purpose:** Context that lives only in chat memory / chat conversation and is NOT reachable from `~/its/` or `~/its-blueprint/` on a fresh Claude Code (CC) session. Drop this in project files so a chat-session can hand it to CC at spin-up, or so a fresh chat-session can re-orient quickly.
 
-**Last refreshed:** 2026-06-12 (exec PRs #271–#276 landed: photo upload PR-1+PR-2, PR-4 Part B Crane form, PR-4 Part A receipt cache, PR-3 Graph upload-session + ADR/§43, PR-5 Form Request browse + requester-bound PDF download. Three doctrine flags open (PR-3 transport delta + PR-4 receipt cache + PR-5 browse model → fold into mission v5 at next blueprint pass). PR-5 Worker NOT yet deployed (migration 0012 + redeploy pending). 55 stale branches pruned; 7 CLOSED-unmerged preserved. `last_verified_against` updated to `213d076`.)
+**Last refreshed:** 2026-06-12 (exec PRs #271–#276 landed: photo upload PR-1+PR-2, PR-4 Part B Crane form, PR-4 Part A receipt cache, PR-3 Graph upload-session + ADR/§43, PR-5 Form Request browse + requester-bound PDF download. PR-5 Worker NOT yet deployed (migration 0012 + redeploy pending). 55 stale branches pruned; 7 CLOSED-unmerged preserved.) **2026-06-12 v5 blueprint reconciliation (this pass):** safety-portal `mission.md` v4 → v5 — the three PR-3/PR-4/PR-5 doctrine flags **folded** into the mission (§7, §15, §16); pin moved `213d076` → `44370e1` (range includes thin follow-ons #279 photo-editor-accept / #280 Form Request month-filter / #281 photo-test publish). Two **new** propose-only doctrine drafts raised (§34 image-class screening sub-pattern + FM Layer-6 wording) — see §3. Verify-before-write: memory-archive §G36 already covered the program → appended §G37 for the pass itself; §8 was already current → targeted edits only.
 **Maintained by:** chat-session at session close (treat as living doc)
 
 ---
@@ -92,10 +92,18 @@ Restate these in every brief touching external-bound code OR external content in
 - PR #86 drift: §A1 already delivered, §A4 named nonexistent `shared/alert.py`, §A5/§B3 wrong specifics. CC caught all of it.
 - Briefs making code-shape claims get a code read first.
 
-### Candidate doctrine flags (pending Seth co-resolution — raised 2026-06-10, Safety Portal v4 reconciliation)
-The Safety Portal as-built surfaced two candidate doctrine changes. Doctrine is high-capability-class → **flags only**, no `doctrine/*` edit. Recorded in [safety-portal mission §Doctrine flags](../workstreams/safety-portal/mission.md) + the 2026-06-10 blueprint session log.
+### Candidate doctrine flags (pending Seth co-resolution; all **flags only**, no `doctrine/*` edit)
+The Safety Portal as-built surfaced four candidate doctrine changes across two reconciliation passes. Doctrine is high-capability-class → flags only. Recorded in [safety-portal mission §Doctrine flags](../workstreams/safety-portal/mission.md) + the respective blueprint session logs.
+
+**Raised 2026-06-10 (v4 reconciliation) — carried, still open:**
 1. **Candidate Op Stds §50 — "privileged code-actuation gate."** Generalize Invariant 1's two-process model to *code* changes: cloud can only queue / the local Mac daemon is the sole actuator / state-machine-stamped / CI-gated synchronous merge / the operator toolchain holds the credentials. First instance = the Safety Portal form-publish pipeline (`publish_daemon.py`); the PO + Subcontracts document-generation workstreams will want the same shape.
 2. **Form-maintenance principle promotion.** Promote *"operator + Claude maintained, with critical invariants enforced in code, not just documented"* to foundation doctrine, now that the portal realizes it mechanically.
+
+**Raised 2026-06-12 (v5 reconciliation) — new, propose-only drafts in the [2026-06-12 v5 session log](../session-logs/2026-06-12_safety-portal-v5-reconciliation.md):**
+3. **Op Stds §34 — canonical image-class screening sub-pattern.** Record the photo pipeline (magic → Pillow `verify()` / decompression-bomb cap / forced metadata-destroying re-encode → ClamAV-on-raw, config-gated) as the canonical §34 instantiation for a constrained image-attachment class, with screen-before-render + MALICIOUS-pages-and-refuses-before-filing as the load-bearing ordering. First instance = `photo_screen.py`.
+4. **FM Invariant-2 Layer-6 wording touch (optional).** Layer 6 for safety reports moves "N/A — no attachments" → "image-constrained attachment class, §34-screened in code."
+
+*The three v4-window exec-side flags (`../its/docs/tech_debt.md` lines 25/2117/2166 — PR-3 transport, PR-4 receipt-cache, PR-5 browse) are now **folded into mission v5** (§7, §16) — closed, not carried.*
 
 ---
 
@@ -492,10 +500,10 @@ The portal→intake transport is a **Python pull model** (operator-ratified 2026
 - **ITS_Daemon_Health observability drifted** — RETIRED `intake_poll` row present (frozen, pending operator delete, row `7461022174478212`); `publish_daemon`/`compile_now_poll`/`picklist_audit` have no rows; `portal_poll` Last Error Summary stale. See `docs/tech_debt.md` "ITS_Daemon_Health observability drift" entry.
 - **Half-applied morning publishes** — reqs 11/12/13 Box archive PDFs never generated (bare-python bug, fixed by #241). One-time backfill needed. See `docs/tech_debt.md`.
 - **PR-5 Worker NOT deployed** — migration 0012 + `npm run deploy` pending (operator step; apply migration BEFORE deploy). `FormRequestPage` + requester-bound PDF download not live until then. See `docs/tech_debt.md`.
-- **Three doctrine flags open (PR-3 + PR-4 + PR-5)** — mission v4→v5 delta covering (a) two-mode weekly-send transport, (b) filed-PDF receipt cache, (c) Form Request browse + requester-bound download + two-stage prune. Fold at next blueprint mission pass.
+- **Three PR-3/PR-4/PR-5 doctrine flags — FOLDED into mission v5 (2026-06-12, RESOLVED).** The (a) two-mode weekly-send transport, (b) filed-PDF receipt cache, and (c) Form Request browse + requester-bound download + two-stage prune deltas are now in `mission.md` v5 (§7, §15, §16). The v5 pass raised **two new** propose-only doctrine drafts instead (§34 image-class screening sub-pattern + FM Layer-6 wording — see §3). Exec-side flag headers at `../its/docs/tech_debt.md` lines 25/2117/2166 are closed by the exec sync PR.
 
 ### On the horizon
-- **Safety Portal** — **PRs #271–#276 landed 2026-06-12 (exec HEAD `213d076`): photo upload PR-1+PR-2, PR-4 Part B Crane form, PR-4 Part A PDF receipt cache, PR-3 Graph upload-session, PR-5 Form Request browse + requester-bound download. Three doctrine flags open for mission v5 fold.** Phase-2 Form Manager fully built; pipeline hardened; UX polished; forensic audit filed; admin idle-timeout hardened (2026-06-10). Blueprint mission/brief reconciled to v4 (2026-06-10, blueprint commit `429d377`). Phase-1 mirror-activated + live-validated (2026-06-08). Publish daemon + portal_poll + weekly_send_poll all live + healthy. `incident-report` v1/v2/v3 in catalog. Admin idle window 30 min; bounded dirty-editor keep-alive in place. `ZZ Portal Proof` (JOB-000008) Active. Candidate §50 code-actuation gate + form-maintenance principle flags pending Seth co-resolution. Next: (0) **deploy PR-5 to mirror** (migration 0012 + `npm run deploy` — operator-run); (1) blueprint mission v4→v5 reconciliation (fold PR-3 + PR-4 + PR-5 doctrine deltas); (2) load `compile_now_poll` daemon; (3) activate Orphaned Reports; (4) resolve CLAUDE.md v16→v18 doctrine drift (M9); (5) resolve ITS_Daemon_Health drift; (6) one-time Box archive backfill for reqs 11/12/13; (7) Evergreen production cutover. See memory-archive §G27 (activation) + §G30 (Phase-2 build) + §G31 (pipeline hardening) + §G32 (UX) + §G33 (forensic audit + E2E validation) + §G34 (idle-timeout hardening) + §G35 (blueprint v4 reconciliation) + §G36 (PR-3+PR-5 photo/form-request session).
+- **Safety Portal** — **PRs #271–#276 landed 2026-06-12 (now exec HEAD `44370e1` incl. follow-ons #279/#280/#281): photo upload PR-1+PR-2, PR-4 Part B Crane form, PR-4 Part A PDF receipt cache, PR-3 Graph upload-session, PR-5 Form Request browse + requester-bound download. Blueprint mission reconciled v4 → v5 (2026-06-12, branch `doctrine/safety-portal-v5`) — the three PR-3/PR-4/PR-5 doctrine flags FOLDED.** Phase-2 Form Manager fully built; pipeline hardened; UX polished; forensic audit filed; admin idle-timeout hardened (2026-06-10). Phase-1 mirror-activated + live-validated (2026-06-08). Publish daemon + portal_poll + weekly_send_poll all live + healthy. `incident-report` v1/v2/v3 + `lifting-plan` (Crane & Rigging) + `photo-test` in catalog. `ZZ Portal Proof` (JOB-000008) Active. Open doctrine items: §50 code-actuation gate + form-maintenance principle (v4, carried) + the two new v5 propose-only drafts (§34 image-class + Layer-6 wording). Next: (0) **deploy PR-5 to mirror** (migration 0012 + `npm run deploy` — operator-run; STILL PENDING — `FormRequestPage` + requester-bound download not live until then); (1) ~~blueprint mission v4→v5 reconciliation~~ **DONE 2026-06-12**; (2) load `compile_now_poll` daemon; (3) activate Orphaned Reports; (4) resolve CLAUDE.md v16→v18 doctrine drift (M9); (5) resolve ITS_Daemon_Health drift; (6) one-time Box archive backfill for reqs 11/12/13; (7) Evergreen production cutover. See memory-archive §G27 (activation) + §G30 (Phase-2 build) + §G31 (pipeline hardening) + §G32 (UX) + §G33 (forensic audit + E2E validation) + §G34 (idle-timeout hardening) + §G35 (blueprint v4 reconciliation) + §G36 (photo/form-request program) + §G37 (blueprint v5 reconciliation).
 - Email Triage workstream build — now carries Invariant 2 Layer 6 (attachment screening) per the portal pivot reassignment
 - `fail_closed_until` kill-switch mechanism deferred from F07 (Q8 resolution) — currently fail-open by documented design; revisit in Phase 2+ when multi-operator scenario makes a true fail-closed window safe to add.
 - DFR backfill and Portfolio Rollups Reports continued expansion.
