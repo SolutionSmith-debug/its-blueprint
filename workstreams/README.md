@@ -11,6 +11,7 @@ named in kebab-case.
 | [`purchase-orders/`](purchase-orders/) | `purchase_orders` | 2 | planning only |
 | [`subcontracts/`](subcontracts/) | `subcontracts` | 2 | planning only |
 | [`ai-employee-capabilities/`](ai-employee-capabilities/) | `ai_employee_capabilities` | 3 | planning only |
+| [`urs-marine-portal/`](urs-marine-portal/) | `urs_marine_portal` | Customer 2 | active build — template-first; B1–B5 CC briefs in `briefs/` |
 
 ## Convention
 
