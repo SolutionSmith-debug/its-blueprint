@@ -93,9 +93,10 @@ Pinned to `SolutionSmith-debug/its@fb15881` (current HEAD at session start — z
 > **FM / V&R / Op Stds / Handover** Authority blocks were NOT churned — they refresh at each doc's *own*
 > next bump. Only the canonical-doc-set *pointer* (`project-organization.md`) was refreshed for coherence.
 >
-> **Post-merge exec follow-on (open):** refresh `../its/docs/doctrine_manifest.yaml` `blueprint_head` →
-> `ad8f563` + the two "Excellence v4"→"v5" `meta` provenance comments (excellence-roadmap is tracked only
-> in those narrative comments — no mechanical `doctrine_versions` entry — so no drift gate in the interim).
+> **Post-merge exec follow-on — DONE:** `../its/docs/doctrine_manifest.yaml` `blueprint_head` → `ad8f563`
+> + the two "Excellence v4"→"v5" `meta` provenance comments — landed via exec **PR #293** (squash `2f70d91`),
+> CI green (`test`/`portal`/`secrets`/CodeQL). Excellence-roadmap is tracked only in those narrative comments
+> (no mechanical `doctrine_versions` entry), so `check_doctrine_drift` was unchanged across the refresh.
 >
 > **Mission status (open, recommend):** `workstreams/urs-marine-portal/mission.md` is still `status: draft`;
 > its frontmatter conditions draft-exit on B5 landing, now satisfied → recommend the operator flip it (draft→canonical).
@@ -139,7 +140,7 @@ platform substrate), NOT a strip of Customer 0's full `its` execution repo.
 
 ## Open items
 
-- ~~Land B5 from a guarded blueprint session (the amendment above).~~ **DONE 2026-06-17** — PR #46 (squash `ad8f563`), tag `excellence-roadmap-v5`. Post-merge exec follow-on (doctrine_manifest.yaml refresh) + mission.md draft→canonical flip remain open (see the B5 section above).
+- ~~Land B5 from a guarded blueprint session (the amendment above).~~ **DONE 2026-06-17** — blueprint PR #46 (squash `ad8f563`), tag `excellence-roadmap-v5`; exec manifest sync PR #293 (squash `2f70d91`). Only open item: `workstreams/urs-marine-portal/mission.md` draft→canonical flip (B5-landing satisfies its draft-exit condition; operator decision — see the B5 section above).
 - B6 (Monday adapter — implement B3's `Adapter` for Monday.com) + B7 (net-new marine forms) are
   post-B4 follow-ons.
 - URS discovery items (mission §12) gate the proposal, not the build.
