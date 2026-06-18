@@ -2,8 +2,8 @@
 type: reference
 version: 5
 status: canonical
-last_verified: 2026-06-13
-last_verified_against: e75c5a7
+last_verified: 2026-06-17
+last_verified_against: 7510f7a
 supersedes: references/memory-archive.md@v4
 workstream: null
 tags: [restoration, operational-detail, post-compaction-recovery]
@@ -2185,3 +2185,81 @@ Once `mark-filed` is posted, the Worker's `/api/internal/pending` stops serving 
 ### §G38.5 — Process
 
 Session log warranted (1 commit + non-obvious decisions: the permanent-400 drain pattern, the find-or-create-key live-smoke procedure). Operator invokes `session-log-writer` directly. Exec-side log only — no blueprint-side doctrine decisions this session.
+
+## §G39 — 2026-06-17 Test-artifact cleanup + job-prefixed PDF naming (PRs #289/#290)
+
+### §G39.1 — What this session did
+
+Two independent workstreams in a single session:
+
+**Part 1 (no git trace):** Live API cleanup — deleted test Smartsheet folders/sheets + Box folders from the ITS — Safety Portal namespace to eliminate visual clutter. Surfaced two operational lessons (MCP delete gaps + regen diagnosis pattern) and left two D1 residue items as tech debt.
+
+**Part 2 (PRs #289/#290):** Job-prefixed PDF naming across all three delivery surfaces. A live test after PR #289 revealed that the fix was incomplete — two surfaces were still using the old naming pattern — which drove PR #290 as an immediate follow-on.
+
+No blueprint doctrine changes. No blueprint session log warranted (no doctrine decisions).
+
+### §G39.2 — MCP connectors cannot delete Smartsheet sheets/folders or Box folders
+
+**Operational fact for future sessions.** The Smartsheet MCP exposes only `delete_rows` and column-level operations — there is **no `delete_sheet`, `delete_folder`, or `delete_workspace`** primitive. The Box MCP has **no delete primitive of any kind**. This was discovered when attempting to clean test artifacts via MCP; the operator had to fall back to the underlying Python SDK clients:
+
+- **Smartsheet:** `smartsheet_client.get_client().Folders.delete_folder(folder_id)` cascades to child sheets; `.Sheets.delete_sheet(sheet_id)` for individual sheets.
+- **Box:** `box_client.get_client().folder(folder_id).delete(recursive=True)`.
+
+**Safety pattern used:** a NAME-GUARDED one-off SDK script that maintained a hard-coded `TEST_NAME_ALLOWLIST` — any candidate whose name was NOT on the allowlist caused an early abort. This prevents accidental production deletes when scripting bulk cleanup against a live system.
+
+**What was cleaned:**
+- Smartsheet (ITS — Safety Portal workspace `194283417429892`): 4 test folders (New test / teala test / Test number two / ZZ Portal Proof) + their "— week of 2026-06-13" sheets (cascade); ALL rows of `ITS_Active_Jobs` (`6223950341164932`, 4 test rows) + `WSR_human_review` (`5035670127988612`, 6 rows) — sheets kept.
+- Box (`ITS_Safety_Portal` root `388017263015`): 6 folders (same 4 + Test project 1 + Rockford), recursive.
+- NOT touched: 2 Evergreen Portfolio Template workspaces (Demo Seed + Master, 2026-06-04 seed scaffolding) + Box migration strays + "Forfront IL portfolio" (ADMIN-only).
+
+### §G39.3 — Portal-poll regen diagnosis: one-shot vs loop
+
+Immediately after deleting the `teala test` folder, it reappeared. Diagnosis:
+
+1. `GET /api/internal/pending` — count was 1 (an in-flight submission the poller was finishing).
+2. The poller completed that submission, triggering `intake.process_portal_submission` → `ensure_week_folder` → Box folder created with the same name.
+3. After the submission was filed, `GET /api/internal/pending` returned count = 0.
+4. The regen folder was deleted; re-verification showed clean.
+
+**Lesson:** a regen immediately after an artifact delete is often a **one-shot** (a queued submission raced the delete), not an infinite loop. The correct triage is to check pending count BEFORE deciding to pause the daemon. If count = 0 after the regen, delete the regen and verify again — the daemon can continue running. Pre-emptively pausing `portal_poll` is unnecessary when the pending queue is empty.
+
+**Two D1 residue items NOT addressed (operator scope was Smartsheet + Box only):**
+- (a) Test-job entries persist in the portal D1 `jobs` table (dropdown source) because `push_jobs` refuses to sync an empty `ITS_Active_Jobs` set. Clearing requires a direct `wrangler d1 execute` targeted at test slugs.
+- (b) Historical filed test submissions + their `filed_pdfs` chunked-cache rows remain in D1. Low operational impact (pruning is time-based) but wastes D1 space and can appear in browse queries.
+
+Both tracked in `~/its/docs/tech_debt.md`.
+
+### §G39.4 — Three PDF name surfaces: all must change together
+
+The portal produces per-submission PDFs delivered via three distinct code paths, each with its own naming logic:
+
+| Surface | Location | Old pattern | New pattern (PR #289/#290) |
+|---|---|---|---|
+| Box file | `intake._file_portal_pdf` (Python) | `<work_date>-<type>.pdf` | `<job>_<work_date>_<type>.pdf` |
+| Smartsheet row attachment | `intake.py` ~line 2208 (Python) | `<date>-<form>.pdf` | `<job>_<date>_<form>.pdf` |
+| Worker download header | `GET /api/submissions/:uuid/pdf` (TypeScript) | `<form>-<date>.pdf` | `<job>_<date>_<form>.pdf` |
+
+**PR #289** (`88bc8ade`) fixed surface 1 (Box) and the weekly-packet name but missed surfaces 2 and 3. A live test submission after the deploy revealed the inconsistency — the Box file had the new name but the Smartsheet attachment and the portal download header still used the old pattern.
+
+**PR #290** (`7510f7a0`) fixed the remaining two surfaces. Surface 3 (Worker) required a `submissions LEFT JOIN jobs` to resolve `project_name` — it is not stored on the `submissions` table directly. The test suite (Python: `test_intake_portal` row-attach exact-name assertion; TypeScript: `pdf.test.ts` + `form-request.test.ts` `Content-Disposition`) locks all three surfaces.
+
+**Class-of-bug:** any time a naming scheme touches more than one rendering path, the fix must audit ALL delivery surfaces before merging. A review that only checks the most obvious path (Box) will miss secondary surfaces. The live test is the only reliable detector — unit tests can stub any single surface in isolation.
+
+**Already-filed PDFs** keep their old names. The new scheme applies only to new submissions from the deploy point forward.
+
+**Weekly packet:** `weekly_generate._packet_basename` now composes `<Job>_week of <Sat>_WSR.pdf`. Recompiles of the same week produce `_v2`, `_v3` etc. (append-only distinct Box files per compile; old `compiled_at` timestamp suffix dropped). `merge_pdfs` is pure — Invariant 1 intact.
+
+Worker deployed as version `c56335d2`.
+
+### §G39.5 — Operational state after this session
+
+- **Exec HEAD (`origin/main`):** `7510f7a` (PR #290; four-part verified, main-branch CI SUCCESS).
+- **`~/its`** fast-forwarded to `7510f7a`. Portal + weekly-send daemons live + healthy.
+- **D1 residue:** test-job dropdown entries + historical test submissions + `filed_pdfs` cache — tracked in tech-debt, NOT yet cleared.
+- **Orphan Smartsheet folder** from JOB-000013 ("I don't know project name Montgomery") — still present; operator deletes via UI (unchanged from §G38).
+- **PR-5 Worker** — still NOT deployed (migration 0012 + `npm run deploy` pending; unchanged from §G38).
+- **Known open items (carried from §G38):** M9 (CLAUDE.md v16→v18), ITS_Daemon_Health drift, half-applied-publishes backfill, compile_now_poll not loaded, Orphaned Reports config-gated OFF, 7 preserved stale branches.
+
+### §G39.6 — Process
+
+Session warranted an exec-side session log (≥2 commits + non-obvious decisions: the MCP-delete gap pattern, the regen-one-shot diagnosis, the 3-surface naming rule). No blueprint session log needed (no doctrine decisions this session). Operator invokes `session-log-writer` directly.
