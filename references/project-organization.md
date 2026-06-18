@@ -2,7 +2,7 @@
 type: reference
 version: 5
 status: canonical
-last_verified: 2026-06-05
+last_verified: 2026-06-17
 last_verified_against: ffad86b
 supersedes: references/project-organization.md@v5
 workstream: null
@@ -61,7 +61,7 @@ Anchor docs for ITS as a whole. Lives in the parent Claude project.
 
 - Handover Plan v9 — Phase 1.5 cutover runbook.
 
-- Excellence Roadmap v4 — quality + reliability tracks.
+- Excellence Roadmap v5 — quality + reliability tracks (+ Track 3.4 platform fork-source: portal-template).
 
 - Foundation Scaffold Update v6.5 — execution-layer state.
 
