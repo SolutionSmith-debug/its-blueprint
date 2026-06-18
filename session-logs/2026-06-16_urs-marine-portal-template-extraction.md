@@ -67,7 +67,38 @@ Pinned to `SolutionSmith-debug/its@fb15881` (current HEAD at session start — z
    `pull_request` scans (a latent B1 defect that B2's PR surfaced); replaced with a direct binary
    scan (no token coupling).
 
-## B5 — doctrine cascade PROPOSAL (propose-only; for a guarded blueprint session to land)
+## B5 — doctrine cascade — LANDED (excellence-roadmap v5; PR #46, squash `ad8f563`, tag `excellence-roadmap-v5`)
+
+> **LANDED 2026-06-17** in a guarded blueprint session (the `block-doctrine-write` guard fired and was
+> operator-approved). The amendment proposed below was applied to `doctrine/excellence-roadmap.md` as
+> **v5**: Track 3.4 added (verbatim from the proposal + `(NEW v5)` marker) + Track 3.3 refined;
+> frontmatter `version 5` / `last_verified 2026-06-17` / `last_verified_against fb15881` / `supersedes @v4`;
+> Authority v5 paragraph + `v5 trigger (met)` + advanced `v6 trigger criteria` (v4 history preserved).
+> Companion edits in the same PR: `references/customer-fork-setup-checklist.md` (source-agnostic
+> fork-source note) + `references/project-organization.md` (canonical-doc-set pointer v4→v5). **Checked
+> consistent / no edit needed** (all fork-source-agnostic): Op Stds §39, `doctrine/foundation-mission.md`
+> (per-customer-repo isolation invariant only), `references/permissions.md` §3.2 (already corrected the
+> "primary operator" framing in Permissions Ask v6 — the stale excellence-roadmap line-75 pointer was
+> corrected in-doc).
+>
+> **Date note:** the proposal specified `last_verified: 2026-06-16`; landed `2026-06-17` (the actual
+> landing date) applied consistently across frontmatter / title / Authority.
+>
+> **Verify — all green:** `lint_frontmatter` + `lint_crossrefs` clean (92 files); four-lens adversarial
+> diff review all PASS_WITH_NITS (no blockers); `doc-reconciliation-auditor` — `check_doctrine_drift.py`
+> EXIT=0 with **zero NEW exec↔blueprint drift** (the lone M2 drift is pre-existing/exec-resident), 0 semantic drift.
+>
+> **Deferred per the documented "don't churn" convention** (memory-archive:1526; `handover-plan.md` itself
+> still carries a stale "Op Stds v16"): the present-tense **"Excellence Roadmap v4"** cites in the
+> **FM / V&R / Op Stds / Handover** Authority blocks were NOT churned — they refresh at each doc's *own*
+> next bump. Only the canonical-doc-set *pointer* (`project-organization.md`) was refreshed for coherence.
+>
+> **Post-merge exec follow-on (open):** refresh `../its/docs/doctrine_manifest.yaml` `blueprint_head` →
+> `ad8f563` + the two "Excellence v4"→"v5" `meta` provenance comments (excellence-roadmap is tracked only
+> in those narrative comments — no mechanical `doctrine_versions` entry — so no drift gate in the interim).
+>
+> **Mission status (open, recommend):** `workstreams/urs-marine-portal/mission.md` is still `status: draft`;
+> its frontmatter conditions draft-exit on B5 landing, now satisfied → recommend the operator flip it (draft→canonical).
 
 This session was home-rooted (`/Users/sethsmith`) — no blueprint hook fires and the
 `block-doctrine-write` guard is self-enforced — so the `doctrine/excellence-roadmap.md` edit is
@@ -108,7 +139,7 @@ platform substrate), NOT a strip of Customer 0's full `its` execution repo.
 
 ## Open items
 
-- Land B5 from a guarded blueprint session (the amendment above).
+- ~~Land B5 from a guarded blueprint session (the amendment above).~~ **DONE 2026-06-17** — PR #46 (squash `ad8f563`), tag `excellence-roadmap-v5`. Post-merge exec follow-on (doctrine_manifest.yaml refresh) + mission.md draft→canonical flip remain open (see the B5 section above).
 - B6 (Monday adapter — implement B3's `Adapter` for Monday.com) + B7 (net-new marine forms) are
   post-B4 follow-ons.
 - URS discovery items (mission §12) gate the proposal, not the build.
