@@ -2263,3 +2263,61 @@ Worker deployed as version `c56335d2`.
 ### §G39.6 — Process
 
 Session warranted an exec-side session log (≥2 commits + non-obvious decisions: the MCP-delete gap pattern, the regen-one-shot diagnosis, the 3-surface naming rule). No blueprint session log needed (no doctrine decisions this session). Operator invokes `session-log-writer` directly.
+
+## §G40 — 2026-06-17 B5 doctrine cascade — Excellence Roadmap v4→v5 + URS Marine mission canonical
+
+### §G40.1 — What landed
+
+All changes are in `its-blueprint` on `origin/main`; blueprint is linear (squash-merge via PRs).
+
+**blueprint PR #46** (squash `ad8f563`, annotated tag `excellence-roadmap-v5`):
+
+- `doctrine/excellence-roadmap.md` **v4→v5** — Track 3.4 (NEW): platform fork-source = `its-portal-template` (the domain-free substrate extracted from exec `its@fb15881`; single Worker + React SPA + D1 + form/checklist engine + DB-driven N-role/capability model + named PM-adapter seam + HMAC/pull transport). This is NOT a strip of Customer 0's full `its`. Per-customer `its-<customer>` repos fork from `its-portal-template`; `its-blueprint` stays one artifact. Track 3.3 refined (portal-template fork path). Frontmatter: version 5, `last_verified: 2026-06-17`, `last_verified_against: fb15881`, supersedes @v4. Authority block: v5 para + `v5 trigger (met)` + advanced `v6 trigger criteria` (v4 history preserved). Stale line-75 permissions §3.2 reconcile note corrected to "reconciled in Permissions v6." Annotated tag `excellence-roadmap-v5` pushed on `ad8f563`. See [[its-doctrine-tag-and-landing-convention]].
+- `references/customer-fork-setup-checklist.md` — fork-source note made source-agnostic; `last_verified: 2026-06-17` updated.
+- `references/project-organization.md` — canonical-doc-set pointer updated "Excellence v4" → "v5".
+
+**Commit `1d38d38`** (not in PR #46; landed directly on `main` after the PR):
+
+- `workstreams/urs-marine-portal/mission.md` — status flipped `draft → canonical`. B5's draft-exit condition (doctrine cascade landed) was the only blocker; no content changes to the mission itself.
+
+### §G40.2 — Verification (all green)
+
+A four-lens adversarial diff-review workflow was run before merge (contradiction / version-Authority / cross-ref+stranding / verbatim-spec) — all PASS, no blockers.
+
+`scripts/lint_frontmatter.py` + `scripts/lint_crossrefs.py` clean across 92 files.
+
+`scripts/check_doctrine_drift.py` (exec-side `doc-reconciliation-auditor`) — EXIT=0, ZERO new exec↔blueprint drift. The lone detected item (`M2 tech_debt.md:1786`) is a pre-existing, exec-resident false positive (a detector-boundary artifact, not a real B5-introduced drift); it warrants an independent exec fix and is already tracked in exec `docs/tech_debt.md`.
+
+### §G40.3 — "Don't churn" deferral + symmetric-companion no-edit rulings
+
+**Deliberate bounded staleness:** the present-tense "Excellence Roadmap v4" companion cites in `doctrine/foundation-mission.md`, `doctrine/vision-and-roadmap.md`, `doctrine/operational-standards.md`, and `doctrine/handover-plan.md` Authority blocks were intentionally left at v4. Policy: companion Authority-block cites refresh at each doc's own next version bump (precedent: `handover-plan.md` still carries a stale "Op Stds v16"). Only `references/project-organization.md` (the canonical-doc-set pointer) was refreshed because it is a reference file, not a version-gated doctrine doc.
+
+**Checked-consistent, deliberately not edited:**
+- Op Stds §39 (per-customer-repo isolation) — already fork-source-agnostic; no change needed.
+- `doctrine/foundation-mission.md` — per-customer-repo isolation invariant unchanged; v5 trigger met note is excellence-roadmap-internal.
+- `references/permissions.md` §3.2 — already corrected to "primary operator" framing in Permissions v6; the stale line-75 reconcile note in excellence-roadmap itself was fixed in PR #46 (no separate permissions doc edit required).
+
+This is a known, bounded staleness — future doctrine bumps to FM / V&R / Op Stds / Handover will pick up the v5 cite naturally.
+
+### §G40.4 — Cross-repo manifest sync (exec PR #293)
+
+exec PR #293 (squash `2f70d91`): `~/its/docs/doctrine_manifest.yaml` `blueprint_head` updated `→ ad8f563` + the two "Excellence v4"→"v5" narrative `meta` provenance comments (excellence-roadmap appears in narrative comments only in the manifest — no mechanical `doctrine_versions` entry). CI green. Exec `origin/main` is now `2f70d91`.
+
+Note: exec advanced significantly this session via OTHER concurrent sessions (#287/#288/#292 etc.; PDF beautification, ITS Portal rebrand, D1 job cleanup). B5's only exec change is the manifest comment sync — PR #293 was narrow and intentional.
+
+### §G40.5 — Operational state after this session
+
+- **Blueprint `origin/main`:** `f4ef4c9` (§G39 close commit, landed just before this B5 close).
+- **Blueprint tags:** `excellence-roadmap-v5` on `ad8f563`.
+- **Excellence Roadmap:** v5 (canonical, `last_verified_against: fb15881`).
+- **URS Marine Portal mission:** canonical (was draft).
+- **Exec `origin/main`:** `2f70d91` (PR #293 manifest sync).
+- **Exec doctrine_manifest.yaml `blueprint_head`:** `ad8f563`.
+- **No new exec tech debt from B5.** The pre-existing M2 detector-boundary FP is carried.
+- All other exec-side open items (PR-5 Worker deploy, ITS_Daemon_Health drift, CLAUDE.md M9, half-applied-publishes, etc.) are unchanged from §G39.
+
+### §G40.6 — Process
+
+**Operational lesson — exec-repo concurrent-access (see [[exec-repo-concurrent-access-verify-head]] auto-memory):** A concurrent `~/its` session switched exec `HEAD` to `main` mid-B5-session. The manifest commit briefly landed on local `main` instead of the PR branch. Repaired via `git branch -f` + `reset --hard origin/main` + `git push --force-with-lease`. Rule: verify `git status` + `git branch` in exec immediately before any exec commit — a concurrent session may have switched HEAD.
+
+**Session log assessment:** No exec session log is warranted for B5. The only exec change is a 2-line manifest comment swap (PR #293); it is entirely self-documented in the PR description and this §G40 entry. No non-obvious decisions were made on the exec side — all judgment calls were blueprint-side (the Track 3.4 wording, the don't-churn deferral, the symmetric-companion no-edit rulings). A blueprint-side session log was already written by the operator (`session-logs/2026-06-17_b5-doctrine-cascade.md` referenced in blueprint main-log commits `d025335` + `4326d79`); operator does not need to invoke `session-log-writer` for B5.
