@@ -1,19 +1,29 @@
 ---
 type: doctrine
-version: 4
+version: 5
 status: canonical
-last_verified: 2026-06-01
-last_verified_against: 585823d
-supersedes: doctrine/excellence-roadmap.md@v3
+last_verified: 2026-06-17
+last_verified_against: fb15881
+supersedes: doctrine/excellence-roadmap.md@v4
 workstream: null
-tags: [quality-bar, tooling, observability, successor-maintenance, training-bounded-co-resolution]
+tags: [quality-bar, tooling, observability, successor-maintenance, training-bounded-co-resolution, platform-fork-source, portal-template]
 ---
 
-**ITS Excellence Roadmap v4**
+**ITS Excellence Roadmap v5**
+
+2026-06-17 — v5: Track 3.4 added — Platform Fork-Source (portal-template)
+
+*v5 records the platform **fork-source** for portal-centric customers: the fork-source is **blueprint + `its-portal-template`** (the domain-free platform substrate extracted from `its@fb15881`), NOT a strip of Customer 0's full `its` execution repo. Adds Track item 3.4 and refines Track 3.3 (Blueprint Fork Runbook) to distinguish the portal-template fork path. Tracks 1–2, the R6 successor-maintenance build program, and the Grade Snapshot carry forward verbatim from v4; v4's R6 (b) Tier-2 readiness reframe stands. Customer 2 (URS Marine, `its-urs-marine`) is the first worked example.*
 
 2026-06-01 — R6 Sub-Deliverable (b) Reframed: Tier-2 Readiness, Not an Enforcement Layer
 
 *The Tier-2 "non-developer-safe enforcement layer" R6 sub-deliverable is removed (no structural maintenance enforcement layer exists or is required — FM v11 / Op Stds v16); R6 (b) becomes Tier-2 readiness work (the §44 low-class action set + §43 runbooks + training). R6 (a) Tier-1 self-heal + (c) runbook tooling carry forward. The v3 Track-3 maintenance-model reframe (Developer-Operator = Tier-3 escalation asset) stands; Tracks 2 + 3 otherwise unchanged from v3.*
+
+# Purpose of v5
+
+v5 adds Track 3.4 (Platform fork-source / portal-template) to the Per-Customer Customization Discipline track and refines Track 3.3. The decision it records: portal-centric customers fork from **blueprint + `its-portal-template`** — the domain-free platform substrate (single Worker + React SPA + D1 + the declarative form/checklist engine + the DB-driven N-role/capability model + the named PM-adapter seam + the HMAC/pull transport contract) — not from a strip of Customer 0's full `its` execution repo. `its-portal-template` was extracted from `its@fb15881` (PROVENANCE-tracked, domain-free, grep-gated); per-customer `its-<customer>` execution repos fork from it, and the blueprint itself stays one artifact (no per-customer blueprint forks — blueprint `CLAUDE.md`). This amends any prior "fork the execution repo" framing for portal-centric customers; non-portal customers continue per Track 3.3. Customer 2 (URS Marine, `its-urs-marine`) is the first worked example.
+
+Tracks 1 and 2, the R6 successor-maintenance build program, the "What v3 Explicitly Does NOT Promise" scope exclusions, and the Grade Snapshot all carry forward from v4 unchanged; v4's R6 (b) Tier-2 readiness reframe stands. v4 retires on acceptance of v5; v2.1 remains canonical baseline; v5 is operative reference.
 
 # Purpose of v4
 
@@ -52,13 +62,15 @@ Tooling that turns operational discipline into automation. Survives the white-gl
 
 - 2.3 — Session-log convention fold into CLAUDE.md. SELF-ORGANIZING. LOW priority. Triggered at next CLAUDE.md touch — which per this cascade is happening NOW (cc reconciliation handoff in Cascade Unification Update 2026-05-22).
 
-# Track 3 — Per-Customer Customization Discipline (carries forward verbatim from v2.2)
+# Track 3 — Per-Customer Customization Discipline (3.1–3.3 carry forward from v2.2; 3.3 refined + 3.4 added in v5)
 
 - 3.1 — Multi-tenancy framework: RETIRED (correctly per v2.1 errata). Per-customer-repo invariant subsumes.
 
 - 3.2 — Configuration externalization: REINSTATED. MEDIUM priority. Urgent at first reviewer-chain-override fetcher implementation.
 
-- 3.3 — Blueprint Fork Runbook (was: Customer 2 onboarding playbook): REINSTATED, renamed. MEDIUM priority. Triggered at Customer 2 conversation start; draft in parallel with V&R v7.2 Phase 1.6.
+- 3.3 — Blueprint Fork Runbook (was: Customer 2 onboarding playbook): REINSTATED, renamed. MEDIUM priority. Triggered at Customer 2 conversation start; draft in parallel with V&R v7.2 Phase 1.6. **Refined in v5:** the runbook now distinguishes the **portal-template fork path** (portal-centric customers fork blueprint + `its-portal-template`, per 3.4) from a full-exec fork; still Developer-Operator-driven (Op Stds §§37-41). The §39 per-customer-fork security baseline (and its `references/customer-fork-setup-checklist.md` operational steps) applies to the forked `its-<customer>` repo regardless of which source it was forked from.
+
+- 3.4 — Platform fork-source (portal-template) (NEW v5). Portal-centric customers fork from **blueprint + `its-portal-template`** — the domain-free platform substrate (single Worker + React SPA + D1 + the declarative form/checklist engine + the DB-driven N-role/capability model + the named PM-adapter seam + the HMAC/pull transport contract) — NOT from a strip of Customer 0's full `its` execution repo. `its-portal-template` was extracted from `its@fb15881` (PROVENANCE-tracked, domain-free, grep-gated). Per-customer execution repos (`its-<customer>`) fork from it; the blueprint stays one artifact (no per-customer blueprint forks — blueprint `CLAUDE.md`). This amends any prior "fork the execution repo" framing for portal-centric customers. Customer 2 (URS Marine, `its-urs-marine`) is the first worked example. Non-portal customers continue per 3.3.
 
 # What v3 Explicitly Does NOT Promise
 
@@ -72,7 +84,7 @@ Concrete scope exclusions carry forward from v2.3, except the maintenance-model 
 
 - Each customer engagement is a separate contract, separate handover, separate maintenance arrangement. The intended steady-state maintenance arrangement is the three-tier successor-maintenance model: Tier 1 self-heal, Tier 2 Successor-Operator + Claude repair within the low-capability-class set, Tier 3 escalation to the Developer-Operator (Seth) as a reachable asset.
 
-- Remote support (Tailscale-managed VPN) is a Tier-3 escalation channel for the Developer-Operator (Seth), **not** the primary ongoing-operation model. Seth is a reachable escalation asset; steady-state operation is Tier 1 (self-heal) and Tier 2 (Successor-Operator + Claude). The earlier framing that positioned remote support / "Solution Smith remains primary operator" as the standing maintenance model is superseded by the three-tier model (reconcile `references/permissions.md` §3.2 "Solution Smith remains primary operator" in the same cascade).
+- Remote support (Tailscale-managed VPN) is a Tier-3 escalation channel for the Developer-Operator (Seth), **not** the primary ongoing-operation model. Seth is a reachable escalation asset; steady-state operation is Tier 1 (self-heal) and Tier 2 (Successor-Operator + Claude). The earlier framing that positioned remote support / "Solution Smith remains primary operator" as the standing maintenance model is superseded by the three-tier model (reconciled in `references/permissions.md` §3.2, Permissions Ask v6 — the "Solution Smith remains primary operator" framing is explicitly corrected there).
 
 # Grade Snapshot (Post-PR-#60 + Verification Audit)
 
@@ -87,10 +99,14 @@ Concrete scope exclusions carry forward from v2.3, except the maintenance-model 
 
 # Authority
 
+Excellence Roadmap v5, 2026-06-17. v5 adds Track 3.4 (Platform fork-source: portal-template) to the Per-Customer Customization Discipline track and refines Track 3.3 to distinguish the portal-template fork path: portal-centric customers fork from blueprint + `its-portal-template` (the domain-free platform substrate extracted from `its@fb15881`, PROVENANCE-tracked, domain-free, grep-gated), not from a strip of Customer 0's full `its` execution repo; per-customer `its-<customer>` repos fork from the template and the blueprint stays one artifact. This amends any prior "fork the execution repo" framing for portal-centric customers; Customer 2 (URS Marine, `its-urs-marine`) is the first worked example. Tracks 1–2, the R6 successor-maintenance build program, the scope exclusions, the Grade Snapshot, and v4's R6 (b) Tier-2 readiness reframe all carry forward verbatim. v4 retires on acceptance of v5; v2.1 remains canonical baseline; v5 is operative reference. Verified against exec `fb15881` (the `its` HEAD that `its-portal-template` was extracted from). Canonical git tag: `excellence-roadmap-v5`.
+
+v5 trigger (met): a substantive Track-3 addition — a new platform fork-source mechanism (item 3.4) for portal-centric customers, with the companion 3.3 refinement. This satisfies the v5-trigger criterion the v4 doc carried ("substantive track restructuring or addition of a fundamentally new track"). Tag pushed post-merge: `excellence-roadmap-v5`.
+
 Excellence Roadmap v4, 2026-06-01. v4 reframes R6 sub-deliverable (b): the Tier-2 "non-developer-safe enforcement layer" is removed (there is no structural maintenance enforcement layer; none is built or required — FM v11 / Op Stds v16 / Handover v8 / V&R v9) and replaced by Tier-2 readiness work (the §44 low-capability-class action set implemented + §43 runbooks + trained-operator / demonstrated-repair). R6 (a) Tier-1 self-heal completion and (c) runbook tooling carry forward; the v3 Track-3 maintenance-model reframe (Developer-Operator = Tier-3 escalation asset) stands. v3 retires on acceptance of v4; v2.1 remains canonical baseline; v4 is operative reference. Canonical git tag: `excellence-roadmap-v4`.
 
 v4 trigger (met): R6's Tier-2 sub-deliverable recharacterized from a structural enforcement layer to Tier-2 readiness work — a track-item restructuring driven by the FM v11 / Op Stds v16 de-1b reframe. Tag pushed post-merge: `excellence-roadmap-v4`.
 
-v5 trigger criteria: substantive track restructuring or addition of a fundamentally new track. Status updates without track-structure changes are absorbed in-place at v4 (no minor-overlay; frontmatter and title stay equal per G7).
+v6 trigger criteria: substantive track restructuring or addition of a fundamentally new track. Status updates without track-structure changes are absorbed in-place at v5 (no minor-overlay; frontmatter and title stay equal per G7).
 
 Companion to FM v11, Op Stds v18, V&R v9, Handover Plan v9, FSU v6.5, Memory Archive v5, Successor-Maintenance Model Audit 2026-05-29.

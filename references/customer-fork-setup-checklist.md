@@ -2,7 +2,7 @@
 type: reference
 version: 1
 status: canonical
-last_verified: 2026-05-24
+last_verified: 2026-06-17
 last_verified_against: 79eec73
 workstream: null
 tags: [customer-fork, security-hardening, operational-checklist]
@@ -11,6 +11,8 @@ tags: [customer-fork, security-hardening, operational-checklist]
 # Customer Fork Setup Checklist
 
 Operational artifact derived from [Op Stds §39](../doctrine/operational-standards.md#39-new-per-customer-fork-security-setup). Apply when standing up a new ITS customer fork (Customer 2+, or any new repo that inherits ITS doctrine).
+
+> **Fork source (see [excellence-roadmap.md](../doctrine/excellence-roadmap.md) Track 3.3 / 3.4).** This checklist hardens the forked repo and is **fork-source-agnostic**. The fork *source* is selected per excellence-roadmap Track 3.3/3.4: **portal-centric** customers fork from blueprint + `its-portal-template` (the domain-free platform substrate); other customers follow the full-exec fork path. Either way, the §39 security baseline below applies unchanged to the resulting `its-<customer>` repo.
 
 Order matters: execute steps in sequence. Each step is independently verifiable; do not proceed past a failed verification without operator review.
 
@@ -170,6 +172,6 @@ gh api repos/<OWNER>/<REPO>/code-scanning/default-setup > /tmp/codeql_setup.json
 
 ## Authority
 
-Customer Fork Setup Checklist v1, 2026-05-24. Derived from [Op Stds v12 §39](../doctrine/operational-standards.md#39-new-per-customer-fork-security-setup). Update this checklist when §39 changes (`last_verified` bump only for clarifications; version bump for substantive changes).
+Customer Fork Setup Checklist v1, 2026-05-24 (`last_verified` 2026-06-17). Derived from [Op Stds v12 §39](../doctrine/operational-standards.md#39-new-per-customer-fork-security-setup). Update this checklist when §39 changes (`last_verified` bump only for clarifications; version bump for substantive changes). **2026-06-17 clarification (Excellence Roadmap v5 Track 3.4):** added the fork-source note above (portal-template vs full-exec). The §39 hardening baseline and the `gh api` steps below are unchanged and fork-source-agnostic — `last_verified_against` is left at `79eec73` (no re-validation of the commands; cross-ref clarification only).
 
 Canonical reference for: any Customer 2+ onboarding; any new ITS repo (sandbox, experiment, fork-of-fork); any retroactive hardening of an existing ITS repo to current baseline.
