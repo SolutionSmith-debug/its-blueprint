@@ -1,8 +1,8 @@
 ---
 type: mission
 version: 1
-status: draft
-last_verified: 2026-06-16
+status: canonical
+last_verified: 2026-06-17
 last_verified_against: SolutionSmith-debug/its@fb15881
 workstream: urs_marine_portal
 tags: [workstream-mission, urs-marine, customer-2, portal, rbac, d1-system-of-record, adapter-seam, integrity-bar, foundation-invariants]
@@ -16,9 +16,9 @@ tags: [workstream-mission, urs-marine, customer-2, portal, rbac, d1-system-of-re
 > mechanics (migration line numbers, exact file edits, PR breakdowns) live in the CC briefs
 > (`B1`–`B4`), not here.
 >
-> `status: draft` until the portal-template fork-model amendment is cascaded into
-> `doctrine/excellence-roadmap.md` (brief B5). If anything here contradicts execution-layer code,
-> the code is ground truth — flag it and reconcile.
+> `status: canonical` as of 2026-06-17 — the portal-template fork-model amendment was cascaded into
+> `doctrine/excellence-roadmap.md` (v5, Track 3.4; brief B5 landed via PR #46, tag `excellence-roadmap-v5`).
+> If anything here contradicts execution-layer code, the code is ground truth — flag it and reconcile.
 
 ## 1. Product context
 
@@ -164,7 +164,7 @@ Carried from the kickoff engagement. Fixed inputs for every CC brief in this wor
 1. Three-tier capability-gated RBAC (§2); 2→N role generalization (decision #2 → DB-driven
    `roles`/`capabilities` tables).
 2. `its-portal-template` is the fork-source; customers fork from blueprint + portal-template (amends
-   "fork the execution repo"). Cascade into doctrine via B5.
+   "fork the execution repo"). Cascaded into doctrine via B5 — `excellence-roadmap.md` v5 §3.4.
 3. Named adapter seam; Smartsheet and Monday are sibling drop-in adapters; the portal core is
    adapter-unaware.
 4. Integration-device host deferred and kept open; pull-daemon + HMAC is the abstraction; the
