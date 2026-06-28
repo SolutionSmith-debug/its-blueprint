@@ -2362,3 +2362,68 @@ This is a reconfirmation of the existing §5 trap (first logged 2026-05-29 F02/F
 ### §G41.4 — Process
 
 Session log already written by operator at `~/its-banner/docs/session_logs/2026-06-20_safety-portal-banner-wordmark.md` (session-log-writer invoked directly). No blueprint session log needed (no doctrine decisions). No new tech debt beyond the browser-tab / favicon cosmetic item (noted but operator-deferred).
+
+## §G42 — 2026-06-28 Field-Ops portal write-UI phase complete + P2.4 BLOCKED
+
+### §G42.1 — What landed
+
+All changes are in the exec repo `SolutionSmith-debug/its`, exec `origin/main` now `5cc4336`.
+
+**Write-UI Slices 1–4 (PRs #319–#322):** completed the Field-Ops portal write-UI phase. Each slice followed the same capability-gated pattern.
+
+- **PR #319** (`61a8b96`): Slice 1 — equipment field-action controls. Status change (available / in-use / maintenance / decommissioned) + machine-log entry (fuel, service, hours). Route: `field_ops/routes/equipment_actions.ts`, gated `field-ops-write`.
+- **PR #320** (`0a2aeb0`): Slice 2 — equipment move + roster admin. Location transfer (move to job / return to yard), equipment deactivate / reactivate. Roster admin: add / edit / deactivate personnel.
+- **PR #321** (`b418fdf`): Slice 3 — Job Tracker write-ops. Job create / close / progress update / add-task / task-status update. Pattern: admin-only creates, field-user task-status.
+- **PR #322** (`5cc4336`): Slice 4 — time logging. Clock-in / clock-out / manual time entry (corrective path for field PMs). Closes the write-UI phase.
+
+All four PRs were four-part verified: `state=MERGED`, `mergedAt` non-null, `mergeCommit.oid` present, main-branch CI SUCCESS.
+
+**Session-close docs (PR #323, in CI as of 2026-06-28, NOT yet on `origin/main`):**
+- `docs/session_logs/2026-06-28_field-ops-write-ui-phase.md` — session log for Slices 3–4 + the P2.4 decision.
+- `docs/cc-brief_fieldops-next-session.md` — comprehensive next-session brief (7-source parallel sweep: tech-debt / memory / plan / briefs / GitHub / code-stubs / blueprint; 121 raw items organized into P3 Materials block, BLOCKED P2.4 section, tracked follow-ups, later P4/P5, cross-cutting hygiene).
+- `docs/tech_debt.md` — P2.4 SoR integration moved to `[BLOCKED 2026-06-28]`; P2.3 write-layer follow-up #4 (write-UI) marked RESOLVED.
+
+### §G42.2 — Canonical write-UI pattern
+
+The write-UI work established a canonical pattern for Field-Ops in-portal write operations. A fresh CC session MUST follow this, and NOT the legacy `/api/submit` path.
+
+**Route sub-module pattern:**
+- Write routes live at `safety_portal/worker/fieldops_<domain>_write.ts` (e.g., `fieldops_equipment_write.ts`, `fieldops_equipment_roster_write.ts`, `fieldops_job_write.ts`, `fieldops_task_write.ts`, `fieldops_time_write.ts`).
+- Each module registers routes on the Hono app via a `register<Domain>WriteRoutes(app, gates)` call, receiving the shared `FieldopsGates` type (defined in `safety_portal/worker/fieldops_gates.ts`) rather than importing from `index.ts` (avoids circular imports).
+- All field-ops routes (read and write) live in the `safety_portal/` TS tree — this is NOT a separate Python workstream. The Python `field_ops/` directory is the stub for the deferred P2.4 SoR sync daemon (BLOCKED).
+
+**Capability gate — convenience, NOT External Send Gate:**
+- Write routes are gated on the `field-ops-write` capability (part of the DB-driven N-role/capability model shared with the Safety Portal).
+- This gate is a **convenience / authorization gate**: it controls which accounts can mutate field-ops data. It does NOT engage Invariant 1 (the External Send Gate) — these routes write to D1 only, no external transmission path.
+- Fail pattern: if the gate is missing, unauthorized users can write data. That is a data integrity issue, not an Invariant 1 breach.
+- Contrast with the Safety Portal form-submission path (`/api/submit`) — that path ingests untrusted external content and is subject to Invariant 2 adversarial handling. The write-UI routes are admin-authenticated in-portal operations; they do NOT require `shared/untrusted_content.wrap()` or `anomaly_logger.check()`.
+
+**Do NOT copy the legacy `/api/submit` pattern for write-ops.** `/api/submit` is the form-submission ingestion path (external submitter → Cloudflare D1 → Mac-side `portal_poll` → `intake.py`). Write-UI routes are the inverse (admin/field-PM actor → D1 directly), completely different data flow.
+
+### §G42.3 — P2.4 BLOCKED: don't-build-against-unseen-SoR principle
+
+**Decision (2026-06-28):** P2.4 (Smartsheet/Box SoR mirror daemon) is PARKED → BLOCKED.
+
+**Reason:** The canonical Evergreen Smartsheet (the live production system of record — active projects, personnel, equipment, assignments) is inaccessible to Seth. The real schema, column types, sheet IDs, and data shape are unknown. Building a sync daemon against an assumed schema means encoding guesses that will be wrong when the actual SoR is observed. The cost of a wrong schema is re-building the sync layer twice.
+
+**Principle (generalized):** Do not build a system-of-record integration until the SoR is directly observable. "I'll figure out the schema later" is the wrong frame — the schema IS the integration. Observation first, then build.
+
+**Unblock condition:** Seth gets read access to the live Evergreen Smartsheet so the real schema can be observed. Design constraints for P2.4 (what the daemon needs to do once unblocked) are captured in `docs/cc-brief_fieldops-next-session.md` (PR #323).
+
+**Auto-memory filed:** `decision_p2.4-parked-no-smartsheet-access` + `feedback_dont-build-against-unseen-sot` (both written this session).
+
+### §G42.4 — Operational state after this session
+
+- **Exec `origin/main`:** `5cc4336` (PR #322, write-UI Slice 4; four-part verified, main-branch CI SUCCESS).
+- **`~/its`** — live tree; daemons unchanged (`portal_poll`, `weekly_send_poll`, `publish_daemon` live + healthy). Field-Ops code is on `origin/main`; the running daemons are unaffected (field-ops is Worker-side + D1, not Python daemon).
+- **Field-Ops worktree:** `~/its-fieldops` (branch used for the write-UI slices; merged slices land on main via PRs in the `~/its` worktree flow).
+- **P2.4:** BLOCKED. Exec `docs/tech_debt.md` updated (pending PR #323 merge).
+- **Field-Ops write-UI phase:** COMPLETE (P0+P1+P2.1+P2.2+P2.3+write-UI all done). Next unblocked work: P3 Materials.
+- **PR #323** (branch `docs/fieldops-session-close-2026-06-28`): in CI, not merged. Contains session log + CC brief + tech_debt update.
+- **Prior open items from §G41.3 unchanged:** PR-5 Worker NOT deployed, ITS_Daemon_Health drift, CLAUDE.md M9, half-applied-publishes backfill, `compile_now_poll` not loaded, browser-tab `<title>` + favicon still "ITS Portal."
+
+### §G42.5 — Process
+
+Exec session log written at `docs/session_logs/2026-06-28_field-ops-write-ui-phase.md` (operator invoked `session-log-writer` directly; in PR #323). No blueprint session log needed (no doctrine decisions this session). No blueprint doctrine touched.
+
+Three auto-memories filed by operator: `decision_p2.4-parked-no-smartsheet-access`, `feedback_dont-build-against-unseen-sot`, `project_fieldops-portal-program` (updated index entry). No additional auto-memories proposed by the session-close pass (no new patterns beyond those three).
