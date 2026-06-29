@@ -282,7 +282,7 @@ The v5 program raises **two new propose-only doctrine drafts** (drafts in the [2
 
 Two as-built observations are candidate doctrine, raised as **flags only** (doctrine is high-capability-class → Developer-Operator co-resolution). Also recorded in the session log + [info-gap](../../references/claude-code-info-gap.md):
 
-1. **Candidate Op Stds §50 — "privileged code-actuation gate."** Generalize Invariant 1's two-process model to **code changes**: cloud can only queue / the local Mac daemon is the sole actuator / state-machine-stamped / CI-gated synchronous merge / the operator toolchain holds the credentials. The form-publish pipeline (§14) is the first instance; the PO and Subcontracts document-generation workstreams will want the same shape.
+1. **Op Stds §50 (RATIFIED v19, 2026-06-29) — "privileged code-actuation gate."** Generalize Invariant 1's two-process model to **code changes**: cloud can only queue / the local Mac daemon is the sole actuator / state-machine-stamped / CI-gated synchronous merge / the operator toolchain holds the credentials. The form-publish pipeline (§14) is the first instance; the PO and Subcontracts document-generation workstreams will want the same shape.
 2. **Form-maintenance principle promotion.** Promote *"operator + Claude maintained, with critical invariants enforced in code, not just documented"* to foundation doctrine, now that the portal realizes it mechanically (§14).
 
 ## Authority

@@ -107,7 +107,7 @@ The Safety Portal as-built surfaced four candidate doctrine changes across two r
 5. **DISAMBIGUATION — §50 vs §51 are two distinct candidates.** Two concerns have both been informally called "§50" in earlier sessions. They are now proposed as separate sections:
    - **Proposed Op Stds §50 — "privileged code-actuation gate"** (raised first, 2026-06-10; see item 1 above). Generalize Invariant 1 two-process model to *code changes*: cloud queues only / Mac daemon actuates with git+Cloudflare credentials / state-machine-stamped / CI-gated. First instance: `publish_daemon.py`.
    - **Proposed Op Stds §51 — "SoR-write gate."** ITS-owned D1 is permitted to write to ITS-owned Smartsheet workspaces (progress reporting SoR + future material sync). Distinct from Invariant 1 (no *external* transmission — these are ITS-internal records). Gates P7 + M2 + M3. Draft doctrine text + §41 version-bump checklist in `workstreams/progress-reporting/mission.md §16`.
-   - **Op Stds v18 ends at §49; §50 is genuinely free; neither §50 nor §51 is ratified.** Do NOT cite either as ratified until Seth confirms. The mission's "Operator follow-ups" section is the holding area.
+   - **RATIFIED 2026-06-29 (Op Stds v19).** §50 = privileged code-actuation gate; §51 = ITS-owned structured-SoR write-back (extended at ratification to name the job-tracker→Active-Jobs write). The numbering collision is resolved and earlier sessions' "§50-for-both" framing is superseded — §50/§51 may now be cited as ratified. The mission's "Operator follow-ups" section is the holding area.
 
 *The three v4-window exec-side flags (`../its/docs/tech_debt.md` lines 25/2117/2166 — PR-3 transport, PR-4 receipt-cache, PR-5 browse) are now **folded into mission v5** (§7, §16) — closed, not carried.*
 
