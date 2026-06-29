@@ -2427,3 +2427,239 @@ The write-UI work established a canonical pattern for Field-Ops in-portal write 
 Exec session log written at `docs/session_logs/2026-06-28_field-ops-write-ui-phase.md` (operator invoked `session-log-writer` directly; in PR #323). No blueprint session log needed (no doctrine decisions this session). No blueprint doctrine touched.
 
 Three auto-memories filed by operator: `decision_p2.4-parked-no-smartsheet-access`, `feedback_dont-build-against-unseen-sot`, `project_fieldops-portal-program` (updated index entry). No additional auto-memories proposed by the session-close pass (no new patterns beyond those three).
+
+## §G43 — 2026-06-28 Progress-Reporting program launch + live lockout root-cause
+
+### §G43.1 — What landed
+
+All changes are in the exec repo `SolutionSmith-debug/its`; exec `origin/main` now `9ef3d5b` (PR #328, four-part verified).
+
+Session preceded by PR #323 (`f759b19`, branch `docs/fieldops-session-close-2026-06-28`) merging earlier: session log for write-UI phase + `docs/cc-brief_fieldops-next-session.md` + tech_debt update (P2.4 → BLOCKED, P2.3 write-UI follow-up → RESOLVED).
+
+| PR | Merge commit | Slice | Notes |
+|----|--------------|-------|-------|
+| #325 | `ef568c2` | **M1** — admin-editable `material_catalog` (migration 0019 + Worker CRUD + admin SPA) | Track M parallel; caps reuse 0013 capability system |
+| #326 | `b6ba870` | **P-A1** — `verify_sheet_cap.py` + `shared/sheet_capacity.py` margin-check | Stage-0 Tier-A gate; MONTHLY adopted here ⟶ **REVERTED 2026-06-29 to weekly** (see mission §9 Decision 2) |
+| #327 | `3b285f5` | **A2** — single-host resilience (SDK timeouts + keychain-locked handling + launchd `RunAtLoad`) | Live-safety slice — Box smoke deferred to A3 |
+| #328 | `9ef3d5b` | **Field-ops UI restyle** — shared `PageShell` + Job/Equipment/Personnel/Materials unification | Confirmed live after hard-refresh (browser cache trap) |
+
+### §G43.2 — Strategic decisions locked (Progress-Reporting program)
+
+The authoritative plan is at `~/.claude/plans/let-s-go-with-option-greedy-fiddle.md`. These decisions are locked — do NOT re-litigate:
+
+1. **Harden-first, parameterize-once, Tier-A gate front-loaded.** Every progress slice that creates a sheet, compiles, or adds a daemon is gated behind the full Tier-A foundation (A1 through A6 + P0). M1 (D1-local, zero scaling coupling) was parallel-now.
+
+2. **Monthly sheets — both safety and progress.** ⚠️ **SUPERSEDED 2026-06-29 → WEEKLY for both** (the sheet period must match the weekly Sat→Fri report cadence; monthly was decision-only, never built, and breaks the 1:1 sheet=week property — see `workstreams/progress-reporting/mission.md` §9 Decision 2). _Original (historical) decision:_ Monthly (not weekly) period boundaries for both workstreams: ~4–5× fewer sheets/year. A1 verified: SAFETY_PORTAL currently at 7 sheets. Operator action (still valid): confirm Smartsheet plan cap (Pro $600/yr vs Business $2,400/yr) then set `smartsheet.sheet_count_ceiling` in ITS_Config. ~~Safety migrates weekly→monthly; progress is born monthly.~~
+
+3. **ITS-owned Smartsheet + Box as SoR; canonical-Evergreen Smartsheet integration deferred.** The "ITS — Progress Reporting" workspace is created and owned by ITS (CC via Smartsheet MCP + Mac build scripts), NOT the canonical Evergreen Smartsheet. PJOB→JOB reconciliation is deferred indefinitely. The prior `decision_p2.4-parked-no-smartsheet-access` framing ("blocked on unseen SoR") is superseded: ITS owns the progress SoR, so P2.4 is no longer a blocker FOR the progress workstream — the D1→ITS-Smartsheet mirror just needs the operator's §50 doctrine blessing.
+
+4. **Parameterize (not clone) security-critical modules via required no-default config objects.** The "contamination gate": `week_sheet`, `weekly_send`, `weekly_send_poll`, and `compile_core` each take a required config object; missing config = immediate `TypeError` at import or construction time (never a silent default). `ops-stds-enforcer` reviews each diff. Never merge a parameterized module to `~/its` until the live safety smoke is green on the new config path.
+
+### §G43.3 — Live lockout root-cause: `wrangler d1 migrations list` before `git pull`
+
+**What happened:** `~/its` was 25 commits behind `origin/main` (the write-UI phase + M1/P-A1/A2 slices had all landed, plus PR #323). Running `wrangler d1 migrations list --remote` from the stale tree compared the OLD `migrations/` folder (up to `0012`) against the live D1 (which actually had `0001–0019` applied via prior sessions' incremental deploys — WAIT: actually the issue was the reverse). Let me re-read the brief more carefully.
+
+Actually per the handoff brief: `~/its` was 25 commits stale; `wrangler d1 migrations list` compared the old (0012) migrations folder → reported "No migrations to apply" while the D1 was actually **MISSING** 0013–0019 (those migrations existed in the code but had NOT been applied to the live D1 yet; the Worker was deployed expecting those tables). The deployed Worker referenced capability tables from migration 0013 (`resolveCapabilities`) that were absent in D1 → `resolveCapabilities` errored → **fail-closed lockout** for all users.
+
+**Root cause (precise):** `wrangler d1 migrations list` compares the LOCAL `migrations/` folder against the D1 `_cf_KV` applied-migrations log. With `~/its` stale at `0012`, the list command saw only migrations `0001–0012` locally and reported all applied. But the Worker binary already deployed in the cloud (from a prior session) was compiled from a newer tree that included migrations `0013–0019` and called `resolveCapabilities` which queries tables from `0013`. The list command never saw `0013–0019` because they weren't in the local folder.
+
+**Fix applied:** `git pull ~/its` to latest main (bringing in migrations `0013–0019`) → `wrangler d1 migrations apply --remote` → all 7 missing migrations applied → Worker tables present → lockout resolved.
+
+**Rule (canonical):** ALWAYS `git pull ~/its` to latest `origin/main` BEFORE `wrangler d1 migrations list`, `wrangler d1 migrations apply`, or `npm run deploy`. The live daemon tree must be on the same commit as the migration folder and Worker binary.
+
+### §G43.4 — Browser-cache-on-deploy: "nothing changed" is almost always stale cache
+
+When a `npm run deploy` succeeds and the operator sees no visual change, the diagnostic is:
+1. Verify the asset hash changed in the Cloudflare deploy output (e.g., `DvoDs9k6` → `DIq3aURp`).
+2. If it changed: **browser cache** is serving the old `index.html` → hard-refresh (Cmd-Shift-R) or open incognito.
+3. If it did NOT change: the build output was identical (check the Vite fingerprint in `dist/client/`).
+
+Do NOT chase a "nothing changed" symptom as a deploy failure until the asset hash delta is confirmed. This session: PR #328 (UI restyle) deployed correctly; the new bundle was live, but the operator's browser held the old `index.html`.
+
+**Deploy ships from `~/its` (the live daemon tree), NOT `~/its-fieldops` (the worktree).** The worktree is for git operations (branch, build, test, push, PR). The actual `npm run deploy` (`vite build && wrangler deploy`) runs from `~/its` after `git pull`. Wrangler must be authed to the account that owns the portal (not the personal `sethsmithusmc` gmail — `wrangler logout && wrangler login` and pick the Evergreen/SolutionSmith account).
+
+### §G43.5 — Progress-Reporting program open items
+
+**Stage 0 remaining (live-safety work — serialize against daemon cycles):**
+- **A3:** Box OAuth cross-process refresh-lock + keychain write-lock + 50-day idle marker. Prerequisite for the A2 Box live smoke.
+- **A4:** unfiled-queue backlog alert + `portal_poll` outage escalation.
+- **A6:** `weekly_generate` per-job timeout + memory guard + resumable watermark → extract hardened core to `safety_reports/compile_core.py` (both compiles instantiate it).
+- **P0:** extract `shared/heartbeat.py` from `weekly_send_poll` + `portal_poll` (heartbeat helpers are currently verbatim-duplicated across three consumers; the 2nd-consumer extraction signal from Op Stds §14 has been pending since §G33).
+
+**Stage 1 (parameterize; live-safety):** P1a (`week_sheet` → required `(workspace_id, key_builder)`; safety binds weekly byte-identically — **the `sheet_period` / weekly→monthly migration was reverted 2026-06-29**); P1b (`weekly_send` → `SendConfig` + Workstream-tag column on WSR + WPR skeleton); P1c (`weekly_send_poll` → `DaemonConfig`); P4-core (progress compile instantiates `compile_core`, staggered + host mutex).
+
+**Stage 2 (build on hardened foundation):** P2 (ITS — Progress Reporting workspace via MCP + `WPR_human_review` + `WALKED_ROOTS += progress_reports` + picklist REGISTRY entry + Progress-Reports-Contact columns on `ITS_Active_Jobs` + §6a manifest); P3–P7 detailed in plan file.
+
+**Track M remaining:** M2 (per-job Material List + bidirectional receive, after P7 + §50); M3 (material incidents + photos via fenced `portal_poll` pass).
+
+**Operator actions gating progress:**
+- Reload launchd plists (`install.sh`) for A2 `RunAtLoad` activation.
+- Confirm Smartsheet tier cap → set `smartsheet.sheet_count_ceiling` ITS_Config.
+- §50 doctrine bump (v18→v19) — Seth-only, gates P7 + M2 write-back; initiate in parallel with Stage 0/1 work.
+- meta-002: define Tier-3 backup/escalation SLA before 20-job cutover.
+- Live D1 migrations and `npm run deploy` are operator-run (CC is classifier-blocked on remote D1).
+
+### §G43.6 — Personnel creation task (task #22)
+
+Surface map is fully explored (2026-06-28). Not yet built. The `personnel` table (`migration 0014`, `id/name/username/trade/active/created_at`) and `users` table are a two-headed roster: login users in `users`, job-site roster in `personnel`, linked by the nullable `username` string (no FK, no referential integrity). Capability gates: `cap.personnel.read` + `cap.personnel.manage` (admin only).
+
+**Build list (next session):** `worker/fieldops_personnel_write.ts` (new — `POST create` / `:id/update` / `:id/retire`, gated `cap.personnel.manage`) + register in `index.ts`; extend `src/lib/fieldops_personnel.ts`; add manage-mode to `FieldOpsPersonnel.tsx`. Reuse existing `POST /api/admin/users` for account creation (kept separate per Option A — operator to confirm).
+
+**3 decisions to confirm with operator before building:**
+1. Account-creation flow: Option A (separate flows, link by username) vs inline toggle on personnel form.
+2. Dangling-username validation: validate that `users.username` exists on create (422 `unknown_account`) vs allow soft dangling.
+3. Default role for account-linked personnel: `submitter`/field-PM (explicit `admin` only).
+
+Full build detail in `docs/cc-brief_progress-reporting-program_2026-06-28.md` (untracked, `~/its`).
+
+### §G43.7 — Operational state after this session
+
+- **Exec `origin/main`:** `9ef3d5b` (PR #328; four-part verified, main-branch CI SUCCESS).
+- **`~/its`** — live tree, on `main`; daemons unchanged (portal_poll, weekly_send_poll, publish_daemon live + healthy). Field-ops code on `origin/main`; safety pipeline unaffected.
+- **D1 migration state:** `0001–0019` applied (confirmed — M1's migration 0019 was the last one applied this session after the lockout fix).
+- **Worker deployed:** previous deploy (from write-UI session or earlier). PR #328 is a React SPA change — requires `npm run deploy` to go live; confirmed live after hard-refresh.
+- **Progress-Reporting program:** all strategic decisions locked, no slices built beyond M1/P-A1/A2 foundation. Active task: personnel creation (task #22) — explore done, build pending.
+- **Prior open items unchanged from §G42.4:** PR-5 Worker NOT deployed (migration 0012 + deploy pending), ITS_Daemon_Health drift, CLAUDE.md M9 (v16→v18 stale), half-applied-publishes backfill, `compile_now_poll` not loaded, browser-tab `<title>` + favicon still "ITS Portal."
+
+### §G43.8 — Process
+
+Exec session log for #325–#328 + the lockout fix is being written in parallel by `session-log-writer` (operator-invoked directly; cannot be spawned by this subagent). No blueprint session log needed (no doctrine decisions). Blueprint doctrine untouched.
+
+Auto-memories written this session (see §G43 notes): `decision_p2.4-parked-no-smartsheet-access` evolved, `project_fieldops-portal-program` updated, `reference_migrations-list-before-pull-lockout` added (NEW), `reference_deploy-browser-cache` added (NEW).
+
+## §G44 — 2026-06-28 Progress-Reporting workstream blueprint codification
+
+### §G44.1 — What was created
+
+Blueprint-only session (no execution-repo code changed). All changes are in `SolutionSmith-debug/its-blueprint`; no PRs opened (local uncommitted changes carrying §G43 + §G44 will be committed in the next push).
+
+| File | Change |
+|------|--------|
+| `workstreams/progress-reporting/mission.md` | NEW — v1, status: draft |
+| `CONVENTIONS.md` | Added `progress_reporting` workstream + fixed pre-existing `urs_marine_portal` drift omission |
+| `scripts/lint_frontmatter.py` | Added `progress_reporting` to canonical workstream enum |
+| `session-logs/2026-06-28_progress-reporting-mission.md` | NEW — blueprint session log (status: archived); already committed |
+
+Both linters (`lint_frontmatter.py` + `lint_crossrefs.py`) pass clean after changes. Zero doctrine/* edits.
+
+### §G44.2 — Mission v1 content (progress-reporting)
+
+`workstreams/progress-reporting/mission.md` mirrors the safety-portal mission skeleton. Status is **draft** (not canonical) because the load-bearing pipeline is a forward plan gated on unratified doctrine (§50/§51). Canonical-promotion trigger = P5 lands + §50/§51 ratified.
+
+**5 locked strategic decisions (do not re-litigate):**
+1. **Harden-first, parameterize-once, Tier-A gate front-loaded.** Every progress slice that creates a sheet, compiles, or adds a daemon is gated behind A1–A6 + P0 foundation (M1 was parallel-now as it has zero scaling coupling).
+2. **Monthly sheets — both safety and progress.** ~4–5× fewer sheets/year than weekly. ⚠️ **SUPERSEDED 2026-06-29 → WEEKLY for both** (matches the weekly report cadence; monthly was never built — see mission §9 Decision 2).
+3. **ITS-owned Smartsheet + Box as SoR.** ITS creates and owns the "ITS — Progress Reporting" workspace (via Smartsheet MCP + Mac build scripts). Canonical Evergreen Smartsheet integration + PJOB→JOB reconciliation deferred indefinitely. P2.4 is NOT a blocker for progress — ITS owns the SoR.
+4. **Parameterize-not-clone via required no-default config objects.** `week_sheet`, `weekly_send`, `weekly_send_poll`, and `compile_core` each take a required config object; missing config = immediate `TypeError` at import/construction time (never silent default). Workstream-tag column guard on WSR/WPR.
+5. **Same-PR doc skeleton + PDF-before-cutover.** Documentation skeleton committed in the same PR as the feature; PDF output verified against reference before any cutover.
+
+**P3 Materials manifest model (mission §9):** `material_catalog` M1 (admin-editable, D1-local, already landed PR #325) + per-job `Material List` (D1) receive-against-manifest. Field-ownership conflict model: down-upsert is content-only, up-sync is delivery-only. NOT a full `/api/internal/sync` replace. Material incidents (low-quantity, wrong-spec, late-delivery) originate from the list.
+
+**Topology:** job = parent Smartsheet folder; period sheets per job; `WPR_human_review` is the only cross-job sheet; period-split + archive-on-closure (never `delete_rows`).
+
+**Stage/Track sequence:**
+- Stage 0: Tier-A hardening (A3–A6 + P0 open); A1+A2 = PRs #326/#327 LANDED.
+- Stage 1: P1a/b/c — parameterize week_sheet / weekly_send / weekly_send_poll.
+- Stage 2: P2–P7 — build progress workstream end-to-end.
+- Track M: M1 LANDED (PR #325); M2 (per-job Material List + bidirectional receive, after P7 + §51); M3 (material incidents + photos, after M2).
+
+**Personnel CRUD task #22 (design-only, not built):** 3 open product decisions before building — (1) account-creation flow (Option A: separate flows + link-by-username vs inline toggle); (2) dangling-username validation (422 `unknown_account` vs allow soft dangling); (3) default role for account-linked personnel. Full build list in `docs/cc-brief_progress-reporting-program_2026-06-28.md` (untracked, `~/its`).
+
+Both Foundation invariants (External Send Gate + Adversarial Input Handling) restated verbatim in mission §4, per blueprint CLAUDE.md defense-in-depth rule.
+
+### §G44.3 — Decision A: new sibling workstream
+
+Progress Reporting is a **new sibling workstream** (tag `progress_reporting`), not an extension of safety-portal or field-ops. It mirrors the safety_portal↔safety_reports split: field-ops captures the UI surface (worker entry), progress-reporting owns the reporting pipeline (compile + send + Smartsheet SoR). Depends on: field-ops / urs-marine-portal capture surface (job/personnel/equipment/time data), and reuses the safety_reports pipeline pattern (parameterized `compile_core`). Justified in mission §2.
+
+### §G44.4 — Decision B: §50/§51 numbering collision (propose-only)
+
+Two distinct concerns have both been informally called "Op Stds §50":
+
+1. **"Privileged code-actuation gate"** — raised 2026-06-10 (v4 reconciliation). Cloud queues only; local Mac daemon actuates with git + Cloudflare credentials; state-machine-stamped; CI-gated. First instance: `publish_daemon.py`. Carried in info-gap §3 + safety-portal mission §"Doctrine flags." Op Stds v18 ends at §49; §50 genuinely free.
+
+2. **"SoR-write"** — raised 2026-06-28 in progress-reporting mission §16. ITS-owned D1 as the writer to ITS-owned Smartsheet workspace (progress reporting + future M2/M3 material sync). Gates P7 + M2 + M3.
+
+**Recommended split (propose-only, Seth-gated):** §50 = code-actuation gate (raised first, 2026-06-10); §51 = SoR-write (raised 2026-06-28). Both are v18→v19 bumps requiring Seth's explicit sign-off.
+
+The mission §16 includes a **draft SoR-write doctrine text** for §51 and a §41 version-bump checklist for when Seth ratifies. The mission also includes a **§50/§51 disambiguation note** distinguishing the two concepts explicitly (both are op-stds-enforcer concerns, not External Send Gate extensions).
+
+### §G44.5 — Process
+
+Blueprint session log `session-logs/2026-06-28_progress-reporting-mission.md` already written (status: archived) — records the mission design, Decision A justification, and the §50/§51 flags. No exec session log needed (blueprint-only session).
+
+Auto-memory written this session: `project_progress-reporting.md` (NEW, blueprint project memory) — tracks mission v1 draft + §50/§51 split recommendation.
+
+## §G45 — 2026-06-29 Stage-0 foundation complete + forensic hardening cluster
+
+### §G45.1 — What landed
+
+All five caller-specified PRs merged to exec `origin/main`, plus seven forensic-hardening PRs that landed in the same session arc:
+
+| PR | Commit | Title |
+|----|--------|-------|
+| #329 | `6914945` | Personnel CRUD — roster + inline-account create/edit/link-unlink/retire |
+| #330 | `4d25577` | Forensic lessons-learned → standards-hardening retrospective |
+| #342 | `63b4411` | Recurrence-guard meta-tests for 5 forensic mistake classes |
+| #343 | `f069f3b` | Drift-proof live-state write guard in conftest |
+| #344 | `334ea9e` | P0 — extract `shared/heartbeat.py` from `weekly_send_poll` + `portal_poll` |
+| #345 | `27726f2` | A3 — Box OAuth refresh-lock + keychain write-lock + 50d freshness marker + watchdog Check P |
+| #346 | `f916c5a` | A6 — `weekly_generate` hardening + `compile_core` extraction |
+| #347 | `2be93f5` | CI: promote doctrine-drift to blocking gate (`--strict`) + M7 citation resolver |
+| #348 | `daa388b` | Hooks: deploy-staleness + live-daemon-tree session guards (classes #2, #5) |
+| #349 | `9ef1461` | A4 — `portal_poll` backlog marker + watchdog Checks Q/R |
+| #350 | `1a1e74d` | Watchdog Check Q — `origin/main` required-CI-green detector (class #13) |
+| #351 | `51bb38d` | CLAUDE.md: best-practice rules for narration-only mistake classes |
+
+**Exec HEAD after session:** `51bb38d` (PR #351, four-part verified, main-CI SUCCESS).
+
+### §G45.2 — Stage-0 foundation (field-ops / progress-reporting)
+
+**P0 — `shared/heartbeat.py` extraction (PR #344).** The 8 ITS_Daemon_Health helper functions that had been copied verbatim across `weekly_send_poll.py`, `portal_poll.py`, and `intake_poll._write_watchdog_marker` were deduplicated into `shared/heartbeat.py`. Thin wrappers in each consumer delegate to the shared module. Tests mock only `_write_heartbeat` / `_write_heartbeat_row`; consumer-level tests unchanged. This closes the "2nd-consumer extraction signal" tech-debt item from Op Stds §14.
+
+**A3 — Box OAuth cross-process refresh-lock + keychain write-lock + 50d freshness marker + watchdog Check P (PR #345).** Three new mechanisms:
+1. `box_client._ensure_fresh_token` now acquires a `state_io.with_path_lock` sidecar-lock (`~/its/state/box_refresh.lock`) before token refresh — prevents concurrent daemons (e.g., `portal_poll` + `weekly_generate`) from racing to rotate the refresh token and invalidating each other.
+2. `keychain_write_lock.py` wraps any Keychain write in a per-service `.lock` file (`~/its/state/keychain_<service>.lock`). All callers of `keychain.set_secret` must acquire this lock.
+3. `write_box_freshness_marker()` writes `~/its/state/box_freshness.json` on every successful refresh. Watchdog **Check P** reads this file and pages at >50d stale (pre-emptive alert before the 60d token expiry).
+
+**A6 — `weekly_generate` hardening + `compile_core` extraction (PR #346).** `compile_core.py` extracted as a shared compilation kernel parameterized by a required config object — no defaults, `TypeError` on missing config at import/construction time. `weekly_generate` is the first consumer; the progress-reporting workstream's future compile path will be the second (parameterize-once design). `weekly_generate` itself gained explicit guard paths for the idempotency triple (Box PDF upload / WSR row / week-Rollup-record) so each guard path is distinct and testable.
+
+**A4 — `portal_poll` backlog marker + watchdog Checks Q/R (PR #349).** `portal_poll` writes `~/its/state/portal_poll_backlog.json` (last-fetch-success UTC timestamp + current unfiled-count) every cycle. Two new watchdog checks:
+- **Check Q (fetch-outage):** pages when the last-fetch-success timestamp is >2 cycles stale — signals that `portal_poll` is running but cannot reach the Worker.
+- **Check R (unfiled backlog):** pages when the unfiled-count has been >0 for >N consecutive watchdog cycles — signals that submissions are fetched but not being filed (intake jam).
+- **Letter ledger:** P = Box freshness (50d), Q = portal_poll fetch-outage, R = portal_poll unfiled-backlog, **O = reserved** for the future A5 row-cap watchdog (not yet built).
+
+**Personnel CRUD (PR #329).** Roster view + inline-account-create flow + edit/link-unlink/retire in the field-ops admin SPA. `fieldops_personnel_write.ts` sub-module; `field-ops-write` capability gate (convenience, not External Send Gate). Three product decisions confirmed during this build: (1) separate create-account / link-by-username flows (Option A); (2) 422 `unknown_account` on a dangling username reference (not soft-dangling); (3) default role for account-linked personnel = `submitter` / field-PM (explicit `admin` only).
+
+### §G45.3 — Forensic hardening cluster
+
+The forensic audit PR #330 filed `docs/audits/2026-06-29_forensic-retrospective.md` — a lessons-learned document classifying 13 recurring mistake classes, each with a named recurrence-guard pattern (structural prevention > test coverage > process rule). PRs #342/#343 landed the first two recurrence guards in code: meta-tests for 5 mistake classes and a conftest drift-proof live-state write guard. PRs #347/#348 promoted two guards into CI infrastructure (doctrine-drift blocking gate) and hooks (deploy-staleness + live-daemon-tree session guards). PRs #350/#351 added a watchdog check (CI-green on `origin/main`) and CLAUDE.md narration rules for the 3 narration-only mistake classes.
+
+### §G45.4 — Keychain `set_secret` TTY-trap — live incident + root cause
+
+**Incident:** Running the A3 Box OAuth smoke interactively (Python session in a terminal) called `setup_box_oauth.py`'s `_persist_tokens` → `keychain.set_secret` → `security add-generic-password -w` with piped stdin. Because the Python process had a controlling TTY (interactive shell), the subprocess inherited it and `security` read the password from `/dev/tty` rather than stdin — silently writing a garbage/unexpected value to `ITS_BOX_REFRESH_TOKEN`. Box auth failed with 401 on the next `portal_poll` cycle.
+
+**Root cause:** `set_secret` uses the bare `-w` + piped-stdin form, which is correct **headless** (launchd: no controlling TTY). In an interactive session the subprocess inherits the parent's TTY; `security` then silently prefers the TTY. The 2026-06-08 §5 trap documented the same underlying behavior for manual shell use but incorrectly claimed `set_secret` was unaffected ("subprocess with no TTY — stdin works correctly there"). This session corrects that claim: "no TTY" holds only under launchd.
+
+**Recovery:** `security add-generic-password -U -a "$USER" -s ITS_BOX_REFRESH_TOKEN -w VALUE` (argv form — value as next token, bypasses TTY read entirely). Verify: `security find-generic-password -w -s ITS_BOX_REFRESH_TOKEN`.
+
+**Standing fix (task #8):** detect controlling TTY in `set_secret` (`os.isatty(0)` / `os.ctermid()`) and switch to the argv form, or raise loudly. See `docs/tech_debt.md` "[OPEN 2026-06-29]" entry.
+
+### §G45.5 — Build-and-hold-for-smoke parallel model
+
+This session exercised a parallel build pattern: multiple independent Stage-0 slices (A3, A4, A6, P0) built in worktrees and held — **each PR built and CI-green but not merged** — until the operator ran the live smoke for each one and confirmed before merge. Merge-train serialization (branch-protection "up to date" enforcement) was planned from the start: each PR was updated and waited for CI before merge. A3 was merged first (it was the most load-bearing — refresh-lock + freshness marker), then P0, A6, A4 in dependency order.
+
+The isolated-worktree-venv `.pth` recipe used: copy `.venv` into each worktree (`cp -R ~/its/.venv ~/its-<branch>/.venv-wt`) then install the worktree's own source editable (`pip install -e ~/its-<branch> --no-deps`). A `.pth` file in `.venv-wt/lib/python*/site-packages/` pointing at the worktree root makes imports resolve to the worktree's Python source rather than the main-tree install.
+
+### §G45.6 — Operational state after this session
+
+- **Exec `origin/main`:** `51bb38d` (PR #351; four-part verified, main-branch CI SUCCESS).
+- **`~/its`** — live tree on `main`; daemons (portal_poll, weekly_send_poll, publish_daemon) live + healthy. `shared/heartbeat.py` is live on all three.
+- **Watchdog checks operational:** A, B, C, D, F, G, I, J, K, L, M, P, Q, R (14 total). E deferred (Anthropic spend). O reserved (A5 row-cap).
+- **Stage-0 status:** COMPLETE. All A3/A4/A6/P0 slices live + four-part verified.
+- **Stage-1 next:** P1a–P1c (parameterize `week_sheet` / `weekly_send` / `weekly_send_poll` with required config objects).
+- **Open operator actions:** (a) keychain TTY-trap fix (task #8, HIGH); (b) reload launchd plists for RunAtLoad; (c) §50/§51 doctrine bumps (proposed split, Seth-gated); (d) CLAUDE.md watchdog count update (now 14 checks, letters P/Q/R active).
+- **Blueprint:** unchanged this session (no doctrine edits; §G43/#G44 remain as WIP in local blueprint `memory-archive.md`; will be committed in the same push as §G45).
+
+### §G45.7 — Process
+
+Session-log-writer invoked by operator directly (subagents cannot spawn subagents). Exec session log warranted (≥1 commit + non-obvious decisions: keychain TTY-trap root-cause, A3 cross-process locking design, compile_core parameterization, merge-train serialization order). Blueprint session log not needed (no doctrine decisions this session).
