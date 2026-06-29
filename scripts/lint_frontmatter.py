@@ -57,6 +57,7 @@ CANONICAL_WORKSTREAMS = frozenset({
     "subcontracts",
     "ai_employee_capabilities",
     "urs_marine_portal",
+    "progress_reporting",
 })  # None / null also valid
 
 VERSION_REQUIRED_TYPES = frozenset({"doctrine", "mission", "brief"})
