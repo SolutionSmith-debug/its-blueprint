@@ -187,4 +187,4 @@ v9.x status absorption (2026-06-01, verified against exec 585823d): the Tier-1 s
 
 v10 trigger: the build-everything-in-sandbox bet substantively changes (deferred ship, scope reduction, multi-step ship sequence forced), OR the ship-and-leave threshold / three-tier maintenance model is substantively revised (a tier boundary moves, the successor-maintainability criterion changes, or a pre-cutover gate is added or removed). v9.x absorbs further status updates without phase-plan or threshold changes.
 
-Companion to Foundation Mission v11, Operational Standards v18, Handover Plan v9, Excellence Roadmap v4, FSU v6.5, Memory Archive v5.
+Companion to Foundation Mission v11, Operational Standards v19, Handover Plan v9, Excellence Roadmap v4, FSU v6.5, Memory Archive v5.

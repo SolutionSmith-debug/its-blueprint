@@ -224,6 +224,10 @@ The program is sequenced **Tier-A foundation → parameterize/compile re-core �
 
 ## 16. Doctrine flags raised (for Seth co-resolution; propose-only, no `doctrine/*` edit)
 
+> **RESOLVED 2026-06-29 — ratified in Op Stds v19.** Both flags below were ratified by the Developer-Operator on 2026-06-29 as **Op Stds v19 §50** (privileged code-actuation gate) and **§51** (ITS-owned structured-SoR write-back — extended at ratification to explicitly name the **job-tracker → Active-Jobs write** as a covered instance). Decision B (the numbering collision) is resolved: **§50 = code-actuation** (raised first), **§51 = SoR-write**. P7 + M2/M3 and the job-tracker pivot (P2.5) are now **doctrine-unblocked** (the build remains gated on the seam + the progress workspace existing, not on doctrine). The propose-only text below is retained as the originating record.
+
+_Original flags (propose-only at the time; retained for the record):_
+
 The Progress-Reporting program surfaces **high-capability-class (doctrine)** questions. Per the [Capability-Gating Through-Line](../../doctrine/foundation-mission.md), doctrine changes are Developer-Operator-only — so they are raised here as **flags only**, exactly as the [Safety Portal mission v5](../safety-portal/mission.md#doctrine-flags-raised-v5-for-seth-co-resolution-propose-only-no-doctrine-edit-this-pass) raised its drafts. No `doctrine/*` file is edited and no doctrine `version:` is bumped this pass.
 
 ### (a) SoR-write doctrine candidate — "ITS as the authoritative writer to an ITS-owned structured Smartsheet system-of-record"

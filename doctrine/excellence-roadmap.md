@@ -109,4 +109,4 @@ v4 trigger (met): R6's Tier-2 sub-deliverable recharacterized from a structural 
 
 v6 trigger criteria: substantive track restructuring or addition of a fundamentally new track. Status updates without track-structure changes are absorbed in-place at v5 (no minor-overlay; frontmatter and title stay equal per G7).
 
-Companion to FM v11, Op Stds v18, V&R v9, Handover Plan v9, FSU v6.5, Memory Archive v5, Successor-Maintenance Model Audit 2026-05-29.
+Companion to FM v11, Op Stds v19, V&R v9, Handover Plan v9, FSU v6.5, Memory Archive v5, Successor-Maintenance Model Audit 2026-05-29.
