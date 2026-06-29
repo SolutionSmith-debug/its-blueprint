@@ -19,7 +19,8 @@ last_verified: 2026-05-24           # ISO date; lint warns if stale beyond N day
 last_verified_against: bee6f46      # git SHA of its repo, or blueprint commit SHA
 supersedes: doctrine/foundation-mission.md@v7   # optional
 workstream: safety_reports | safety_portal | email_triage | purchase_orders |
-            subcontracts | ai_employee_capabilities | null
+            subcontracts | ai_employee_capabilities | urs_marine_portal |
+            progress_reporting | null
 tags: [external-send-gate, invariant]   # optional
 ---
 ```
@@ -41,7 +42,7 @@ tags: [external-send-gate, invariant]   # optional
 
 - **types**: `doctrine`, `mission`, `brief`, `reference`, `audit`, `session_log`, `overlay`, `scaffold`, `snippet`
 - **status**: `canonical`, `draft`, `superseded`, `archived`
-- **workstream**: `safety_reports`, `safety_portal`, `email_triage`, `purchase_orders`, `subcontracts`, `ai_employee_capabilities`, `null`
+- **workstream**: `safety_reports`, `safety_portal`, `email_triage`, `purchase_orders`, `subcontracts`, `ai_employee_capabilities`, `urs_marine_portal`, `progress_reporting`, `null`
 
 Adding a workstream = small PR editing `scripts/lint_frontmatter.py`
 and this file. Don't ad-hoc.
