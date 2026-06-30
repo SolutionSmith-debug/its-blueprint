@@ -2736,3 +2736,65 @@ Full plan at `~/.claude/plans/ok-we-are-going-scalable-flamingo.md`. Folds into 
 ### §G46.8 — Process
 
 Exec session log written by session-log-writer in parallel (`docs/session_logs/2026-06-29_field-ops-progress-stage0-foundation-landed.md` was pre-existing from the prior arc; the Stage-1 + v19 arc warrants its own log). Blueprint session log warranted for Op Stds v19 ratification + Stage-2 pivot decision.
+
+## §G47 — 2026-06-30 Tech-debt cleanup pass + worktree-venv recipe fix
+
+### §G47.1 — What landed
+
+| Repo | PR | Commit | Title |
+|------|-----|--------|-------|
+| exec | #363 | `5f57fef` | docs(tech-debt): currency sweep — close 10 grep-verified-resolved stale entries |
+| exec | #365 | `d1bfc8b` | test(smartsheet): absorb create→read eventual-consistency flake via reruns (package B) |
+| exec | #366 | `7522cea` | docs(tech-debt): close stale weekly_send mailbox-cleanup entry (premise obsolete) |
+| exec | #367 | `d51e122` | docs(ops): operator action checklist — tech-debt cleanup residue (2026-06-30) |
+| exec | #368 | `b91ed8d` | fix(worktree): correct the cp-venv recipe that silently corrupts the live ~/its/.venv |
+
+PR #364 (package A — allowlist-drift Layer-1 email-format validation in `shared/trusted_contacts.py`) **closed unmerged.** The subsystem is dormant: `SHEET_TRUSTED_CONTACTS=0` placeholder, `intake_poll` retired, Email Triage not built. Collision-safe triage found no blast-radius overlap with the in-flight Phase-2 session, but the "live consumer + real data?" gate failed — hardening a dormant code path adds noise with no operational benefit. Branch `feat/allowlist-drift-layer1` preserved. Tech_debt entry "Allowlist drift detection" stays OPEN; real trigger: Email Triage exists + allowlist populated.
+
+**Exec HEAD after session:** `b91ed8d` (PR #368; four-part verified, main-branch CI SUCCESS).
+
+### §G47.2 — Buggy `cp -R .venv .venv-wt` worktree-venv recipe: root cause + fix
+
+**The bug.** The recipe documented in §G45.5 (`cp -R ~/its/.venv ~/its-<branch>/.venv-wt && pip install -e ~/its-<branch> --no-deps`) is wrong. The copied `bin/pip` retains a shebang pointing at `~/its/.venv/bin/python`. When `pip install -e ~/its-<branch>` runs, it uses that interpreter — whose `sys.prefix` is `~/its/.venv` — so the editable-install `.pth` pointer is written into `~/its/.venv/lib/python*/site-packages/`, not the worktree copy's site-packages. From that moment, the live `~/its/.venv` resolves all `its.*` imports to the worktree's source tree. The live launchd daemons (portal_poll, weekly_send_poll, publish_daemon) are affected immediately on the next cycle.
+
+**This session's incident.** Running the recipe in a cleanup-session worktree during a parallel Phase-2 session corrupted the shared `~/its/.venv` that the Phase-2 session was also using. Recovery: `~/its/.venv/bin/pip install -e ~/its --no-deps` to repoint the `.pth` back to `~/its`.
+
+**Why it wasn't caught earlier.** The root cause was documented in a 2026-06-15 session log and partly captured in the `reference_worktree-venv-for-python-source-edits` auto-memory — but neither the SessionStart hook (`warn-live-daemon-tree.sh`) nor the authoritative `docs/operations/worktree_discipline.md` was updated. The fix didn't propagate until an incident made it concrete.
+
+**Correct recipe** (PR #368):
+```bash
+python3 -m venv ~/its-<branch>/.venv-wt
+~/its-<branch>/.venv-wt/bin/pip install -e ~/its-<branch>'[dev]'
+# Isolation assertion before any import:
+~/its-<branch>/.venv-wt/bin/python -c "import its; print(its.__file__)"
+# Output must start with ~/its-<branch>/, not ~/its/
+```
+A fresh venv has no inherited shebang — `bin/pip` points at `.venv-wt/bin/python`, so the editable install writes the `.pth` only into the worktree venv's site-packages. The live `~/its/.venv` is untouched.
+
+PR #368 updated both `.claude/hooks/warn-live-daemon-tree.sh` and `docs/operations/worktree_discipline.md` with the correct recipe and an isolation assertion. The `reference_worktree-venv-for-python-source-edits` auto-memory was also updated this session with the bulletproof default.
+
+### §G47.3 — Triage lesson: collision-safe ≠ worth-doing
+
+This session ran a full 116-item tech-debt triage against the Phase-2 blast radius via a Workflow (classify → synthesize → adversarial collision re-verify). The lesson from PR #364's close-unmerged:
+
+**Collision-safe is a necessary condition, not a sufficient one.** Before opening a hardening PR, two gates both must pass:
+1. Collision-safe — no overlap with in-flight work (the blast-radius check).
+2. Live consumer + real data — the code path being hardened has an active consumer with real data flowing through it.
+
+PR #364 passed gate 1 but failed gate 2. The `trusted_contacts` allowlist check had no live consumer (Email Triage not built, intake_poll retired, sheet ID is a `0` placeholder). A correct, collision-safe, passing-CI PR that hardens a dormant path is premature: it adds test coverage for an untriggered branch and makes future contributors reason about a code path that has no operational footprint.
+
+Auto-memory entry `feedback_dont-harden-dormant-subsystems` (created this session) captures the rule.
+
+### §G47.4 — Operational state after this session
+
+- **Exec `origin/main`:** `b91ed8d` (PR #368; four-part verified, main-branch CI SUCCESS).
+- **Op Stds version:** v19 canonical (blueprint + exec; unchanged this session).
+- **Tech-debt OPEN count:** ~96 (from ~98 pre-session; 2 additional closed by #365/#366 beyond the 10 in #363).
+- **Stage-0 + Stage-1:** COMPLETE. **Stage-2 (job-tracker→Smartsheet SoR pivot):** planned, not yet started.
+- **`~/its/.venv`:** restored to point at `~/its` (Phase-2 worktree borrow repaired).
+- **Phase-2 in-flight session:** unaffected post-repair; it uses its own fresh `.venv-wt`.
+- **PR #362** (feat(progress-reporting): P2 — Progress Reporting workspace + WPR_human_review + ITS_Active_Jobs_Progress) landed during this same 2026-06-30 date from the parallel Phase-2 session; not documented here (belongs to that session's close).
+
+### §G47.5 — Process
+
+Exec session log warranted (5 commits + non-obvious decision: #364 deliberate close-unmerged + cp-venv root-cause). Blueprint session log not warranted (no doctrine decisions — pure exec cleanup + hook fix). Operator to invoke `session-log-writer` directly.
