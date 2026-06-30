@@ -2663,3 +2663,76 @@ The isolated-worktree-venv `.pth` recipe used: copy `.venv` into each worktree (
 ### §G45.7 — Process
 
 Session-log-writer invoked by operator directly (subagents cannot spawn subagents). Exec session log warranted (≥1 commit + non-obvious decisions: keychain TTY-trap root-cause, A3 cross-process locking design, compile_core parameterization, merge-train serialization order). Blueprint session log not needed (no doctrine decisions this session).
+
+## §G46 — 2026-06-30 Stage-1 Progress-Reporting complete + Op Stds v19 + Stage-2 pivot plan
+
+### §G46.1 — What landed
+
+| Repo | PR | Commit | Title |
+|------|-----|--------|-------|
+| exec | #353 | `dbfe991` | feat(safety): parameterize week_sheet → required WeekSheetConfig (P1a) |
+| exec | #354 | `8613ced` | feat(compile): host-level compile mutex (P4-core) |
+| exec | #355 | `f98f56f` | fix(keychain): close the set_secret TTY-trap (task #8) |
+| exec | #356 | `2b843cd` | feat(safety-reports): P1b — weekly_send → SendConfig + Workstream guard |
+| exec | #358 | `a0fd202` | docs(doctrine): Op Stds v18→v19 propagation (§§50–51) + persist session logs |
+| exec | #359 | `763ad2b` | feat(safety-reports): P1c — weekly_send_poll → DaemonConfig + send_poll_core |
+| blueprint | #50 | `7b24cda` | docs(doctrine): Op Stds v18→v19 — ratify §50 (code-actuation) + §51 (ITS-owned SoR write-back) |
+
+**Exec HEAD after session:** `763ad2b` (PR #359; four-part verified, main-branch CI SUCCESS).
+
+### §G46.2 — Stage-1 parameterization: design and no-default pattern
+
+The parameterization program (P1a / P1b / P1c) replaces the formerly singleton safety-workstream modules with config-object–driven kernels that can be called by future workstreams without any mutable global state.
+
+**No-default policy.** Each config object (`WeekSheetConfig`, `SendConfig`, `DaemonConfig`) has no default constructor and no module-level constants as fallbacks. A call site that omits the config object raises `TypeError` at import or construction time — not a silent wrong-workstream run. This is the "immediate TypeError" pattern ratified in Decision 3 of the Progress-Reporting mission.
+
+**P1a — `WeekSheetConfig` (PR #353).** `week_sheet.py` now receives the full context required to create and name a per-job per-week Smartsheet sheet: job slug, project name, box-folder IDs, sheet-name prefix. The `week_sheet_name()` function is parameterized by the config; the 50-char truncation logic (PR #283) is preserved.
+
+**P4-core — compile mutex (PR #354).** `compile_core.py` holds a host-level file-lock (`~/its/state/compile.lock`) for the duration of any compile run. This prevents two daemons (future progress-reporting `compile_core` + safety `weekly_generate`) from concurrently writing overlapping Box paths or WSR rows. The lock is non-blocking with a configurable timeout; a timeout raises a named exception that the caller drains to Review Queue.
+
+**P1b — `SendConfig` + `Workstream` guard (PR #356).** `weekly_send.py` now accepts a `SendConfig` (sheet ID, workstream tag, approved-senders list, etc.). A `Workstream` enum guard on every `update_rows` call verifies that the calling context is writing to the sheet it claims to be writing to — prevents the "two workstreams, one send script" cross-write class that would otherwise require careful orchestration. Live send confirmed on mirror (Workstream=safety, one WSR row approved + sent, recipient + CC confirmed).
+
+**P1c — `DaemonConfig` + `send_poll_core` (PR #359).** `weekly_send_poll.py`'s polling loop extracted as `send_poll_core(config: DaemonConfig)`. The function is stateless and can be called by a future progress-reporting send-poll daemon with its own `DaemonConfig`. The existing launchd plist entry-point calls `send_poll_core` with the safety `DaemonConfig` singleton — zero behavioral change.
+
+### §G46.3 — Monthly→weekly revert
+
+PR #326 (P-A1 `verify_sheet_cap.py`) had adopted a monthly sheet model for progress reporting. This session reverted it to weekly sheets across 8 files (mission, brief, P-A1 code, CLAUDE.md, progress-reporting workstream docs, session memory). The rationale: sheet = week matches the weekly WSR cadence already live in the safety workstream; a `sheet_period` abstraction adds complexity for a cap-pressure scenario that hasn't materialized. If the Smartsheet tier cap bites at scale, the switch to monthly is a config-flip, not a rebuild. Mission §9 Decision 2 now records this with the rationale.
+
+### §G46.4 — Op Stds v18→v19 ratification
+
+**Blueprint PR #50** commits the v19 doctrine text to `doctrine/operational-standards.md` (frontmatter `version: 19`, tag-ready). Two new sections:
+
+- **§50 — Privileged code-actuation gate.** Generalizes Invariant 1's two-process model to *code changes*: the cloud layer may only queue a change request; the local Mac daemon (with git + Cloudflare credentials) is the sole actuator. State-machine-stamped, CI-gated merge, operator-toolchain credential scope. First instance: `safety_reports/publish_daemon.py`. Resolves the "§50 candidate" flag raised 2026-06-10 at the v4 Safety Portal reconciliation.
+
+- **§51 — ITS-owned structured-SoR write-back.** ITS-owned D1 is permitted to write to ITS-owned Smartsheet workspaces (progress-reporting SoR, future material sync, and — extended at ratification — the job-tracker→Active-Jobs write path). Distinct from Invariant 1 (no *external* transmission; these are ITS-internal records). Gates P7 + M2 + M3 in the Progress-Reporting roadmap.
+
+**Exec PR #358** propagates the version: CLAUDE.md parenthetical updated from v18→v19; `docs/doctrine_manifest.yaml` `last_verified_against` bumped; the session-log-persist convention added to CLAUDE.md.
+
+### §G46.5 — Keychain TTY-trap fix (task #8 CLOSED)
+
+PR #355 (`f98f56f`) closes the standing task #8 in `docs/tech_debt.md`. Implementation: `shared/keychain.set_secret` now checks `os.isatty(sys.stdin.fileno())` before choosing the write path. In an interactive session (TTY attached) it uses the argv form (`[..., "-w", value]`) rather than piped stdin — the argv form is unambiguous regardless of TTY state. In a headless launchd session (no TTY) the original piped-stdin path is preserved (no behavioral change for the normal daemon path). Recovery procedure for a corrupted secret: `security add-generic-password -U -a "$USER" -s <service> -w VALUE` (argv form, same as the fix).
+
+### §G46.6 — Stage-2 pivot: job-tracker→Smartsheet SoR plan
+
+Ratified decision: the job-tracker component currently storing all job state in D1 will be refactored to use Smartsheet as the SoR (Op Stds §51). The architectural design:
+
+- **Two physical Active-Jobs sheets:** `ITS_Active_Jobs_FieldOps` (equipment + personnel + job-status tracking) and `ITS_Active_Jobs_Progress` (progress-reporting WPR + material-list integration).
+- **Portal Job Key bridge:** a lightweight D1→Smartsheet row-ID map maintained by the dual-sheet mirror daemon. The Worker continues to resolve jobs by `job_slug` via D1 (fast, always-on); the daemon keeps Smartsheet rows in sync.
+- **Dual-sheet mirror daemon:** polls both sheets; writes D1 job records; runs on the existing 60s launchd cadence.
+- **6 slices** planned: schema migration → daemon build → FieldOps read-wiring → Progress read-wiring → FieldOps write-back (§51) → Progress write-back (§51).
+
+Full plan at `~/.claude/plans/ok-we-are-going-scalable-flamingo.md`. Folds into the roadmap as P2 topology revision + new P2.5 slice.
+
+### §G46.7 — Operational state after this session
+
+- **Exec `origin/main`:** `763ad2b` (PR #359; four-part verified, main-branch CI SUCCESS).
+- **`~/its` local tree:** 4 commits behind `origin/main` at session start (operator completing cutover pull; `docs/tech_debt.md` locally divergent — resolves on `git pull`).
+- **Op Stds version:** v19 canonical in blueprint + exec.
+- **Watchdog checks operational:** A, B, C, D, F, G, I, J, K, L, M, P, Q, R (14 total). E deferred. O reserved.
+- **Stage-0 + Stage-1:** COMPLETE.
+- **Stage-2:** planned, not yet built.
+- **Open operator actions:** (a) `git -C ~/its pull origin main` to complete cutover; (b) reload launchd plists (`install.sh`) for A2 RunAtLoad; (c) confirm Smartsheet tier cap + set `smartsheet.sheet_count_ceiling`; (d) meta-002 Tier-3 backup/escalation SLA.
+
+### §G46.8 — Process
+
+Exec session log written by session-log-writer in parallel (`docs/session_logs/2026-06-29_field-ops-progress-stage0-foundation-landed.md` was pre-existing from the prior arc; the Stage-1 + v19 arc warrants its own log). Blueprint session log warranted for Op Stds v19 ratification + Stage-2 pivot decision.
