@@ -2798,3 +2798,171 @@ Auto-memory entry `feedback_dont-harden-dormant-subsystems` (created this sessio
 ### §G47.5 — Process
 
 Exec session log warranted (5 commits + non-obvious decision: #364 deliberate close-unmerged + cp-venv root-cause). Blueprint session log not warranted (no doctrine decisions — pure exec cleanup + hook fix). Operator to invoke `session-log-writer` directly.
+
+## §G48 — 2026-06-30 P4 Slices 1–2 COMPLETE: active_jobs parameterized + generate_core extraction + progress_weekly_generate
+
+### §G48.1 — What landed
+
+| Repo | PR | Commit | Title |
+|------|-----|--------|-------|
+| exec | #362 | `dd6de18` | feat(progress-reporting): P2 — Progress Reporting workspace + WPR_human_review + ITS_Active_Jobs_Progress |
+| exec | #369 | `5f5747c` | feat(progress-reporting): P3 — category routing (built dark, flag OFF) |
+| exec | #370 | `eb110c1` | docs(session-log): tech-debt cleanup alongside Phase-2 (#363–#368) |
+| exec | #371 | `7886aaf` | style(portal): canonical button + back/home design language |
+| exec | #372 | `fad817b` | feat(safety-portal): form-builder workflow selector + recategorize publish op |
+| exec | #373 | `7c8a616` | style(portal): extend design-language button variants to Accounts delete + Forms version-bump |
+| exec | #374 | `d8d5ac7` | chore(safety-portal): publish recategorize: equipment-preinspection -> progress (req 1) |
+| exec | #375 | `8be87f3` | feat(progress): P4 slice 1 — parameterize active_jobs reader (ActiveJobsConfig); safety byte-identical |
+| exec | #376 | `34855cc` | feat(progress): P4 slice 2 — parameterize weekly compile into generate_core + progress_weekly_generate |
+
+PR #362 was landed by the parallel Phase-2 session earlier in the same 2026-06-30 day (noted in §G47.4 as belonging to "that session's close" but not separately documented — captured here).
+
+**Exec HEAD after session:** `34855cc` (PR #376; four-part verified, main-branch CI SUCCESS).
+
+### §G48.2 — P4 Slice 1: `ActiveJobsConfig` parameterization
+
+`shared/active_jobs.py` was previously safety-only (implicitly reading `ITS_Active_Jobs`). P4 Slice 1 introduced `ActiveJobsConfig` — a required config dataclass that carries the sheet ID, per-sheet row cache, and column-name mappings. Two module-level singletons are exported:
+
+- `SAFETY_ACTIVE_JOBS_CONFIG` — wired to `ITS_Active_Jobs` (safety reports contact columns); safety consumers (`portal_poll`, `weekly_generate`, `weekly_send`, etc.) pass this explicitly.
+- `PROGRESS_ACTIVE_JOBS_CONFIG` — wired to `ITS_Active_Jobs_Progress` (the P2 sheet).
+
+Workstream-neutral column aliases (`reports_contact_email`, `reports_contact_name`) are exposed alongside the legacy `safety_reports_contact_email` / `safety_reports_contact_name`. The safety instances use these aliases to map to the safety-specific columns; the progress instance maps them to the progress-specific columns. Any P5 progress-send script that passes `PROGRESS_ACTIVE_JOBS_CONFIG` will transparently get the progress contact via `job.reports_contact_email` without needing a separate branch.
+
+**Trap for P5 author:** a script that omits the config argument or passes `SAFETY_ACTIVE_JOBS_CONFIG` silently routes to the safety contact. No runtime error — the wrong column resolves successfully. Named in `docs/tech_debt.md` "P5 progress_send must use..." entry. The §43 progress-send runbook (not yet written) must repeat this warning.
+
+ops-stds-enforcer review: 0 blocks. Safety instance byte-identical confirmed by live smoke.
+
+### §G48.3 — P4 Slice 2: `generate_core` extraction + `progress_weekly_generate`
+
+`safety_reports/generate_core.py` is the parameterized weekly-compile engine extracted from `weekly_generate.py`. Key design decisions:
+
+- **`GenerateCoreConfig` required, no defaults.** The config carries: `ActiveJobsConfig`, `WeekSheetConfig`, `CompileMutexConfig`, `BoxFolderRoot`, `SendSheetConfig`, `WorkstreamTag`. Missing config produces `TypeError` immediately (same no-default philosophy as P1a/P1b/P1c).
+- **Safety binding is a thin shell.** `safety_reports/weekly_generate.py` now constructs the safety config objects and calls `generate_core.run()`. The output is byte-identical with the pre-P4 binary. Confirmed by running `scripts/smoke_test_weekly_generate.py` and diffing the smoke artifacts.
+- **Progress instantiation is GATED.** `progress_reports/progress_weekly_generate.py` has `PROGRESS_GENERATE_ENABLED = False` at the top. The daemon would load and run harmlessly (empty-week behavior, no sends), but the plist is NOT loaded until the operator activates the progress workstream. The gate is an explicit flag, not a missing config.
+- **Staggered plist (Fri 14:30).** `org.solutionsmith.its.progress-generate.plist` fires 30 minutes after the safety plist (Fri 14:00). This ensures no contention on the host-level compile mutex (P4-core, PR #354). Both can run in the same Friday window with natural offset.
+- **§43 runbook explicit about watchdog gap.** `docs/runbooks/progress_weekly_generate.md` says outright that Check-C + Check-I are not wired to the `progress_weekly_generate` slug — tech_debt entry OPEN (see §G48.5).
+
+Fork agents (ops-stds-enforcer + a second review agent) caught 3 byte-identical extraction bugs before merge:
+1. **Selection param omission** — a `compile_core` inner call used the old positional signature after extraction changed the parameter name.
+2. **`_read_int_setting` mock seam** — the extraction broke a `unittest.mock.patch` target path for the integer-setting reader; tests passed under the old path but would have been mocking the wrong object.
+3. **Rollup-vs-review attach** — the week-sheet Rollup snapshot row and the `WSR_human_review` review row were being attached PDFs in the wrong order after extraction shuffled the local variable scope.
+
+None of these would have been caught by the existing test suite alone; agents doing adversarial diff review on a live-gate refactor earned their keep here.
+
+### §G48.4 — Portal: form-builder workflow selector + recategorize + design-language
+
+**Form-builder workflow selector (PR #372):**
+`safety_portal/workflows.json` is a new config file listing workflow categories (e.g., `safety`, `progress`, `inspection`) with display names. The form-builder UI presents a workflow selector when creating or editing a form definition. `recategorize` is a new publish op (alongside `create`, `edit`, `add_version`, `delete`, `rollback`) that changes a form's `workflow_category` field. The op lands in the §50 publish actuator chain (Worker enqueue → Mac daemon actuates). Migration 0020 adds the `workflow_category` column to the D1 `forms` table.
+
+**Live deploy issue (Cloudflare token scope):** the `CLOUDFLARE_API_TOKEN` used by `wrangler` had account-level permissions but lacked the zone-level `Zone:DNS:Edit` permission required to update custom-domain routes on `evergreenmirror.com`. The deploy of the Worker script itself succeeded; the route registration failed. Fix: add the zone permission in the Cloudflare dashboard. Noted in info-gap §6.
+
+**recategorize req 1 (PR #374):** `equipment-preinspection` was recategorized to `progress` via the publish pipeline on the live mirror. This is the first use of the `recategorize` op in production.
+
+**Button design-language (PRs #371/#373):** site-wide standard now enforced — primary action = green bg + white text + gold border (`.btn--primary`), edit = green + gold (`.btn--edit`), retire/delete = red + gold (`.btn--retire`), back/home = banner-extension nav-tab style. Applied to Submit-a-Form + Form-Request back/home navigation and to Accounts Delete + Forms version-bump. Noted in auto-memory `reference_portal-button-design-language`.
+
+### §G48.5 — Deferred items (fast-follows + P5 forward-notes)
+
+**Watchdog Check-C + Check-I not wired to `progress_weekly_generate` slug:**
+`scripts/watchdog.py` tracks only `safety_weekly_generate` in `WEEKLY_GENERATE_JOB_SLUG` (Check-I Friday-crash catch-up) and `TRACKED_JOBS` (Check-C staleness floor). The progress compile writes a `progress_weekly_generate` marker but nothing reads it. A stale or skipped Friday progress compile produces no alert. Fix: ~30-line change to `watchdog.py` + assertion in `tests/test_watchdog.py`. Tech_debt entry OPEN: "Watchdog Check-C staleness + Check-I catch-up not wired to `progress_weekly_generate` slug [OPEN 2026-06-30]".
+
+**P5 `progress_send` forward-note:**
+P5 author must use `job.reports_contact_email` (NOT `job.safety_reports_contact_email`) and always pass `PROGRESS_ACTIVE_JOBS_CONFIG`. Omitting the config silently routes reports to the safety contact. Tech_debt entry OPEN: "P5 progress_send must use `job.reports_contact_email` alias and pass `PROGRESS_ACTIVE_JOBS_CONFIG` [OPEN 2026-06-30]". Name this trap in the progress-send §43 runbook.
+
+**Operator activations queued (not CC):**
+- (a) `git -C ~/its pull origin main` to local HEAD (currently 2 commits behind as of session close).
+- (b) load `org.solutionsmith.its.progress-generate.plist` at progress workstream cutover (NOT now — gate is off).
+- (c) §46 — re-share safety approvers into `ITS — Progress Reporting` workspace before P5 send is activated.
+
+**Pre-existing tech debt flagged (not introduced this session):**
+- Doctrine drift M6 — FM v8 cites in `safety_reports/intake.py` + `weekly_summary.py` docstrings (FM v11 canonical). Tech_debt entry OPEN.
+- `docs/session_logs/README.md` index missing the #370 session-log row (`regen_doc_indexes.py` warn-only). Tech_debt entry OPEN.
+
+### §G48.6 — Operational state after this session
+
+- **Exec `origin/main`:** `34855cc` (PR #376; four-part verified, main-branch CI SUCCESS).
+- **Op Stds version:** v19 canonical (blueprint + exec; unchanged this session).
+- **Tech-debt OPEN count:** ~100 (4 new entries added: watchdog fast-follow, P5 forward-note, M6 drift, session-log README).
+- **Stage-0 + Stage-1:** COMPLETE. **P4 Slices 1–2:** COMPLETE. **Stage-2 (job-tracker→Smartsheet SoR pivot):** planned, not yet started. **P5 (`progress_send`):** next in Progress Reporting sequence.
+- **Progress compile daemon:** plist on disk (`org.solutionsmith.its.progress-generate.plist`), NOT loaded. Gate `PROGRESS_GENERATE_ENABLED=false`.
+- **`safety_reports/weekly_generate.py`:** thin safety binding, output byte-identical to pre-P4.
+- **`safety_reports/generate_core.py`:** NEW shared parameterized engine.
+- **`progress_reports/progress_weekly_generate.py`:** NEW progress instantiation (gated).
+
+### §G48.7 — Process
+
+Exec session log warranted (9 commits including PRs #371–#376 + #362 P2 from parallel session + non-obvious decision: agent-caught extraction bugs in generate_core + Cloudflare token scope resolution). Blueprint session log not warranted (no doctrine decisions). Operator to invoke `session-log-writer` directly.
+
+## §G49 — 2026-07-01 P2.5 cutover LIVE + P2.6 Manager tier deployed + FF4/FF5 daemon hardening
+
+### §G49.1 — What landed
+
+| Repo | PR | Commit | Title |
+|------|-----|--------|-------|
+| exec | #395 | `4acb98f` | fix(launchd): print real StandardOutPath/ErrorPath in install.sh load |
+| exec | #396 | `569003c` | fix(field_ops): read shared Worker base-URL key under its owning safety_reports workstream |
+| exec | #397 | `95c7613` | feat(watchdog): track fieldops_sync in Check-C (P2.5 job up-sync mirror daemon) |
+| exec | #398 | `6654a41` | feat(p2.6): Manager tier — third portal role + cap.crew.assign + crew→job placement |
+| exec | #399 | `7e44d73` | fix(portal_poll): WARN (not CRITICAL) on a transient Smartsheet circuit-open |
+| exec | #400 | `551aa72` | fix(fieldops_sync): 401-on-mark-mirrored → CRITICAL + partial-commit review context |
+
+**Exec HEAD after session:** `551aa72` (PR #400; four-part verified, main-branch CI SUCCESS).
+
+**Operator cutover executed live, same session:** `git pull ~/its` (daemon-only fixes for #395/#396/#397/#399/#400 — no deploy needed, confirmed healthy post-pull, portal_poll/fieldops_sync cycling with zero errors); P2.6 migration `0023 --remote` applied + `npm run deploy` run **from the operator's own terminal** (see §G49.3); `fieldops-sync` launchd job reloaded at its 90s interval; the duplicate `field_ops.*` `worker_base_url` ITS_Config row (made redundant by #396) deleted; the Workstream picklist gained `field_ops` + `progress_reports` options via `update_column` through the Smartsheet MCP. **JOB-000017 confirmed mirrored to both `ITS_Active_Jobs` and `ITS_Active_Jobs_Progress`** — the P2.5 job-tracker→Smartsheet up-sync is live end-to-end.
+
+### §G49.2 — P2.6 Manager tier: the third portal role
+
+Migration `0023` is a pure-additive change (no rebuild): inserts the `manager` role row (satisfies `0013`'s `users.role` → `roles` FK), grants `cap.crew.assign` (the 19th capability) to both `manager` and `admin` (explicit grant — `admin`'s catch-all predated this cap), assigns the 11-capability manager grant set, and `ALTER TABLE personnel ADD COLUMN current_job TEXT`.
+
+**Role hierarchy as-built:** `submitter` (field PM, 8-cap floor) → `manager` (submitter's 8 + `cap.personnel.read` + `cap.personnel.manage` + `cap.crew.assign`, but explicitly WITHHELD `cap.jobtracker.manage` so a manager cannot create jobs/tasks) → `admin` (office, everything). One coherent story: office creates jobs, manager runs crews, field PM submits.
+
+**New route:** `POST /api/fieldops/personnel/:id/assign` — send-free, D1-only, atomic `EXISTS(active job)`-in-WHERE guard (no dangling placement possible), mutation + conditional audit row in one D1 batch (empirically verified zero audit rows on a failed 422 — the batch is truly atomic).
+
+**Orthogonality (operator-locked):** a person's `current_job` placement and their `time_entries` are independent. A crew member placed on Job A can log time against Job B without reassignment — placement is "where you're standing," time entries are "what you worked on," and the two do not need to agree.
+
+**Adversarial review caught a real fan-out miss:** `portal_admin.py` had hint/docstring strings enumerating the role vocabulary (`submitter`/`admin`) that didn't get the new `manager` value added in the first pass — `ops-stds-enforcer` flagged it as a WARN, fixed before merge. This is the same class of bug CLAUDE.md already names generically ("a datum usually has N independent implementations — enumerate them ALL first") — here the datum was the role-name enum, and the CLI help text was the missed surface.
+
+### §G49.3 — Deploy-auth constraint: CC shell has no `CLOUDFLARE_API_TOKEN` this session
+
+This session's CC shell had **no `CLOUDFLARE_API_TOKEN`** set. That's a departure from a 2026-06-08 info-gap addendum which stated "CC can run `npm run deploy` in auto-mode" (that session's CC shell evidently did have the token). The practical effect: `npm run deploy` and `wrangler d1 migrations apply --remote` for P2.6 (migration 0023 + the Worker deploy) were **operator-terminal-only** this session — CC built and tested everything up to the deploy boundary, then held the PR ("Held for operator smoke") with explicit numbered activation steps in the PR body, and the operator ran the actual deploy from their own terminal.
+
+**Lesson (now in info-gap §6):** deploy capability is **not a stable CC-environment fact** — it depends on whether `CLOUDFLARE_API_TOKEN` happens to be exported into that particular session's shell. Don't assume either direction (deploy-capable or deploy-blocked) from a prior session's note; check `CLOUDFLARE_API_TOKEN` / `wrangler whoami` at the start of any session that will need to deploy, and default to the "hold for operator, spell out the numbered activation steps" pattern (as PRs #398/#399/#400 all did) when the token is absent.
+
+### §G49.4 — Stale-base landing hazard, caught live (FF4 / PR #399)
+
+FF4's worktree was cut from `origin/main` **before** PR #397 (watchdog Check-C `fieldops_sync` tracking) landed. By the time FF4's diff was ready, `origin/main` had moved past the worktree's base commit. Committing without rebasing first would have made the diff **falsely appear to revert** the just-merged #397 watchdog change — not because FF4 touched that code intentionally, but because the diff is computed against a base that predates it.
+
+`ops-stds-enforcer`'s review caught this pre-commit (a "phantom watchdog-revert" in the diff) and the fix was mechanical: `git pull --ff-only origin main` into the worktree before committing. This is a live, concrete instance of the general class already documented in exec `CLAUDE.md` ("Don't deploy / migrate / audit from a stale checkout" — forensic class #2) and now also called out explicitly as a "Gotcha" in the unified-create-flow spec (`~/.claude/plans/spec_unified-job-create-flow.md`, §"Gotchas") for the next session that builds against a fast-moving `origin/main`: **rebase the worktree onto `origin/main` immediately before the final commit, not just at worktree creation time**, whenever sibling PRs are landing concurrently.
+
+### §G49.5 — Doc-pointer copy-paste class (FF5 / PR #400)
+
+See info-gap §5 for the full trap writeup (added this session). Summary: FF5's new 401-CRITICAL alert in `fieldops_sync.py` was drafted by pattern-matching `portal_poll.py`'s existing 401-CRITICAL alert, and the runbook pointer in the alert message was copy-pasted along with the surrounding code shape — it still read `docs/runbooks/portal_poll.md` inside `fieldops_sync.py`. `ops-stds-enforcer` caught it; fix added the missing "Symptom E" section to `docs/runbooks/fieldops_sync.md` and corrected the pointer. **New reusable class:** when drafting a new alert/log message by copying a sibling module's existing one as a template, the code logic gets adapted but prose strings (runbook paths, module names in error text) can silently survive the copy unchanged — grep the new message text for the source module's name before committing.
+
+### §G49.6 — Unified job-create flow: the crew-convergence finding
+
+While scoping the next field-ops slice (bundling task-create + crew-assign + equipment-assign into the portal's "New job" creation flow), a real data-model gap surfaced: **a job's "crew" is computed today from `task_assignments`** (`JOIN personnel p ON p.id = ta.personnel_id`, in both the job-list card query and the job-detail query in `safety_portal/worker/fieldops_jobtracker.ts`), **NOT from `personnel.current_job`** — the standing-placement column P2.6 (§G49.2) just added. If the unified create-flow used P2.6's new `assignPersonnel` route to place crew on a job, that crew would silently **not appear** in either the job-list crew count or the job-detail crew list, because those queries never look at `current_job`.
+
+**Locked resolution (operator-approved 2026-07-01, captured in `~/.claude/plans/spec_unified-job-create-flow.md`):** crew CONVERGES on `current_job` — both the list-card and detail-view crew queries are rewritten to `SELECT id, name, trade FROM personnel WHERE current_job = <job_id> AND active = 1` (response shape unchanged, so no SPA type change). `task_assignments`/`tasks` queries are explicitly LEFT UNTOUCHED (§14 preservation — tasks ARE task-based, that's correct and stays). This is a **semantics shift**: after it lands, a job's crew means "who is currently placed here," not "who has ever been task-assigned here" — existing jobs with task-assignment history but no placements will show an empty crew list until someone is explicitly placed (no data loss; the task assignments still show in the tasks list with `personnel_name`). New migration `0024` (tentative — verify latest before building) adds `idx_personnel_current_job` to index the new query's filter column.
+
+**Not built.** The spec is a complete, reviewer-ready build plan (3 slices: worker crew-query convergence + migration, SPA detail-view assign controls, SPA create-flow nudge) with locked scope decisions (materials deferred to M2, per-control capability gating so a manager can assign crew but not create tasks) — a fresh session executes it directly rather than re-deriving the design.
+
+### §G49.7 — Deferred items (already in `docs/tech_debt.md`, cross-referenced here)
+
+- **Job routing form "Same as stakeholder" copy button** [OPEN 2026-07-01] — mid-build UX parity gap, parked.
+- **Remove the progress-% estimate system-wide** [OPEN 2026-07-01] — operator-locked multi-surface removal (SPA + Worker + D1 column), not yet executed.
+- **Time entries can't attribute hours to a specific crew member** [OPEN 2026-07-01] — UI gap; the `personnel_id` column + write-route support already exist, only the picker UI is missing.
+- **P2.5 job-tracker up-sync fast-follows** [OPEN 2026-06-30, updated this session] — of the six original items, #397 (watchdog Check-C) and #400 (401-severity + partial-commit context) close two of them live this session; the `active_jobs_writer` re-find race and the `_ENROLLMENT_SUFFIXES` enrollment-list item remain OPEN — FF5 explicitly evaluated both and deliberately deferred them again (re-find race: hard-to-hit + idempotent; `_ENROLLMENT_SUFFIXES`: adding the suffix cascades and breaks the capability-gating meta-test on the pre-existing `picklist_sync.py`, so the correct fix order is enroll `picklist_sync.py` first, in a separate PR).
+- **install.sh interval-help-text stale** [NEW, flagged this session — see `docs/tech_debt.md`] — the `usage()` text and header comment list only 3 of the 5 interval daemons the code actually resolves defaults for.
+
+### §G49.8 — Operational state after this session
+
+- **Exec `origin/main`:** `551aa72` (PR #400; four-part verified, main-branch CI SUCCESS).
+- **Op Stds version:** v19 canonical (unchanged this session).
+- **P2.5 job-tracker up-sync:** LIVE, `sync_enabled=true`, JOB-000017 confirmed mirrored to both Active-Jobs sheets.
+- **P2.6 Manager tier:** DEPLOYED LIVE (migration 0023 applied `--remote`, Worker deployed, `manager` role usable).
+- **`fieldops_sync` daemon:** loaded, watchdog Check-C tracking it (8-min staleness window), zero errors observed post-cutover.
+- **`portal_poll`:** hardened against transient Smartsheet circuit-open false alarms (FF4).
+- **Next field-ops slice:** unified job-create flow, fully spec'd at `~/.claude/plans/spec_unified-job-create-flow.md`, not started.
+
+### §G49.9 — Process
+
+Exec session log warranted (6 commits + non-obvious decisions: the deploy-auth environment variance, the stale-base landing hazard caught live, the doc-pointer copy-paste class, the crew-convergence data-model finding). Blueprint session log not warranted (no doctrine decisions — pure exec build + cutover + a propose-only spec artifact under `~/.claude/plans/`, not `doctrine/`). Operator to invoke `session-log-writer` directly; suggested filename `docs/session_logs/2026-07-01_manager-tier-ff4-ff5-cutover.md` (see the drafted content in this session's close-maintenance report for a starting point).
