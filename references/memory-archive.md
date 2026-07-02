@@ -2,8 +2,8 @@
 type: reference
 version: 5
 status: canonical
-last_verified: 2026-06-17
-last_verified_against: 7510f7a
+last_verified: 2026-07-02
+last_verified_against: c350f09
 supersedes: references/memory-archive.md@v4
 workstream: null
 tags: [restoration, operational-detail, post-compaction-recovery]
@@ -2966,3 +2966,99 @@ While scoping the next field-ops slice (bundling task-create + crew-assign + equ
 ### §G49.9 — Process
 
 Exec session log warranted (6 commits + non-obvious decisions: the deploy-auth environment variance, the stale-base landing hazard caught live, the doc-pointer copy-paste class, the crew-convergence data-model finding). Blueprint session log not warranted (no doctrine decisions — pure exec build + cutover + a propose-only spec artifact under `~/.claude/plans/`, not `doctrine/`). Operator to invoke `session-log-writer` directly; suggested filename `docs/session_logs/2026-07-01_manager-tier-ff4-ff5-cutover.md` (see the drafted content in this session's close-maintenance report for a starting point).
+
+---
+
+## §G50 — 2026-07-02 Assigned-Tasks feature (S1–S6+T) + R-series refinement program (autonomous build)
+
+### §G50.1 — What landed
+
+Fully autonomous session — operator away for the entire arc. Two consecutive programs, both against the field-ops portal, neither touching progress-reporting.
+
+| PR | Commit | Title |
+|-----|--------|-------|
+| #405 | `c4386bd` | URS-refine Personnel + Materials + JobTracker/badge polish (PR-3, tail of the prior session's design pass) |
+| #406 | `86a3b8c` | S1 — Assigned-Tasks tab: My-Tasks route + manager full task authority |
+| #407 | `60d84bd` | S2 — checklist engine: schema + admin per-job daily-checklist editor |
+| #408 | `7a8d2b7` | S3 — daily-checklist generation + tab + manual-attest completion |
+| #409 | `5111bad` | S4 — checklist loop-closure: form_linked/inspection auto-check + count completion |
+| #410 | `f6218b9` | S5 — Daily-Report rollup: assemble draft + review-and-file from the completed checklist |
+| #411 | `1054110` | S6 — inspection-checklist library + admin assign + assignee-tab surfacing |
+| #412 | `02ca9af` | Slice T — subcontractor tier: scoped crew-create + time-scoping + display rename |
+| #413 | `a5f980b` | design-language pass on Assigned-Tasks surfaces + shrink inline X buttons |
+| #414 | `4c8123d` | R-seed — real SOP checklist content (migration 0028) |
+| #416 | `545207d` | R1 — worker contracts, task-ownership security fix, errorCopy/labels foundation (migration 0029) |
+| #417 | `6b8e95a` | R4 — consolidated admin Checklists area + authoring completeness |
+| #418 | `491c9c0` | R2 — My Tasks two tabs + never-silent error hardening |
+| #419 | `620d832` | R3 — form-loop round trip + item interactions (acknowledge flow live) |
+| #420 | `a889f2b` | R5 — assignment lifecycle (list + cancel + guarded assign) |
+| #421 | `c350f09` | R7 — attribution, HomePage grouping, final never-silent sweep (closes the refinement program) |
+
+**Exec HEAD after session:** `c350f09` (PR #421; four-part verified, main-branch CI SUCCESS). **PR #415** (FF4 severity fix) built + reviewed CLEAN but deliberately **OPEN, NOT merged** — see §G50.5.
+
+**Migrations landed this session:** `0025` (task authority — `cap.tasks.assign` grant to `manager` + subcontractor-target/current-owner guards), `0026` (checklist engine schema), `0027` (`cap.crew.create` + `personnel.created_by`), `0028` (R-seed real SOP content — content-only, no schema change), `0029` (`checklist_instances.template_title` snapshot). Per the user's session summary, **0025–0027 were applied `--remote` + deployed mid-session** (2026-07-02 morning, between Slice T and R-seed); **0028+0029 accumulated, NOT yet applied/deployed** — operator step.
+
+### §G50.2 — Assigned-Tasks feature: architecture as-built
+
+One templates→instances engine (migration 0026: `checklist_templates` / `checklist_items` / `checklist_instances` / `checklist_item_states`), built incrementally S2→S6:
+
+- **S2** ships the schema + admin editing surface only — a `daily_default` template (one row, global) plus per-job `job_override` templates that ADD items or SUPPRESS specific default items (`suppresses_default_item_id`). The read path (`GET /checklist/job/:id`) computes an **effective merge**: default-minus-suppressed ∪ override-additions, seq-ordered. No generation/completion logic yet.
+- **S3** adds daily-instance generation: `generateDailyInstance` runs **Worker-on-read** (not a cron/daemon) when a manager placed on a job hits `GET /checklist/mine` — `INSERT OR IGNORE` on the 0026 UNIQUE key makes it idempotent, and the job's effective-merged items are **snapshotted** into `checklist_item_states` on first create only (later template edits do NOT retroactively change an already-generated instance — see R4's "changes take effect tomorrow" copy). `instance_date` is the Pacific work-day. Only a manager **placed on a job** (`personnel.current_job`, the P2.6 column) gets an instance; a submitter or unplaced manager gets none. Completion routes are ownership-scoped (403 if the instance isn't the actor's) and — at S3 — cover only `manual_attest` items.
+- **S4** closes the loop for the other two item types: `form_linked` items auto-complete via `reconcileFormLinked` (runs on every `GET /checklist/mine`) when a submission exists matching `(instance.job_id, the item's form_code family, instance.instance_date)` — bound params, OPEN→done only, `completed_by='(auto)'` sentinel, persisted so downstream rollup/instance-complete logic sees it. `count` items complete at `POST .../complete { value_num }` iff `value_num >= target_count`, else `400 below_target` (the value is still recorded + audited, and R1 later adds an **acknowledge** override path for a below-target close with a required note).
+- **S5** is the payoff: once an instance is complete, `GET /checklist/mine/rollup-draft` assembles a **best-effort** `daily-report-v1` values draft from the day's actual data (placed crew, equipment on the job, a factual summary of checklist outcomes/counts/forms filed) — narrative fields deliberately left blank, nothing fabricated. The manager reviews/edits and files through the **UNCHANGED `/api/submit`** path. **Invariant 1 stays intact**: this is assembly + human confirmation, not a new send path and not AI-generated content — both reviewers verified this explicitly as the one property that mattered most in this slice.
+- **S6** generalizes S2's single-template CRUD into a full generic-inspection **library** (admin-authored templates, `kind='generic_inspection'`) that can be `POST /checklist/assign`ed to any manager or subcontractor, producing a `kind='inspection'` instance that reuses the S3/S4 completion routes unchanged (ownership check is kind-agnostic). R5 later adds the missing admin-side visibility (list + cancel) for these assignments.
+- **Slice T** adds a genuinely new actor class: **non-login roster people**. `POST /crew` (`cap.crew.create`, granted to `submitter`+`admin` by migration 0027) creates a `personnel` row with `username=NULL` (login-mint stays admin-only via the existing route), auto-places them on the **actor's own** `current_job` (server-resolved, never client-supplied — closes a cross-job-placement risk before it could exist), and stamps `created_by=actor`. Time-log scoping then restricts a `cap.time.log`-only actor (a subcontractor, lacking `cap.personnel.manage`) to logging time only for `{self, personnel where created_by=self}`.
+
+**The role-authority framing changed mid-arc, deliberately.** §G49.2 recorded P2.6's manager grant as explicitly WITHHOLDING `cap.jobtracker.manage` "so a manager cannot create jobs/tasks." S1 (migration 0025) grants `manager` **`cap.tasks.assign`** specifically (via a new `requireAnyCapability(cap.jobtracker.manage, cap.tasks.assign)` OR-gate on the task create/reassign routes) — managers can now create/assign/complete **tasks**, but `cap.jobtracker.manage` (job-level: create/close/progress a job itself) stays admin-only, unchanged. PR #406's own description calls this out explicitly: "Deliberately reverses the P2.6 'manager no-task-create' invariant (documented)." Read §G49.2 as the JOB-level authority story and this paragraph as the TASK-level refinement on top of it — they are not in conflict, but a reader skimming only §G49 would get the stale, narrower picture.
+
+### §G50.3 — R-series refinement program: scope + autonomous defaults
+
+The R-series resolved a **4-persona UX audit (~102 findings)** against the freshly-built Assigned-Tasks feature. Spec: `~/.claude/plans/refinement-spec-r-series.md`. Because the operator was away for the whole arc, the spec's four open questions were answered by CC itself in an **EXECUTION ADDENDUM** appended to the same file (all defaults explicitly flagged reversible, operator may override on return):
+
+- **Q1 (SOP content):** answered directly — real content extracted from `~/Downloads/Site_Supervisor_SOP 2.docx` (13 items) + the ER Safety Manual (6 inspection-library templates); landed as R-seed/migration 0028. This ALSO closed the originally-planned "R6 data-module refactor" as unnecessary once real content existed (§14 — the admin authoring UI is the go-forward content-edit path, not a code refactor of a one-time seed).
+- **Q2 (checklist photo evidence):** chose (a) — optional photo on every check-type item, no migration, reversible. R3 shipped the render-half only (see §G50.6 for the capture-half gap, now tracked tech-debt).
+- **Q3 (assigned-inspection due-date semantics):** chose the proposed default — a form-linked inspection item closes on filing **on or before** its due date (daily checklists unchanged).
+- **Q4 (admin IA naming):** chose one Home card named "Checklists" (default daily + inspection library), with per-job add/hide staying inside Job Tracker via cross-links — landed in R4.
+
+**Slice-order + collision avoidance (CC's own scheduling call):** all `HomePage.tsx` edits were moved to R7 exclusively (card copy/rename/section grouping) to remove an R2/R4 file-overlap; sequence was R-seed(0028) → R1(0029 + contracts) → R2 ∥ R3 ∥ R4 (parallel worktrees, merged serially with rebases) → R5 → R7, with FF4 (Python-only, unrelated) built HELD any time. Each SPA-only slice got a behavioral-regression/design review + ops-stds; each worker-touching slice (R1, R5, R7) got the portal-worker-security-reviewer + ops-stds.
+
+**Locked won't-do decisions (from the spec, not re-litigated):** multi-manager auto-close de-confliction stays per-manager/per-(job,date) by design (only the presentational "filed by" attribution ships); the `submitter` role key/semantics don't change (Slice T's "Subcontractor" is a UI label only); client-side gating is never treated as enforcement (the Worker re-gates everything — R1 adds the one missing server check, doesn't replace UI filters with it); no notification/send path of any kind (send-free invariant, External Send Gate unchanged).
+
+### §G50.4 — Two recurring review-caught classes, now named in info-gap §5
+
+Both are documented in full in `references/claude-code-info-gap.md` §5 (added this session) — summarized here for the archive record:
+
+1. **D1 mutation+audit-row atomicity ("W4").** Caught as a security BLOCK three separate times in this one program (S2 #407, S4 #409, S6 #411) — a mutation and its audit-trail row issued as two statements/requests instead of one atomic `db.batch([...])`, in each case risking a silently-unaudited or orphaned row. R5 (#420) built its cancel route already-atomic, having learned the pattern.
+2. **Display-name-only attribution.** Caught twice (R1 #416 W9, R7 #421) — an attribution field (assignee, "filed by," "By" column) that could fall back to `users.username` (a raw login handle) instead of resolving through `personnel.name`. Both worker joins are now `personnel.name`-only.
+
+Neither is a novel class in isolation (§G49.2 already names the analogous role-vocab-fan-out miss), but the 3x and 2x recurrence WITHIN one program is the reason they're now named explicitly in info-gap §5 rather than left as one-off PR-review footnotes — the intent is that the next new `fieldops_*_write.ts` route or attribution field gets built correctly the first time, not caught only in review.
+
+### §G50.5 — PR #415 (FF4) deliberately HELD — operator severity sign-off required
+
+PR #415 fixes the residual half of the FF4 class (#399 already fixed the circuit-OPEN→WARN case; #415 handles a single-cycle transient blip that raises a raw, uncaught `SmartsheetError` before the breaker's 5-failure threshold trips, currently surfacing as a misleading `CRITICAL uncaught_exception` triple-fire with no heartbeat). The fix is built, tested (pytest 2143, mypy/ruff clean), and reviewed CLEAN by ops-stds-enforcer.
+
+**It is intentionally NOT merged.** Per the 2026-07-01 handoff, alert-severity posture on a **live safety daemon** (`portal_poll`) is operator-owned — CC does not unilaterally soften a CRITICAL to a WARN on a production alerting path without Seth's explicit sign-off, even when the technical fix is correct and reviewed clean. The PR body names one accepted behavior change for Seth to weigh: a transient blip during the `polling_enabled` config read now lets the poll cycle proceed past the gate (previously it aborted via the uncaught exception) — it typically self-resolves into the existing creds-transient skip one call later, and the reviewer judged this is not a new risk class (the prior code already swallowed NotFound/CircuitOpen the same way), but it's a real behavior delta worth the operator's eyes.
+
+**This is a template worth reusing:** build + test + review a HELD change to completion, hold the merge, and hand the operator a PR with the tradeoff spelled out — rather than either (a) skipping the fix because the operator is away, or (b) merging a severity-posture change on a live safety daemon without sign-off.
+
+### §G50.6 — Deferred / tech-debt items (see `docs/tech_debt.md` for full text)
+
+- **Checklist item-state photo CAPTURE** — R3 shipped the render-half only (an item can DISPLAY a photo if `photo_ref` is set); there is no Worker route to store an uploaded item-state photo. Flagged as needing its own §34-shaped design pass (untrusted image → D1/Box → served back) before building, not a quick wire-up.
+- **R-series spec Deferred #5–#10** — six explicitly-scoped-out items from the spec's own "Deferred / won't-do" section: mid-day template re-sync into open instances, mid-day job-reassignment orphan-instance surfacing, scoped crew edit/retire + time amend/void epic, server-side completed-history cutoff, full URL router, `task_assignments.due_date`. None are regressions — all were locked scope cuts with reasoning captured in the spec.
+- **Checklist template identity is title-keyed** — 0026's design choice (no template "code"/slug column); flagged during the #414 review as a low-blast-radius edge case (an admin-authored template with a migration's exact future title would merge on re-apply). Not worth a schema change until the library grows past the seeded set.
+- **`cap.tasks.assign` + `cap.checklist.manage` — both now RESOLVED** in the "Portal permission-model stale plumbing" tech-debt entry (originally 4 ungated caps + `cap.tasks.assign` tracked as a 5th; S1 resolved `cap.tasks.assign`, S2/R1/R4/R5 resolved `cap.checklist.manage` — 3 caps remain ungated: `cap.form.submit`, `cap.form.request`, `cap.inspection.job`).
+
+### §G50.7 — Operational state after this session
+
+- **Exec `origin/main`:** `c350f09` (PR #421; four-part verified, main-branch CI SUCCESS).
+- **PR #415:** OPEN, held for Seth's severity sign-off — not part of `origin/main`.
+- **Migrations 0025–0027:** applied `--remote` + deployed live mid-session (2026-07-02 morning).
+- **Migrations 0028+0029:** landed in code, NOT yet applied `--remote` / deployed — operator step, smoke list in info-gap §8 "Operator follow-ups."
+- **Op Stds version:** v19 canonical (unchanged this session).
+- **Assigned-Tasks feature (S1–S6+T):** feature-complete in code; live-usability gated on the 0025–0027 deploy (already done) — managers can create/assign/complete tasks, place non-login crew, run/complete daily checklists + assigned inspections, and file the auto-drafted Daily Report.
+- **R-series refinement:** feature-complete in code, gated on 0028+0029 deploy (pending) for the real SOP content + template-title/security-fix to go live.
+- **Next field-ops slice:** unified job-create flow, still spec'd-not-built at `~/.claude/plans/spec_unified-job-create-flow.md`, now queued behind the 0028/0029 deploy + smoke and PR #415 sign-off.
+
+### §G50.8 — Process
+
+Exec session log warranted (16 merged PRs across two full programs + several non-obvious decisions: the autonomous EXECUTION ADDENDUM defaults, the mid-arc role-authority reversal for tasks, the two recurring review-caught classes, the deliberate PR #415 HELD posture). Blueprint session log not warranted (no doctrine decisions this session — pure exec build, no `doctrine/*` touch). Operator to invoke `session-log-writer` directly for the exec-side log.
