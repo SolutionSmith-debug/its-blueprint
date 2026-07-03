@@ -2,8 +2,8 @@
 type: reference
 version: 5
 status: canonical
-last_verified: 2026-07-02
-last_verified_against: c350f09
+last_verified: 2026-07-03
+last_verified_against: d7ba70f
 supersedes: references/memory-archive.md@v4
 workstream: null
 tags: [restoration, operational-detail, post-compaction-recovery]
@@ -3062,3 +3062,82 @@ PR #415 fixes the residual half of the FF4 class (#399 already fixed the circuit
 ### §G50.8 — Process
 
 Exec session log warranted (16 merged PRs across two full programs + several non-obvious decisions: the autonomous EXECUTION ADDENDUM defaults, the mid-arc role-authority reversal for tasks, the two recurring review-caught classes, the deliberate PR #415 HELD posture). Blueprint session log not warranted (no doctrine decisions this session — pure exec build, no `doctrine/*` touch). Operator to invoke `session-log-writer` directly for the exec-side log.
+
+## §G51 — 2026-07-02/03 SOP Daily Form + Material Receipts + design-refinement + optimization program
+
+### §G51.1 — What landed
+
+Continuation arc, operator-directed at the start ("delete the daily field report as a regular form… re-create a daily checklist that is directly sourced from the SOP document… a FORM with fillable fields… deep links — not 'mark done'"), then two more operator asks (material receipts; a frontend design-refinement pass) and a self-scoped optimization pass against the resulting surface.
+
+| PR | Commit | Title |
+|-----|--------|-------|
+| #423 | `87b6d2d` | D1 — SOP daily form: `guidance`/`form_link` section types + `daily-report-v2` (SOP verbatim) |
+| #424 | `0e35606` | D2 — the Daily tab IS the SOP form (date selector, inline render, live form-links, retirements) |
+| #425 | `1f75993` | D3 — photo minimum removed + Site-photos upload (`daily-report-v3`) |
+| #426 | `224273b` | M1 — expected materials (migration 0031; per-job data layer, admin UI, receive/flag routes) |
+| #427 | `13c3ed9` | D4 — per-job daily-form requirements (migration 0030; `daily-report-v4`) |
+| #428 | `10b5187` | M2 — receipt flow inside D.13 + `material-incident-v1` (`daily-report-v5`) |
+| #429 | `51244a5` | Design-refinement pass — Barlow Semi Condensed, the day-rail, hazard-tape callouts |
+| #430 | `1d8ff1a` | Opt Slice 1 — pending-migrations punch-list, doc hygiene, test-helper consolidation |
+| #431 | `9aa4fb9` | Opt Slice 3 — scope-gate extraction, audit dedupe, assigned-batching, wire types |
+| #432 | `d7ba70f` | Opt Slice 2 — draft flush/debounce/photo-strip, static memo, admin route-split |
+
+**Exec HEAD after session:** `d7ba70f` (PR #432; four-part verified, main-branch CI SUCCESS). Specs: `~/.claude/plans/spec_sop-daily-form.md` (D1–D4), `spec_material-receipts.md` (M1–M2), `design-refinement-plan.md`, `optimization-plan.md`.
+
+**Migrations landed this session:** `0030` (`job_daily_requirements`, D4) and `0031` (`job_expected_materials`, M1). **Neither applied `--remote` nor deployed as of session close** — tracked in the `safety_portal/README.md` pending-migrations punch-list (built by #430; the canonical single source for this, per its own explicit design goal of never letting a migration go untracked again).
+
+**Gate progression across the arc:** worker 558 (#423) → 573 (#424) → 574 (#425) → 589 (#426) → 611 (#427) → 621 (#428) → 621 exact (#430, consolidation only) → 639 (#431, +18 new) → 639 untouched (#432). SPA 357 → 348 (#424, honest ±delta from retirements) → 348 (#425) → 359 (#426) → 387 (#427) → 406 (#428) → 412 (#429) → 412 (#431) → 419 (#432). pytest 2172 → 2183 (#425) → 2197 (#427) → 2222 (#428), **frozen at 2222 from #428 onward** — #429/#430/#431/#432 touch zero Python (design + docs/test + worker/SPA only), matching the optimization plan's own standing gate rule.
+
+### §G51.2 — SOP Daily Form architecture as-built (D1–D4)
+
+The daily deliverable is no longer a checkbox checklist or a data-entry form running parallel to the SOP — it **is** the Site-Supervisor SOP, rendered as a single guided form:
+
+- **D1** extracted all 110 text units of `~/Downloads/Site_Supervisor_SOP 2.docx` (headings, bullets, the CRITICAL RULE/QUALITY RULE/NOTE callouts, the FINAL STATEMENT) byte-verbatim into `daily-report-v2`, using two new definition section types: `guidance` (read-only SOP prose, styled callouts) and `form_link` (a "Create <name> →" deep link with a live filed-status indicator, reusing the existing family-match loop-closure query built for S3/S4 of the Assigned-Tasks program). DFR data fields (job/date/weather/crew-progress/deliveries/visitors/comments/etc.) are interleaved UNDER their corresponding SOP section rather than living in a separate block — "one continuous guided walk" per the operator's framing. The Python `form_pdf.py` renders `guidance` as headings-only (+ one-line callouts) to avoid bloating the filed packet, while the SPA renders the full prose.
+- **D2** made the Daily tab (not the Submit-a-Form picker) the home for this form: a date selector (defaults today; past dates show filed state), the v2 definition rendered inline and prefilled from the manager's placement + job-tracker detail, and a small new per-job-scoped endpoint `GET /api/fieldops/daily-form/status?job&date` driving the live "Filed ✓ <time>" indicators. Two review BLOCKs fixed before merge: the status endpoint needed per-job ownership scoping (a subcontractor probing another job's filing activity), and tapping a form-link used to unmount the tab and silently destroy the day's typed draft — draft persistence per `(job, date)` closed that. The checkbox daily-checklist generation UI, the admin "Default daily checklist" editor, and the per-job daily editor were all retired (the checklist **engine** stays live for assigned inspections — nothing underneath was removed, only the daily-specific UI callers).
+- **D3** removed the "minimum 50 photos" language (kept the what-to-photograph guidance verbatim) and added a Site-photos upload field riding the **existing** §34 screening pipeline unchanged. This slice is also where the team **confirmed definitions are append-only by mechanism, not just convention** — see §G51.5.
+- **D4** gave admins a per-job "Job-specific requirements" overlay (migration 0030, `job_daily_requirements`: note/confirm/text/form_link items), editable on the Job Tracker job-detail page, rendered inside every manager's daily form for that job via a new `job_requirements` section type, and **filed with the submission** — values are self-describing (label + response captured verbatim), so a later edit to the requirements never mutates a historical filed PDF. Security review accepted one WARN: the 200-item active-requirements ceiling is checked read-then-insert rather than atomically in the WHERE clause (admin-only actor, resource-exhaustion-shaped, not privilege-escalation — tracked as a fast-follow tech-debt item parallel to the existing task-authority TOCTOU entry).
+
+### §G51.3 — Material Receipts architecture as-built (M1–M2)
+
+Operator ask: "create the material receipt page so that on job creation we can add what materials we are expecting… and the managers can select from the expected material arrival to confirm receipt and create material incident reports as part of the daily report." Grounding check found `cap.materials.receive` had been **reserved for exactly this purpose** since migration 0013 ("Receive materials against a job + file material incident reports") and never activated — no new capability needed.
+
+- **M1** (migration 0031, `job_expected_materials`): office adds expected materials per job — catalog-picked (via the existing `material_catalog` from migration 0019) or free-text, with qty/unit/expected-date — on job creation or as the job develops. Worker gains expectation CRUD (`cap.materials.manage`, admin) plus two per-job-ownership-scoped routes for `cap.materials.receive` holders: `GET /api/fieldops/expected-materials?job_id` and `POST .../:id/receive` / `.../:id/flag-incident`, both guarded in-WHERE on `status='expected'` so a repeat action 409s idempotently rather than double-processing. W9 display-name-only on `received_by`; W4 atomic mutation+audit throughout. Admin UI lives on the Job Tracker job-detail page, matching D4's per-job-editor placement pattern.
+- **M2** wired the receive/incident actions **into the daily form's existing D.13 section** rather than a standalone page: pending expected materials for the viewer's job render there with **Confirm receipt** (optimistic, per-row busy, auto-seeds a `deliveries_received` row in the form values on success) and **Report material incident →** (deep-links a new `material-incident-v1` form, prefilled job/date/material, via the same R3 prefill machinery used elsewhere; live Filed✓ indicator via the status-endpoint family list, extended with `material-incident`). Zero new mutation surfaces — M1's routes, reused as-is. `material-incident-v1` (material/description, delivery/PO ref, qty expected/received, issue select, details, photos via the existing §34 pipeline, action taken) carries a **PENDING OPERATOR CONFIRMATION** flag in-file on its required-content floor (description + issue + details) and its `category: progress` (not `safety`) workstream placement — both explicitly flagged for veto, not silently assumed.
+
+### §G51.4 — Design-refinement + optimization program
+
+**Design-refinement (#429)**, run against the fully-built SOP/Materials surface, added a self-hosted **Barlow Semi Condensed** signage typeface (weights 500/600/700, 47.5KB woff2 + OFL license, same self-hosting pattern as the Great Vibes banner font — zero CSP change) for structure (headings, eyebrows, pills, tabs, table headers, buttons), while keeping the 17px system-stack body type as a deliberate field-legibility choice. The one "spend the boldness once" signature element is the daily form's **day-rail**: a slim BRG rail with gold-ticked, Barlow-eyebrow phase labels (`7:30 AM`, `MORNING KICKOFF`, `THROUGH THE DAY`, `END OF DAY`) that encode the SOP's chronological structure so a supervisor mid-scroll always knows where they are in the day — a presentational mapping over the definition's existing headings, no definition change. CRITICAL callouts alone got a safety-tape diagonal-stripe treatment; QUALITY/NOTE callouts stayed quiet. AA contrast ratios recomputed for every new text pair; gold stays decorative-only per the standing contrast doctrine.
+
+**Optimization program (#430/#431/#432)** was synthesized from three parallel audits (SPA perf, Worker quality, test/maintenance) run against the arc's own output, producing a 16-finding ranked plan (`optimization-plan.md`) executed in three worktree-parallel slices:
+
+- **Slice 1** (#430, docs+test only): a README "Pending live activation" punch-list covering every migration 0023–0031 (slice/PR/applied-live checkbox) — the direct fix for the exact "universal lockout" class named in CLAUDE.md's own forensic-class list (stale-checkout deploy). Discovered D4 had shipped migration 0030 with no activation section at all and fixed it in the same pass. Also collapsed a duplicate OPEN/CLOSED tech_debt entry and converted 25 of 26 `fieldops-*` worker test files onto one shared `test/helpers.ts` (−800 lines, import-mechanical, 621-exact parity-verified).
+- **Slice 3** (#431, Worker-side): extracted the triplicated per-job ownership gate into `worker/fieldops_scope.ts` (see §G51.5), deduped 33 hand-rolled conditional-audit-INSERT literals into one `auditStmtIfChanged` helper, batched `/checklist/assigned`'s O(N) 3-round-trips-per-instance pattern into one `DB.batch` call (3N+2 → 4 round trips), and introduced `worker/wire-types.ts` as the single source for Worker↔SPA JSON shapes (the DailyReportTab fixture now type-checks against what the Worker actually sends, not a hand-maintained copy) — though `fieldops_checklist.ts`'s `AssignedInspectionsResponse` was not itself converted to a re-export (tracked tech-debt, see §G51.6).
+- **Slice 2** (#432, SPA-side, closes the sweep): fixed the audit's own #1-ranked finding — draft persistence was stringifying the full form INCLUDING base64 photo data on every keystroke, risking a silent sessionStorage-quota failure that would kill D2's draft protection exactly when it mattered most (mid-form, navigating via a form-link). Fix: debounce + flush-at-every-loss-moment (unmount/key-change/elapse) + photo-key stripping from the persisted draft. Also memoized the 20 value-independent `guidance`/`content_blocks`/`static_text` section types (`StaticSectionView`), route-split the three admin-only views behind `React.lazy` (main chunk −49kB/−8%, with a never-silent `ChunkBoundary` error+Retry fallback rather than a silent chunk-load failure on a flaky field connection), and removed 129 lines of dead client API surface for the retired daily-checklist flows.
+
+**Deliberately NOT built:** the plan's one **medium-risk** item — Slice 3's "tail," collapsing `DailyReportTab`'s 2-stage 6-fetch waterfall by adding `viewer_current_job` to `/api/fieldops/tasks/mine` — was correctly left out of both Slice 2 and Slice 3 because the plan requires it to serialize AFTER Slice 2 lands and to carry its own mandatory `/security-review` gate (it widens a capability-gated read route). It remains open, tracked as tech-debt with the plan's own reasoning preserved (see §G51.6). Two further propose-only, Seth-gated decisions from the plan's "Needs-operator" section (a historical form-definition registry split; removing vs. formally keep-deprecating the retired daily-checklist Worker routes + dormant migration-0028 rows) were also correctly left un-executed.
+
+### §G51.5 — Two patterns confirmed/promoted this arc (see info-gap §5 for the full text)
+
+1. **Form/checklist definitions are append-only BY MECHANISM.** Confirmed during D3: `publish_manifest.apply_publish` structurally raises on an in-place edit to an already-published definition — this is not a convention that could be violated by a careless PR, it is enforced at the mechanism level. Every version bump this arc (`daily-report-v2` through `v5`) is a genuinely new catalog-registered file; prior versions and their historical submissions/PDFs are untouched.
+2. **`requireJobScope` (`worker/fieldops_scope.ts`) is now THE standard for per-job-ownership-scoped reads/writes**, extracted by Opt Slice 3 from three independently-drifting copies (`fieldops_checklist.ts`, `fieldops_daily_requirements.ts`, `fieldops_expected_materials.ts`). This is a third named field-ops security-shape class alongside W4 (audit atomicity) and display-name-only attribution — a future field-ops route needing "actor may only touch their own placed job" should call this helper, not re-implement the placement lookup locally.
+
+### §G51.6 — Deferred / tech-debt items (see `docs/tech_debt.md` for full text)
+
+- **DailyReportTab waterfall tail (optimization finding #12)** — deferred, medium-risk, its own mandatory `/security-review` gate before merge.
+- **Two optimization-plan "Needs-operator" doctrine-adjacent decisions** — historical form-definition registry split; deprecated daily-checklist Worker-surface removal vs. formal keep-deprecated register entry. Propose-only, Seth-gated, neither urgent.
+- **`fieldops_checklist.ts` still hand-maintains `AssignedInspectionsResponse`** instead of re-exporting from `wire-types.ts` — the one shape Slice 3's own header note flagged as "a follow-up after Slice 2 lands"; Slice 2 has now landed and this is a small, low-risk, actionable follow-up.
+- **D4 job-requirements ceiling check is TOCTOU** (admin-only, accepted at review) — parallel entry to the existing task-authority TOCTOU tech-debt item; same fix shape (fold the count predicate into the mutating statement's WHERE).
+- **Two operator-confirmation flags live in-file, not yet actioned:** `required-content.json`'s new `daily-report` legal-floor entry (D1) and `material-incident-v1`'s required-content floor + `category:progress` placement (M2).
+
+### §G51.7 — Operational state after this session
+
+- **Exec `origin/main`:** `d7ba70f` (PR #432; four-part verified, main-branch CI SUCCESS).
+- **Migrations 0030+0031:** landed in code, NOT applied `--remote` / deployed — operator step, tracked in `safety_portal/README.md`'s punch-list (canonical single source since #430).
+- **PR #415** (from the prior §G50 arc): still OPEN, still held for Seth's severity sign-off — unaffected by this session.
+- **Op Stds version:** v19 canonical (unchanged this session; no `doctrine/*` touch).
+- **SOP Daily Form + Material Receipts:** feature-complete in code; live-usability gated on the 0030/0031 deploy.
+- **Next field-ops slice:** unified job-create flow, still spec'd-not-built at `~/.claude/plans/spec_unified-job-create-flow.md`, now queued behind the 0030/0031 deploy + smoke, PR #415 sign-off, and the two in-file operator-confirmation flags above.
+
+### §G51.8 — Process
+
+Exec session log warranted (10 merged PRs across three operator-directed deliverables (SOP form rebuild, material receipts, design-refinement) plus a self-scoped optimization pass + several non-obvious decisions: definitions-append-only-by-mechanism confirmed structurally, the `requireJobScope` extraction, two in-file operator-confirmation flags, one deliberately-deferred medium-risk optimization item). Blueprint session log not warranted (no doctrine decisions this session — pure exec build, no `doctrine/*` touch). Operator to invoke `session-log-writer` directly for the exec-side log — this maintenance pass does not write it (see `optimization-plan.md`'s own "Needs-operator #4," which named this exact session-close pass as its trigger).
