@@ -3141,3 +3141,26 @@ Operator ask: "create the material receipt page so that on job creation we can a
 ### §G51.8 — Process
 
 Exec session log warranted (10 merged PRs across three operator-directed deliverables (SOP form rebuild, material receipts, design-refinement) plus a self-scoped optimization pass + several non-obvious decisions: definitions-append-only-by-mechanism confirmed structurally, the `requireJobScope` extraction, two in-file operator-confirmation flags, one deliberately-deferred medium-risk optimization item). Blueprint session log not warranted (no doctrine decisions this session — pure exec build, no `doctrine/*` touch). Operator to invoke `session-log-writer` directly for the exec-side log — this maintenance pass does not write it (see `optimization-plan.md`'s own "Needs-operator #4," which named this exact session-close pass as its trigger).
+
+## §G52 — 2026-07-03 Complete-state hardening + unbounded-growth audit + design-table + live-report fixes
+
+### §G52.1 — What landed (PRs #434–#456 + blueprint #55)
+
+Single multi-day session (bulk by Claude Fable 5; Opus 4.8 handoff for the v6 finish + close), operator mandate "work until a usage limit, CC owns all merging." Four arcs, each a build+adversarial-review workflow → four-part verify. Exec session log `docs/session_logs/2026-07-03_complete-state-growth-audit-design-table.md` (#457) is the completeness anchor (covers #405–#456 across three logs).
+
+| Arc | PRs | Core |
+|-----|-----|------|
+| Complete-state (CS1–CS4b) | #437/#438/#439/#440/#442 | publish-daemon **migration guard** (#438 — makes deploy-ahead-of-migrations structurally impossible; motivated by a LIVE #434 skew incident that 500'd the D4/D5/M1/M2 routes), vendor-chunk split, tombstone deletions, waterfall+TOCTOU folds |
+| Unbounded-growth audit | #447/#448/#449 | GS2 prune observability (Check V, 0033), GS1 Check O row-rotation + wired the dormant sheet-capacity tripwire, **Sentry reclassification** |
+| Design table | #445/#446/#450/#451/#452/#453 | D6 dead-route deletions, D5 registry split, G2.6 due-dates, G2.3 crew/time corrections, G1 item photos, G2.5 URL router |
+| Live-report fixes | #454/#455/#456 | photo-disappear bug, daily-report role gating + confirm-toggle, v6 unlimited-photo pool + D.13 incident link |
+
+### §G52.2 — Operational detail a fresh CC session can't reconstruct from code
+
+- **Complete-state audit verdict:** genuinely-stuck technical blockers = **NONE**. The two new artifacts (daily-report-v5, material-incident) resolve `category=progress` but `progress_reports.intake_enabled` has **no live row** → both file into the **SAFETY** workspace by built-dark design until the operator runs the 6-step progress go-live (`~/.claude/plans/complete-state-audit.md` Part 1 A2).
+- **Unbounded-growth ("scale-crash") audit** (`~/.claude/plans/unbounded-growth-audit.md`): 14-row time-bomb table. Real fuses fixed this session — ITS_Errors/Review-Queue 20k-row cap (Check O), the silent D1-prune SPOF (Check V), the never-wired week-sheet capacity tripwire, the Sentry quota. MEMORY.md was **over its load cap and silently truncating** — compacted (zero code). Already-safe surfaces documented (submissions/PDF prunes exist; sessionStorage browser-bounded; the Mac disk is years out).
+- **Sentry doctrine reclassification (blueprint #55, operator-ratified option 1):** Op Stds §3.1/§3.2 amended — Resend AND Sentry are now the two dedupe-subject **push** legs (each on its own `sentry::`/Resend window), ITS_Errors the sole always-write **record**. Took the **lighter v19.x-amendment path** (dated Authority note, `version:19` untouched, per the v16.x precedent) NOT a v20 bump — the protective claim is unchanged (operator still paged; ITS_Errors always carried the full record), and a v20 would have invalidated every "Op Stds v19" citation.
+- **⚠ Disclosed CS4b staging error:** the `cap.form.submit`/`cap.form.request` enforcement was **intended held** but rode #440's squash because the review agents' `git add -A` pre-staged the worktree before the selective Part-A commit. Lockout analysis proved all three roles hold both caps → no ability lost; operator chose to **keep** it. Lesson: in a reviewed worktree, **wip-commit → rebase → reset**, never selective `git add` after review.
+- **G1/v6 photo architecture = §34 Option-D screened pool** (delete-on-screen, no serving route) — now the canonical template for any new photo surface (memory `reference_section34-option-d-photo-pool.md`).
+- **Pending operator deploy (one sweep):** `git -C ~/its pull origin main` → `npx wrangler d1 migrations apply its-safety-portal-db --remote` (0030–0037) → `npm run deploy`. The #438 guard HALTS publishes until applied (correct). Live smokes: photo-stays; G1+v6 synthetic-malicious must red-light; sub can't see Daily tab; confirm toggles.
+- **Orphan to clean:** origin branch `feat/cs4b-vestigial-caps` (hook-blocked for CC).
