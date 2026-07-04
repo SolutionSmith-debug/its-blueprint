@@ -19,6 +19,33 @@ drive what gets built there.
 If a doc here contradicts the execution-layer code, this repo wins.
 Flag the inconsistency.
 
+## START HERE — read order & canonical sources (cross-repo map)
+
+The ITS knowledge system spans this repo (planning-canonical) and the
+execution repo. There is **one source of truth per category** — link to
+it, don't restate it elsewhere (the anti-sprawl contract):
+
+1. **Doctrine (canonical — this repo wins)** — `doctrine/` (Operational
+   Standards v19, Foundation Mission v11). Non-negotiable invariants;
+   everything else links here by `§N`.
+2. **Design source** — `workstreams/*/mission.md` (what each workstream
+   is + why); `briefs/`, `audits/`.
+3. **References** — `references/` (memory-archive, claude-code-info-gap,
+   daemon-health-schema, worktree-discipline, …).
+4. **Execution conventions + current-state** — the exec `its` repo
+   `CLAUDE.md` ("What's stubbed vs. real" table).
+5. **Working standards / house reflexes** — the exec `its` repo
+   `docs/HOUSE_REFLEXES.md` (canonical, deduped; add execution reflexes
+   there, not a new doc).
+6. **Roadmap / marching order** — the exec `its` repo `docs/ROADMAP.md`
+   (single top-level forward path), which indexes the field-ops program
+   file + these missions.
+
+**Anti-sprawl contract:** a new standard goes in `doctrine/` (if an
+invariant) or exec `HOUSE_REFLEXES.md` (if an execution reflex); new
+scope goes in exec `ROADMAP.md` or exec tech-debt — never a fifth
+scattered doc or plan file.
+
 ## What lives where
 
 | Doc | Location | Why |
