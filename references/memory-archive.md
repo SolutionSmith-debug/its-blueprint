@@ -3269,3 +3269,50 @@ Live Smartsheet flips this session (operator-directed, via MCP, no code): `field
 - **Hours-Log Task column (operator-requested, logged not built):** the `Started`/`Ended` columns on the per-job Hours Log are always empty in practice (the portal time-log form never captures start/end wall-clock, only `hours` + `task_id`); operator wants them replaced with a single `Task` column resolved from `task_assignments.description`. Multi-surface fan-out identified (Worker `/hours-pending` route, `progress_reports/hours_log.py`, `fieldops_sync._mirror_hours_pass`, `shared/portal_client.py`, tests, plus a one-time live sheet-schema migration for already-created Hours Log sheets). Full spec in exec `docs/tech_debt.md`.
 - **`FormFillPage.r3.test.tsx` flaked once in CI** on PR #470's 4th-gate portal check (the "R3 dirty guard" `onDirtyChange` last-call assertion, immediately after a `waitFor` on "Submitted ✓" — not itself `waitFor`-wrapped, unlike its sibling assertion a few lines above). Cleared on unmodified re-run. Filed as a test-only timing gap in exec `docs/tech_debt.md`, not a real dirty-guard regression — the fix is to wrap the assertion in its own `waitFor` to match the file's own established pattern.
 - **Operator queue carried forward (this arc):** (1) `git -C ~/its pull` to activate the #469 decouple fix — HIGH priority, the live daemon is still running the starving code; (2) the §G54.2 M2 doctrine reconciliation (Seth) BEFORE flipping `materials_enabled`; (3) flip `equipment_enabled` / `materials_enabled` when ready, after applying migration 0039 + `npm run deploy`; (4) set `smartsheet.sheet_count_ceiling` (still unset — needs the plan-tier decision, tracked since the 2026-07-04 wiring audit); (5) the Hours-Log Task-column build; (6) `/pending-jobs` transport-flakiness root-cause diagnosis (§G54.4). Standing trackers now built: Hours Log (live), Equipment (dark), Material List (dark) — all one-way-up, archive-on-closure-capable (`its#462`/#465), row-cap-WARN guarded.
+
+## §G55 — 2026-07-05 (part 2) Activate shipped-dark trackers + Hours Log Task column + hygiene + §51 Material List rider draft
+
+### §G55.1 — What landed (exec PRs #472/#473, both four-part verified)
+
+Continuation of the same-day arc (§G54 = part 1, morning). Both confirmed (state=MERGED, mergedAt non-null, mergeCommit present, main-branch CI on the merge commit = SUCCESS — #473's CI was `in_progress` at first check, confirmed `success` on re-poll):
+
+| PR | mergedAt (UTC) | mergeCommit | Core |
+|---|---|---|---|
+| #472 | 2026-07-05T18:40:00Z | `9aada583` | Hours Log Task column (replaces always-empty Started/Ended) |
+| #473 | 2026-07-05T18:49:14Z | `86bfab0a` | Hygiene — SYNC_INTERVAL_SECONDS 300→90 (M-3) + R3 test stabilize |
+
+Session-close docs = exec PR #474 (`docs/session-close-2026-07-05`). No new PR for the config-gate work — a Smartsheet-only change via MCP, not code.
+
+### §G55.2 — Config gates ship dark by ROW-ABSENCE — the operator's live blocker, root-caused
+
+The operator could not find `ITS_Config` rows to flip `field_ops.fieldops_sync.equipment_enabled` / `.materials_enabled` to activate the two P7 trackers shipped dark in the morning session (#468/#470). Root cause: `fieldops_sync._read_bool_setting(key, default)` treats a **missing row** identically to an explicit `false` — `DEFAULT_EQUIPMENT_ENABLED = DEFAULT_MATERIALS_ENABLED = False`. Only `sync_enabled` and `hours_enabled` had ever been seeded; nobody created the Equipment/Materials rows those PRs' own text promised to gate on. There was no row to flip — it had to be **created**.
+
+Fixed by creating both rows via MCP: `equipment_enabled=true` (ACTIVATED) and `materials_enabled=false` (still §51-blocked — see §G55.3 — but now a visible, intentional `false`). Verified the Worker deploy independently (not just trusting the morning session's code-landed claim) via unauthenticated 401 probes on `/api/internal/fieldops/{equipment,material-list}-snapshot` — a genuinely deployed gated route 401s `application/json`; a route never deployed SPA-falls-back to `200 text/html`, the sibling case of [[reference_worker-spa-fallback-200-on-deleted-asset]]. Equipment activation **live-smoked GREEN**: the 90s `fieldops_sync` cycle picked up the flip at 17:53Z and reported `equipment upserted=1 errors=0` steadily over ~45 min; `Portal create test 2 — Equipment` exists in the progress workspace as the SoR artifact.
+
+**General lesson:** any `ITS_Config`-gated boolean defaulting safe on a missing row ships dark *invisibly* — unlike a hardcoded-fallback WARN (#336's `REQUIRED_CONFIG` class), there's no wrong VALUE to notice, just an absent row a human has to know to create. Captured in exec `docs/HOUSE_REFLEXES.md` §5 (config-gate row-seeding reflex) + `docs/tech_debt.md`.
+
+### §G55.3 — §51 Material List — ratification-ready rider drafted (both honest framings), still Seth's call
+
+Proposal doc written (`docs/audits/2026-07-05_section51-materials-rider-proposal.md`, `status: proposed`), complementing #471's tech-debt entry. The crux: canonical §51 promises the operator can edit Material List content columns as an input (bidirectional split-ownership); shipped M2 removes that (one-way-up, no `smartsheet_row_id`, no down-sync). Two readings of §51's v20-trigger:
+
+- **Reading A → Path A (v19.x phased-delivery rider).** "Protective claim" = the SECURITY/SAFETY guards, all of which one-way-up meets or exceeds (it's *more* conservative). Removing editability is a feature deferral, not a protection weakening. Full draft rider text is in the proposal doc — same "protective claim unchanged" test the 2026-07-03 Sentry + 2026-07-04 low-volume-log riders used.
+- **Reading B → Path B (reconfirm one-way-up permanently).** The bidirectional split-ownership *is* the mechanism's promised contract; dropping it changes what the mechanism promises → arguably a v20 recharacterization (edits §51's clause directly, removes "bidirectional").
+- Third option: build bidirectional M2b before enabling — highest cost.
+
+**Gates `materials_enabled=true`.** No doctrine file touched — proposal only. Seth's call.
+
+### §G55.4 — Hours Log Task column (PR #472) — architecture as-built
+
+Multi-surface, zero D1 migration (`task_assignments.task_id`/`description` pre-exist): Worker `/hours-pending` (`LEFT JOIN task_assignments ta ON ta.id = t.task_id AND ta.job_id = t.job_id`, job-scoped per the security reviewer, projects `ta.description AS task`, drops `work_started_at`/`work_ended_at` from *that projection only*) → `progress_reports/hours_log.py` `COL_TASK` → `fieldops_sync` hours-pass mapping (`work_date` from `created_at`) → `portal_client` docstring → tests → `scripts/migrations/hours_log_task_column.py` (two-phase, name-guarded, idempotent) → runbook Fault M. Three-agent adversarial review: security CLEAN (job-scope hardening applied), ops-stds clean with one §43 BLOCK fixed pre-merge (Fault M was missing on the first pass), completeness replaced a `/search`-based discovery with a scoped traversal + added the migration's own unit test. **Remaining operator step, order-critical:** `--phase add --commit` BEFORE the `git pull` + Worker deploy, `--phase drop --commit` AFTER (`add_rows` raises `KeyError` on an unknown column title if run out of order).
+
+### §G55.5 — Hygiene (PR #473)
+
+M-3 (2026-07-04 wiring audit): `SYNC_INTERVAL_SECONDS` 300→90 to match the installed launchd `StartInterval` — feeds the daemon-health cadence, cosmetic-but-confusing drift, not a correctness break. R3: stabilized `FormFillPage.r3.test.tsx`'s flaky dirty-guard last-call assertion (wrapped in its own `waitFor`) — 8/8 stable.
+
+### §G55.6 — Operational state after this session
+
+`~/its` (main checkout) is 3 commits behind `origin/main` (`f7f3764` → `86bfab0a`: #471 docs, #472, #473). Operator queue: (1) `git -C ~/its pull` — HIGH, activates BOTH the #469 decouple fix AND #472's Task-column code; (2) the Hours Log two-phase live-sheet migration, order-critical (add before deploy, drop after); (3) the §51 Material List rider decision (Seth) — blocks `materials_enabled=true`; (4) migration 0039 + `npm run deploy` before the M2 code path is live (independent of the `materials_enabled` gate, already visibly `false`); (5) `smartsheet.sheet_count_ceiling` still unset; (6) `its#460` progress@ mailbox still open; (7) `/pending-jobs` transport-flakiness root cause still undiagnosed (§G54.4). `equipment_enabled` is the one gate now fully live (config flip + live smoke both done); `hours_enabled` remains live from the morning; `materials_enabled` remains dark pending (3).
+
+### §G55.7 — Process
+
+Fetched `origin/main` first in both repos before numbering. Verified both PR numbers via `gh pr view`/`gh run list` rather than trusting the session narrative. Numbered `§G55` from the fetched `origin/main` copy (highest existing was `§G54`).
