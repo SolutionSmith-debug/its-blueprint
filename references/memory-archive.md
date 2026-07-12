@@ -3567,3 +3567,166 @@ Three verify-first corrections on one PR, all caught before code was written, no
 D1-3b — the launchd plist install that makes the dashboard an actual daemon, plus interval-key edits — is the next queued slice, not built this session. Three worktrees remain for operator cleanup: `~/its-ws2-dash`, `~/its-ws2-d1-2`, `~/its-ws2-d1-3` (`git worktree remove` — force-delete is hook-blocked inside CC). All three landed slices ship **dark**: the ACT surface (D1-2 + D1-3) is fail-closed until the operator provisions `ITS_OPERATOR_PIN` and sets `ITS_DASH_ALLOWED_ORIGINS`; the DoD acceptance smokes (a live config toggle + a live low-stakes secret rotation, confirming the audit rows) are explicitly operator-run — they need the PIN plus a real secret write, neither doable autonomously this session. None of the above is code debt: it is the same "ships dark, operator activates" pattern already established for the PO config editor (§G59) and Op Stds §50 generally, and is NOT tracked in `docs/tech_debt.md`. Full operational detail — every route, the full registry contents, the validator list, runbook pointers — lives in auto-memory `project_ws2-operator-dashboard.md`; not re-derived here.
 
 Numbered `§G62` from the fetched `origin/main` copy of `memory-archive.md` (`git show origin/main:references/memory-archive.md | grep -oE '^#+ §G[0-9]+ ' | sed 's/[^0-9]//g' | sort -n | tail -1` → highest existing was `§G61`).
+
+## §G63 — 2026-07-12 Office Operations nav + PO/SC Configuration subcontract editors (PRs #541/#542/#546) + the doc-reconciliation backfill (#543/#545/#547/#549 + blueprint #65) that closes the §G62 "needs its own close pass" gap
+
+Fulfills the §G62 closing note — `origin/main` had advanced past `914a42a` via PO-config Features 1/2 +
+cutover readiness (#524–#527) and an entire Subcontracts workstream SC-S1→Exhibit-A (#529–#540), none of it
+narrated in the archive. A **documentation-reconciliation brief** (WP1/WP1.5/WP1.6/WP5 exec-side, WP2
+cutover, WP3 blueprint-side) ran largely concurrently with this session's own build work — WP5 (#549) landed
+mid-way through this very maintenance pass, see §G63.7 — and closed that gap directly — covered here as
+verified-status pointers, not re-audited line-by-line (their own PR bodies are the detailed record). This
+session's own build work is #541/#542/#546 (all `gh pr view`-verified `MERGED`, four-part
+clean); #544 and #548 are `gh pr view`-verified `OPEN`/`MERGEABLE`, HELD for the operator, not narrated as
+landed.
+
+### §G63.1 — The doc-reconciliation backfill (PRs #543/#545/#547 exec, #65 blueprint)
+
+Landed interleaved with this session's own commits (exec `origin/main`: `f57559c` #541 → `226f509` #542 →
+`e8c33b9` #543 (WP2) → `d3ecb92` #545 (WP1) → `cdd38a8` #546 → `1cf08a3` #547 (WP1.5); blueprint `b897bba` #65
+(WP3)). **WP1 (#545):** CLAUDE.md's "What's stubbed vs. real" table covered only 3 of 8 packages — added the
+6 omitted (`po_materials`, `subcontracts`, `progress_reports`, `field_ops`, `operator_dashboard`, `docs_pdf`)
++ the `safety_portal` Worker/SPA; watchdog row corrected to 20 registered/21 defs/12 tracked jobs (was "6 of
+7"); `anthropic_client`'s sole live consumer corrected to `intake.py` (weekly_generate retired its narrative
+core); `docs/ROADMAP.md` + the Aug-7 program doc updated (Track 0/2/3 landed banners, subcontracts reversed
+INTO scope, daemon count 11→15); `doc_conventions.md` + `doctrine_manifest.yaml` taxonomy extended with
+`po_materials`/`subcontracts`/`operator_dashboard`; `generate_config_dictionary.py`'s `_SCAN_ROOTS` was found
+to have never scanned `subcontracts` (root cause: `subcontract_poll`'s `REQUIRED_CONFIG` was invisible to the
+dictionary) — fixed, regenerated 58→61 keys. **WP2 (#543):** cutover docs (`cutover_checklist.md` /
+`verify_cutover.py`) reconciled to 18 secrets / 15 daemons / subcontracts inclusion. **WP1.5 (#547):**
+mechanical split of `docs/tech_debt.md` (370→190 KB) into the OPEN file + a new `docs/tech_debt_closed.md`
+archive (resolved/superseded entries moved, not deleted) — this session's own tech-debt entries (CE-7,
+SC-CFG-1/2, PR-B2) landed against the post-split OPEN file. **WP3 (blueprint #65):** two canonical missions
+were found **inverted** relative to as-built and corrected — `subcontracts/mission.md`→v5 (v4's "AI-drafted
+scope-specific language" premise removed; as-built is deterministic/no-AI per ADR-0003; generation built +
+Send-Gate-enrolled, **SEND half SC-S4 NOT built**, cutover CL-38) and `purchase-orders/mission.md`→v5
+(RFQ-drafting "not started" framing inverted to the as-built direct-PO `po_materials` pipeline, RFQ deferred
+post-delivery); two new missions written from scratch (`field-ops-portal/mission.md` v1, `operator-dashboard/
+mission.md` v1 stub); `progress-reporting/mission.md` promoted draft→canonical v2. All four PRs verified
+`lint_frontmatter`/`lint_crossrefs` clean, ruff/mypy/pytest clean, ready-for-CI at authoring. **WP5 (#549,
+exec, merged `fbd77a0` — landed WHILE this maintenance pass was running, a live concurrent-session example
+of exactly the collision this agent exists to catch):** enforcement so the drift doesn't recur —
+`scripts/lint_doc_conventions.py` gains a `session-log-verify-block` check (session logs must carry the
+four-part verify block, warn/grandfather-gated) + a `plans-citation` check (flags a committed doc citing
+ephemeral `~/.claude/plans/` as authoritative); both prove-it-bites verified + regression-tested. WP5 also
+found a **fourth** untracked copy of the workstream taxonomy — `CANONICAL_WORKSTREAMS` in
+`lint_doc_conventions.py` itself, which WP1 (#545) had missed when it updated `doc_conventions.md` +
+`doctrine_manifest.yaml` — synced with `po_materials`/`subcontracts`/`operator_dashboard`, its own diff
+becoming the poster child for the new same-PR reconciliation DoD it also adds (HOUSE_REFLEXES §1 + CLAUDE.md
+"Adding a new workstream" #10). A `docs/state.yaml` single-source-of-truth is proposed, NOT built (post-freeze
+candidate). **This closes the §G62 flagged gap** — the archive is no longer behind on the SC-S1→Exhibit-A
+arc's existence (though the per-PR narrative detail for #529–#540 individually still lives only in
+auto-memory `project_subcontracts-workflow.md` and the 2026-07-11 session logs, not re-derived into archive
+prose here).
+
+### §G63.2 — PR #541: Office Operations home-nav section + card rename
+
+`HomePage.tsx` gains a new **"office"** nav section between the existing field and admin sections — Purchase
+Orders, Subcontracts, Checklists, Materials Catalog, Vendors, and Subcontractors all moved into it from
+wherever they previously lived (admin). The `po-config` card is renamed **"PO Configuration"→"PO/SC
+Configuration"**, anticipating #546's subcontract-config content landing in the same page. SPA-only, no
+worker/migration change.
+
+### §G63.3 — PR #542: subcontract builder UX — trade overwrites Exhibit A + calendar date pickers
+
+Two independent UX fixes to `SubcontractBuilderPage`: (1) `onTradeSelect` now **unconditionally overwrites**
+the Exhibit A "The Work" text box on every trade change — the prior guard only pre-filled when the box was
+empty, so switching trades mid-draft left stale Article II text from the previous trade selection; a failed
+template fetch still does NOT clobber (degrades to leaving whatever text was already there). (2) Start/
+Completion date fields switched from free-text to native `<input type="date">` — removes a manual-entry
+typo class the corpus's real filled subcontracts had shown was live risk.
+
+### §G63.4 — PR #546: PO/SC Configuration — subcontract Contractor + terms editors (v1)
+
+The session's largest build. Two things happen at once:
+
+1. **§14 extraction.** The terms-library editor (add_version / make-current / create_profile + the profiles
+   display) — previously PO-specific UI inside `PoConfigPage` — is pulled out into a shared,
+   **workstream-parameterized** `components/TermsProfilesEditor.tsx`. `PoConfigPage` now renders it **twice**
+   (`workstream="po_materials"` and `workstream="subcontracts"`), net −280 lines in `PoConfigPage`, and the
+   existing PO terms tests pass **unchanged** through the extracted component — the regression net that
+   proves the extraction didn't silently change PO behavior. This is the second §14 parameterize-not-clone
+   instance on the config-editor rail (the first was the PO/subcontracts-aware `config_actuator.py` itself,
+   SC-S2, §G-earlier).
+2. **Subcontract editors.** The previous "coming soon" subcontracts placeholder in `PoConfigPage` is replaced
+   with a **Contractor identity** editor (json `edit` op, payload matching the actuator's existing
+   `_apply_contractor_edit` — entity / non-empty `address_lines` / phone / `signature_entity` /
+   `prime_contractor_default`, all required) plus the shared `TermsProfilesEditor` instance for subcontract
+   terms. Both gated on `cap.subcontracts.manage`; the status monitor now shows rows from either workstream.
+   Every edit is a send-free §50 `submitConfigEdit` POST — the legal make-current is only QUEUED here, never
+   actuated by the SPA itself.
+
+**Deliberately deferred to PR-B2** (needs a worker change, so out of scope for this SPA-only PR): payment-
+terms editing (the actuator's `_apply_payment_terms_edit` needs `application_for_payment_day`/
+`progress_payment_day`, which `/api/subcontracts/config` doesn't yet serve — exec `docs/tech_debt.md` CE-7)
+and Exhibit-A editing (versioned + legal-gated — exec `docs/tech_debt.md` PR-B2). Gate: `npm run typecheck`
+(3 tsconfigs) clean, `test:spa` 636/636, `build` clean — no worker/migration touch, no deploy needed.
+
+### §G63.5 — HELD, not merged: #544 (attach-kind terms reference) + #548 (C1 site-address auto-fill)
+
+Both `gh pr view`-verified `OPEN`/`MERGEABLE`, both **behind main** (need `gh pr update-branch`), both held
+for the operator because each crosses a boundary this session's autonomous-merge authorization doesn't cover
+(doctrine/ADR touch for #544; a live worker deploy + down-sync smoke for #548) — not because either failed
+review.
+
+**#544 — `fix(subcontracts): attach-kind terms render a one-page reference, not a fence`
+(`feat/attach-kind-reference`, worktree `~/its-attach`).** Fixes a real fence: an `attach`-kind terms profile
+(`negotiated_msa`) had no library text, so `render_body_text`→`load_terms_text` raised and a valid
+negotiated-MSA subcontract could never file. `render_body_text` now branches on `terms.get_profile(kind)` —
+`library` stays the existing sha-verified + Layer-A-gated path; `attach` renders a **one-page reference**
+sourced from a new sha-pinned `subcontracts/terms/attach_reference.md`, composed of PURE VERBATIM fragments
+lifted from the `standard_subcontract` body (preamble + §2.1 Contract Price + signature block) plus the
+profile's manifest `render_line` — strict token-fill, no library-text load, no legal-review gate (correctly:
+the fragments are already covered by `standard_subcontract`'s cleared `legal_review`; the binding terms are
+the external MSA itself, not anything drafted here). **An ops-stds review initially BLOCKED an earlier draft**
+that had added a paraphrased §1 SCOPE clause and an invented Annex-C sentence — rewritten to pure-verbatim,
+re-review confirmed all findings RESOLVED. `manifest.json`'s `negotiated_msa` description + **ADR-0003
+decision #9** updated to describe the one-page-reference design (supersedes an earlier "emit ONLY the
+reference line" stub framing). `render_package` stays 3-file (Exhibit A + Annex C still render alongside).
+Live-smoked: a real 3-file `negotiated_msa` package rendered with the verbatim `render_line`, no unfilled
+tokens, 27-article body correctly absent. **Known non-blocking follow-up:** `attach_reference.md`'s sha pin
+freezes v1-era wording — a future `standard_subcontract_v2` won't auto-flag it as diverged (exec
+`docs/tech_debt.md` SC-CFG-1).
+
+**#548 — `feat(subcontracts): auto-fill the builder's Site address from the Smartsheet SoR (C1)`
+(`feat/subcontract-job-address`, worktree `~/its-c1`).** `portal_poll._push_active_jobs` adds `address` to
+the existing `/api/internal/sync` payload (no new sync call); the Worker sync route accepts it, bounds it
+(`>512` rejects the whole batch as `invalid_row`), and stores it in `jobs.address` — no D1 migration, the
+column already exists from migration 0021. New `GET /api/subcontracts/jobs/:job_id/site-address`
+(`cap.subcontracts.manage`-gated) mirrors the existing PO ship-to-address pattern. `SubcontractBuilderPage`'s
+`onJobSelect` now fetches and fills `siteAddress`, degrading to manual entry on a blank/404/degraded response
+(never clobbers an operator-typed value with an empty SoR address). `portal-worker-security-reviewer`
+verdict CLEAN across all 13 checked findings (W1–W13). HELD for the operator's **worker deploy + a live
+down-sync smoke** (confirm a real `ITS_Active_Jobs` address round-trips through `portal_poll`→Worker→the
+builder). **Known cosmetic follow-up:** the sync route's inline `address.length > 512` check duplicates the
+literal already defined as `MAX_ADDRESS` in three other Worker files rather than importing a shared constant
+(exec `docs/tech_debt.md` SC-CFG-2).
+
+### §G63.6 — NOT built: PR-B2 (Exhibit-A versioned+gated editing + payment-terms editing)
+
+Operator-directed ("build Exhibit-A now, versioned + gated") but explicitly left unbuilt this session — an
+Explore agent mapped it as one LARGE, atomic Python+worker+SPA change requiring both a worker deploy and a
+Layer-A legal-attestation seed (the 7 existing trade templates need `legal_review=cleared`, the same operator
+attestation already applied to `standard_subcontract` v1, commit `95a01cb`), so it needs the operator present
+rather than being safe to run autonomously. Full scope (manifest schema versioning, `exhibit.py`/renderer
+legal-gate addition, `config_apply.py`/`config_actuator.py` wiring, `config.ts`/`subcontract.ts` worker
+routes, SPA fetchers + a new per-trade-keyed exhibit editor block) recorded in exec `docs/tech_debt.md`
+under **PR-B2** — read that entry before picking up this work, not this summary.
+
+### §G63.7 — Four-part verify, done directly (not assumed) — and a live mid-session collision
+
+All three of this session's own PRs re-checked via `gh api repos/.../commits/<sha>/check-runs` on the merge
+commit directly (not just `gh pr view`'s triad): `f57559c` (#541), `226f509` (#542), `cdd38a8` (#546) each
+show `test`/`portal`/`secrets`/3×CodeQL `Analyze` all `completed`/`success`. Combined with each PR's
+`gh pr view` `state: MERGED` + non-null `mergedAt` + present `mergeCommit.oid`, all three are **four-part
+verify clean**, not narrative-assumed. **A live collision, caught rather than missed:** a second
+`git fetch origin` partway through this maintenance pass found `origin/main` had advanced from `1cf08a3` to
+`fbd77a0` — PR #549 (WP5, §G63.1) had landed mid-session from the concurrent doc-reconciliation thread. Also
+re-verified four-part clean (`test`/`portal`/`secrets`/3×CodeQL all `success` on `fbd77a0`). The local `~/its`
+working tree had already fast-forwarded to `fbd77a0` by the time this was noticed (another session's `git
+pull` on the same shared live tree, per the standing "after every PR merge, `git checkout main && git pull`"
+convention) — this session's own uncommitted `docs/tech_debt.md` edits survived the fast-forward intact
+(`#549` touched `CLAUDE.md`/`HOUSE_REFLEXES.md`/`lint_doc_conventions.py`/`test_doc_conventions.py` only, no
+overlap). Nothing landed past `fbd77a0` as of this archive entry's own close.
+
+Numbered `§G63` from the fetched `origin/main` copy of `memory-archive.md` (highest existing was `§G62`).
