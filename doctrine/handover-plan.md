@@ -1,15 +1,17 @@
 ---
 type: doctrine
-version: 9
+version: 10
 status: canonical
-last_verified: 2026-06-07
+last_verified: 2026-07-12
 last_verified_against: f3ad814
-supersedes: doctrine/handover-plan.md@v8
+supersedes: doctrine/handover-plan.md@v9
 workstream: null
 tags: [california-cutover, hardware-handoff, permissions, successor-operator, training-bounded-co-resolution, portal-user-admin, safety-portal]
 ---
 
-**ITS Handover Plan v9**
+**ITS Handover Plan v10**
+
+2026-07-12 — v10 status-fact refresh (operator-directed doctrine elevation). (1) Watchdog **Check C covers 12 tracked jobs** (`TRACKED_JOBS`), not "all four" — the v9 "four tracked daemons" figure is stale. (2) The `weekly_generate` Friday-crash catch-up — v9's "lone residual / remaining pre-cutover requirement" — is **BUILT** (watchdog **Check I** catch-up); that Tier-1 gap is CLOSED. (3) Live workstream roster is now **seven** (safety-reports, safety-portal, field-ops, progress-reporting, po-materials, subcontracts, operator-dashboard) across **15 daemon plists / 14 loaded at cutover** (`po-send` stays unloaded — send-gate); the pre-cutover conditions' per-workstream cutover sequence extends to all seven. The Tier-2 readiness model, the both-rule, and the four high-class categories are UNCHANGED from v9.
 
 2026-06-07 — Safety Portal field-PM account administration runbook added to Step 8 (Phase 7 admin CLI landed, PR-H #185)
 
