@@ -1,15 +1,15 @@
 ---
 type: doctrine
-version: 20
+version: 21
 status: canonical
 last_verified: 2026-06-29
 last_verified_against: f98f56f
-supersedes: doctrine/operational-standards.md@v18
+supersedes: doctrine/operational-standards.md@v20
 workstream: null
 tags: [push-vs-record, picklist-hardening, attachment-screening, polling-daemon, sdk-vs-live, cc-tooling, fork-security, pii-logging, actions-version-discipline, code-self-documentation, successor-operator, tier-2-repair, successor-remediation, training-bounded-co-resolution, workspace-topology, standalone-workspace, find-or-create, workspace-membership-approval, box-version-on-conflict, codeql-fp-handling, preservation-for-future-workstream, code-actuation-gate, its-owned-sor-writeback]
 ---
 
-**ITS Operational Standards v20**
+**ITS Operational Standards v21**
 
 2026-07-06 — v20 consolidation: §§52–54 added (narrated-not-enforced + citation integrity; sandbox-masks-production; runtime secret/PII backstop — its#341); §31/§43 hardened; §23/§24 seventh standalone workspace (ITS — Progress Reporting); §51 Material-List one-way + low-volume period-split folded from the v19.x riders
 
@@ -155,9 +155,232 @@ Per v10.1 prose, extended by the 2026-07-03 v19.x rider. Composite key (script_n
 
 Summary delivery via watchdog Check G (daily 7AM ET); a `sentry::`-prefixed key's summary subject is tagged `[sentry-leg]` (prefix stripped for display) so the operator can tell which push leg was suppressed. During MAINTENANCE windows (§2), summary email firing defers; first post-MAINTENANCE sweep fires deferred digest. Phase-2 deletion proceeds during MAINTENANCE (no push surface). Preserves §3.1 doctrine (as amended 2026-07-03).
 
-# §§4-22 — Carry Forward From v10
+# §4 — Data Fidelity: No Invented Field Data
+> *Reconstructed 2026-07-12 from execution-layer paraphrases; original v10 .docx unavailable — ratify before treating as verbatim.*
 
-Reviewer chain (§4), confidence scoring (§5), structured outputs (§6), sender allowlist (§7 — now extends per §33 trusted-contacts), untrusted-content tagging (§8), capability gating (§9), anomaly logging (§10), Python venv (§11), tool surface discipline (§12), diagnostic discipline (§13), preservation vs refactor (§14), reviewer chain (§15), ITS_Time_Off (§16), federal-holiday rule (§17), 14-day forward scan (§18), Smartsheet UI-only constraint (§19), remote access (§20), hardware lifecycle (§21), Box paths (§22) — all carry forward verbatim from v10 with no substantive change.
+ITS never fabricates system-of-record field data it does not hold from a live source. When a structured value — an address, a job attribute, any record field — has no authoritative live source, the cell is left **blank**, and where a downstream decision depends on it the item routes to a human (`ITS_Review_Queue`), never populated with a guessed, inferred, or synthesized value. A blank is honest and recoverable; an invented value is a silent corruption of a system of record (Smartsheet / Box / Outlook are SoR, unchanged by ITS) and is indistinguishable from real data downstream.
+
+Rationale: fabricated field data violates the "failures must be observable, recoverable, and never silent" invariant and the permanent human-in-loop posture. This rule pairs with Foundation Mission Invariant 2 (all content originating outside the operating tenant is untrusted data) and with §5 (confidence scoring) — both refuse false-confident output rather than emit it.
+
+**Status / enforced.** This is realized as a code-level assertion (one of the Op Stds sections cited as code-enforced, excellence-roadmap 2.2). Canonical instance: the six `ITS_Active_Jobs` rows were seeded with **Address cells left BLANK** because no structured live source existed, rather than inventing real addresses; the office PM fills them before Work Location auto-fill can serve values. `scripts/migrations/seed_its_active_jobs.py` marks Address sourcing "§4 — load-bearing: Address is sourced from live data ONLY."
+
+> **Index-stub resolution.** The v10→v20 one-line carry-forward index (`# §§4-22 — Carry Forward From v10`) mislabels §4 as "reviewer chain," duplicating the same label at §15. Every live `§4` code/doc citation is data-fidelity / no-invented-field-data (`seed_its_active_jobs.py`, `docs/tech_debt.md`, the 2026-06-03 session log, `claude-code-info-gap.md`, `memory-archive.md`); the reviewer chain has **zero** §4 citations and lives in the §15–§18 scheduling cluster. §4 is therefore reconstructed as data fidelity and the reviewer chain resolves to §15. [reconstructed — the *content* is well-attested; the §4↔"reviewer chain" title mismatch is the resolution point — confirm against v10 if recovered]
+
+---
+
+# §5 — Confidence Scoring on Extractions
+> *Reconstructed 2026-07-12 from execution-layer paraphrases; original v10 .docx unavailable — ratify before treating as verbatim.*
+
+Every extraction or classification step that produces a structured value carries a confidence score, and that score gates acceptance. The system-wide default acceptance threshold is **0.85**: an output scoring below threshold is **not** silently accepted — it routes to `ITS_Review_Queue` with reason `low-confidence-extraction` for human disposition, never treated as a silent success.
+
+Individual workstreams may set a **higher, more conservative** threshold where the cost of a wrong auto-accept is greater; the threshold is configurable per workstream via `ITS_Config`, with 0.85 as the missing-row fallback. Email-Triage classification, for example, starts at **0.90** for its first 30 days and is tuned downward only as a logged reliability record supports it.
+
+Rationale: ambiguity is routed to a human, never auto-approved — the "never silent" invariant plus the permanent human-in-loop rule. Confidence gating and §4 (no invented data) together ensure ITS emits a reviewable gap rather than a confident falsehood.
+
+**Status.** The `ReviewReason` enum in `shared/review_queue.py` carries `low-confidence-extraction` and its sibling `ambiguous-classification`. Cited as "default threshold 0.85 per Op Stds §5" across the safety-reports brief and CLAUDE.md ("Confidence scoring on extractions").
+
+---
+
+# §6 — Structured Output Enforcement
+> *Reconstructed 2026-07-12 from execution-layer paraphrases; original v10 .docx unavailable — ratify before treating as verbatim.*
+
+Every Anthropic API call that produces data ITS will act on uses **tool-use to force a JSON-schema-conforming response**. A response that does not conform to the declared schema is **rejected** — not coerced, truncated, or best-guessed — and routes to `ITS_Review_Queue` (reason `structured-output-edge`). This is **Layer 4** of the Invariant 2 adversarial-input defense (Foundation Mission v11); it is one of the real prevention layers (2–4), backed by the two-process External Send Gate (Invariant 1), which is the actual security boundary.
+
+JSON schemas are version-controlled in `schemas/` (paired with `prompts/`), each carries a `version` field, and scripts reject responses on schema mismatch. Schemas and prompts are never inlined ad hoc.
+
+Rationale: structured-output enforcement bounds what a possibly-injected model can hand back to "a schema-shaped object, or nothing" — it cannot smuggle free-form instructions or actions through the response channel. Combined with capability gating (§9), the model's output may be *wrong* but cannot itself transmit or take action; the damage ceiling stays "extracted data is wrong," not "external action taken."
+
+**Scope note.** On the LLM-free Safety-Portal path, Layer 4 is realized as **form-definition schema validation** of the structured payload (client + server, re-validated Python-side before any write); the Anthropic-tool-use form of §6 applies on the preserved email-intake and classification paths (safety-reports Stage 6, Email-Triage). [reconstructed — thin on the exact v10 wording of the reject-mechanism; conservative statement of the rule — confirm against v10 if recovered]
+
+---
+
+# §7 — Sender Allowlist + Scope Enforcement (Invariant 2, Layer 1)
+> *Reconstructed 2026-07-12 from execution-layer paraphrases; original v10 .docx unavailable — ratify before treating as verbatim.*
+
+**Rule.** All content originating outside the operating customer tenant is untrusted data (Foundation Mission Invariant 2). The first layer of defense is sender authorization: every intake-bearing workstream verifies the sender against an operator-maintained allowlist before the message reaches any Anthropic call. A sender with no matching authorization is quarantined, never processed silently.
+
+**Header-forgery detection precedes the allowlist lookup.** Because sender identity is only as trustworthy as the mail authentication behind it, authentication headers are checked *before* the allowlist is consulted. The Microsoft Graph API exposes `Authentication-Results`, `Return-Path`, and the `Received` chain on every inbound message; intake parses these (`graph_client` Stage-2 SPF/DKIM/DMARC parser). Any of `{spf=fail, dkim=fail, dmarc=fail, Return-Path domain ≠ From: domain}` routes to `ITS_Quarantine` with reason `header_forgery_suspected` before sender lookup. Softer signals — `{spf=neutral, spf=softfail, dkim=none}` on an otherwise-trusted sender — route to `ITS_Review_Queue` rather than being trusted outright.
+
+**Disposition.** Sender not on the allowlist → `ITS_Quarantine` (reason `sender_not_trusted`). Sender authorized but out of its declared project/workstream scope → `ITS_Review_Queue` (reason `scope_mismatch`). Sender authorized and in scope → proceed to the pipeline. In-code helpers live in `shared/quarantine.py` (`is_allowlisted`, `QuarantineReason`) and the header-verdict module; failures to write a quarantine/review record must propagate so the caller can elevate (an absent audit record is never acceptable).
+
+**Migration path — now extends per §33.** The Phase-1 pattern is a JSON-list allowlist in an `ITS_Config` row. This is superseded by the **`ITS_Trusted_Contacts` sheet pattern codified in §33** — an operator-visible, audit-trail-supporting, scope-enforcing sender-authorization surface. At trusted-contacts cutover the per-workstream `ITS_Config` allowlist rows retire and all intakes read from the sheet. §33 is the canonical implementation reference for the schema, the trust-evaluation logic, and the header-forgery checks summarized here.
+
+**Residual risk.** A sophisticated attacker who compromises a legitimate sender's credentials and transmits through that sender's real mail server bypasses all sender-side defenses; header-forgery detection only catches authentication failures. Layers 2–4 (§§8, 9, 6) still apply, with §10 as a post-hoc detection signal. Under credential compromise the damage ceiling stays "extracted data is wrong," not "external action taken on the attacker's behalf" — the External Send Gate (Invariant 1) remains the boundary.
+
+---
+
+# §8 — Untrusted-Content Tagging (Invariant 2, Layer 2)
+> *Reconstructed 2026-07-12 from execution-layer paraphrases; original v10 .docx unavailable — ratify before treating as verbatim.*
+
+**Rule.** Every Anthropic API call that processes content originating outside the operating customer tenant MUST wrap that content with `shared.untrusted_content.wrap()` and include the canonical system-prompt boilerplate from `shared.untrusted_content.system_boilerplate()` in the call's system prompt. This is Layer 2 of the Invariant-2 six-layer defense and applies to every workstream without exception.
+
+**Mechanism.** `wrap(content, source=...)` encloses the external text in `<untrusted_content source="...">` … `</untrusted_content>` tags, and the accompanying system boilerplate instructs the model that anything inside those tags is *data to analyze*, never instructions to follow. The wrapper is defensive against tag-breakout: the closing `</untrusted_content>` sequence in attacker-supplied content is zero-width-broken so the untrusted text cannot emit a premature closing tag and escape its envelope. `wrap()` never raises on a malformed source label (it sanitizes rather than rejects). `shared/untrusted_content.py` is live, tested, and in production.
+
+**Definition-of-done.** Per the "Adding a new workstream" checklist, any prompt that touches external content consumes both `wrap()` and `system_boilerplate()`. This layer does not by itself prevent a determined injection from influencing the model — it establishes the trust framing that Layers 3–4 and the two-process send gate rely on. It is a necessary framing control, not a standalone barrier.
+
+---
+
+# §9 — Capability Gating (Invariant 2, Layer 3)
+> *Reconstructed 2026-07-12 from execution-layer paraphrases; original v10 .docx unavailable — ratify before treating as verbatim.*
+
+**Rule.** The AI has no permission to send or to take external action. This is Layer 3 of Invariant 2 and it is the same control as Invariant 1's **two-process model**: generation scripts (which call the Anthropic API) have zero send capability, and send scripts (which transmit) have zero AI step. A successful prompt injection at the AI layer therefore cannot cause an external transmission, because the AI runs in a different process from the transmitter.
+
+**Enforcement — verified in code, not merely asserted.** `tests/test_capability_gating.py` inspects each enrolled script's imports at the AST level and fails the build if a forbidden capability is reachable. Generation/actuation scripts are enrolled in `GATED_SCRIPTS` with a per-script forbidden-substring list — canonically `{send_mail, resend, smtplib, email.mime}`, extended to `{graph_client, anthropic, anthropic_client}` for deterministic (LLM-free) actuators to assert they stay both send-free *and* AI-free. Send scripts are enrolled in `SEND_SCRIPTS` and forbid `anthropic`/`anthropic_client`. `tests/test_intake_capability_gating.py` extends the same discipline to intake paths that aren't part of the generic contract. `shared/graph_client.send_mail` exists to make sending possible for *send* scripts only; the gating test forbids it in every generation process.
+
+**Definition-of-done.** When a new generation script lands, add it to `GATED_SCRIPTS`; when a new send script lands, add it to `SEND_SCRIPTS`. A capability-bearing script that is not enrolled is a gap the test cannot catch — enrollment is part of merging the script, not a follow-up. This is the one Invariant-2 layer that is structurally enforced rather than framing-based, and it is load-bearing precisely because it holds even if injection succeeds at the model layer.
+
+---
+
+# §10 — Anomaly Logging on Extraction Output (Invariant 2, Layer 5 — a detection tripwire, NOT a defense layer)
+> *Reconstructed 2026-07-12 from execution-layer paraphrases; original v10 .docx unavailable — ratify before treating as verbatim.*
+
+**Rule and reframe (audit F13, FM v9).** Every extraction output passes through `shared.anomaly_logger.check()` before it is trusted. Layer 5 is a **low-effort post-hoc detection tripwire, not a defense layer** — it does not *prevent* a successful prompt injection. It raises a signal that an extraction output matched a known-suspicious pattern, so the item can be routed to human review and flagged. It must never be relied on as a barrier. Doctrine that treats it as co-equal with Layers 2–4 overstates the protection delivered; FM v9 corrected that framing per audit finding F13, and the correction stands.
+
+**Why it is not a barrier.** The implementation is exact-substring / regex matching against a short sentinel list — trivially evaded by paraphrase or a thesaurus. The actual prevention is Layers 2–4 (untrusted-content tagging §8, capability gating §9, structured-output enforcement §6/Layer 4), backed by the two-process External Send Gate (Invariant 1), which is the real security boundary. Layer 5's value is detection and triage signal, not prevention.
+
+**Mechanism.** `check(extracted_dict)` returns any anomalies found; a non-empty result routes the item to `ITS_Review_Queue` with `security_flag=True` and notifies the owner separately. The Phase-1 sentinel set (`shared/anomaly_logger.py`, live and tested) flags: schema-illegitimate field names (`recipient_override`, `send_to`, `external_address`, `ignore_*`, `role_*`, `system_*`), oversized field values (an injected payload stuffed into a field), well-known injection phrases in any string value, and numeric values exceeding `NUMERIC_ANOMALY_THRESHOLD` (F21) — the in-code backstop to the schema's per-field `maximum` bound. The `SUSPICIOUS_FIELD_PATTERNS` false-positive risk is tracked in `docs/tech_debt.md` for tuning against real extraction outputs; the code is otherwise unchanged and stays in production.
+
+---
+
+# §11 — Python Virtual-Environment & Worktree Isolation
+> *Reconstructed 2026-07-12 from execution-layer paraphrases; original v10 .docx unavailable — ratify before treating as verbatim.*
+
+The execution repo is installed as an **editable** package (`pip install -e ~/its`); its strict editable finder resolves every `import` back to the `~/its` checkout even when `PYTHONPATH` points elsewhere, and the launchd daemons run that same `~/its` working tree directly on a ~60 s cadence. There is no build/deploy step between "save" and "production." Two consequences are load-bearing:
+
+- **Any Python-source change is made in a per-task `git worktree` off `origin/main`, never on the live `~/its` tree.** An uncommitted edit saved in `~/its` goes live on the daemons' next cycle; committing in `~/its` mid-cycle can strand the publish daemon on a `publish/req-*` branch. Docs-only edits are safe on the live tree.
+- **Each worktree gets its OWN fresh venv — `python3 -m venv .venv-wt && .venv-wt/bin/pip install -e '.[dev]'` — and gates run through `.venv-wt/bin/...`.** **Never `cp -R ~/its/.venv`:** a copied venv's `bin/pip` keeps a shebang hard-coded to the original interpreter, so `install -e .` silently rewrites the **live** `~/its/.venv` editable pointer and repoints production imports at your worktree. Verify with `pip show its | grep 'Editable project location'` — the worktree's must be its own tree and `~/its/.venv`'s must be UNCHANGED.
+
+Corollary — adding a new top-level package/dependency to `pyproject.toml` requires refreshing the live editable install (`cd ~/its && .venv/bin/pip install -e . --no-deps` plus the new dep); the strict finder is baked at install time, so `-m` daemon invocations work but operator smokes break with `ModuleNotFoundError` until refreshed. Canonical procedure: `docs/operations/worktree_discipline.md`.
+
+---
+
+# §12 — Tool-Surface Discipline
+> *Reconstructed 2026-07-12 from execution-layer paraphrases; original v10 .docx unavailable — ratify before treating as verbatim.*
+
+Know the boundary of every tool surface before relying on it, and fall back deliberately rather than assuming a primitive exists. [reconstructed — thin evidence; confirm against v10 if recovered]
+
+- **Each MCP surface has gaps; the underlying SDK is the fallback of record.** The Smartsheet MCP exposes `delete_rows` and column-level ops only — it has **no `delete_sheet` / `delete_folder` / `delete_workspace`**; the Box MCP has **no delete primitive at all**; the Reports MCP is read-only (`create_report` needs a direct REST fallback). Any teardown or unsupported op uses the underlying Python SDK client (`smartsheet_client`, `box_client`) directly.
+- **Destructive SDK operations are name-guarded with a hard-coded allowlist.** A bulk sheet/folder deletion script must gate on an explicit allowlist of names, never a pattern that could match a live artifact.
+- **The AI's own tool surface is conservative by default and widened only by capability review.** A reasoning/chat agent's initial tool set is read-only (Smartsheet, Box, review queue); promotion to any write- or draft-tool requires an explicit per-tool capability review — consistent with the Invariant-1 capability-gating posture (§9), never a blanket grant.
+
+Rationale: an unexamined tool surface produces either a silent no-op (the primitive was never there) or an over-broad blast radius (a destructive op with no guard). Both are "never silent / never unbounded" violations; naming the fallback and the guard up front is the discipline.
+
+---
+
+# §13 — Diagnostic Discipline
+> *Reconstructed 2026-07-12 from execution-layer paraphrases; original v10 .docx unavailable — ratify before treating as verbatim.*
+
+Hard bugs and performance regressions are worked through a disciplined loop, not by speculative patching: **reproduce → minimise → hypothesise → instrument → fix → regression-test.** Reproduce the failure deterministically; minimise to the smallest triggering input; form a single explicit hypothesis; instrument to confirm or kill it before touching the fix; then land a regression test that fails on the old code and passes on the new. The `diagnose` skill drives this loop.
+
+- **This is the standard response to the SDK-vs-Live bug class** — the recurring failures where a mock passes but the real Smartsheet / Box / Graph SDK rejects the call. Any bug investigation touching an SDK boundary runs the loop; the fix ships with a live smoke on top of the regression test (a green mock proves nothing here — see §30 integration discipline).
+- **Not every failure is a code regression — classify before chasing.** An externally-caused fault (an org-wide GitHub-Actions billing outage, a CodeQL infra-fail, an SDK eventual-consistency flake) is diagnosed as non-code from its signal (job annotation, error code) and *not* pursued as a regression. Misclassifying an environmental fault as a code bug burns the loop on a fix that cannot exist.
+
+Rationale: the loop forces the failure to be understood before it is "fixed," so the fix addresses the actual mechanism and the regression test locks it — the opposite of the patch-and-hope pattern that leaves a bug latent behind a passing suite.
+
+---
+
+# §14 — Preservation over Refactor
+> *Reconstructed 2026-07-12 from execution-layer paraphrases; original v10 .docx unavailable — ratify before treating as verbatim.*
+
+**Working code is preserved, not rewritten for style.** This section is non-negotiable — it was hardened after the chat-session-to-Claude-Code code-landing pattern produced repeated ruff/mypy churn (rewrites of correct code to satisfy a linter). The default is to leave working code alone.
+
+- **Lint/type friction is resolved by an ignore, not a rewrite.** When chat-landed code trips ruff/mypy, the §14 path is `[tool.ruff.lint.per-file-ignores]` in `pyproject.toml`, never a rewrite of the working code. Exception: genuinely dead code (not a stylistic false positive) may be deleted with the ignore. Canonical examples: PR #4 (`1295a93`), PR #8 (`parse_job_v3` F841 closure).
+- **Speculative refactors clear a high bar: ≥4 real reuse cases.** A refactor/extraction proposed for its own sake (e.g. `improve-codebase-architecture`) does not run until the operator confirms the target meets the **≥4 genuine reuse cases** threshold. Duplication below that bar is preferred over a premature abstraction.
+- **Parameterize, not clone — when a real second consumer appears.** A genuine second consumer of a pattern is served by parameterizing the existing module (a required, no-default config object bound by each caller) rather than copy-pasting it, and the change is **byte-identical for the original caller when the new parameter is unset** — the additive path must not alter existing behavior. This is the standing idiom across `generate_core` / `compile_core` / `week_sheet` / `weekly_send` / `compile_now_poll` (each carries an in-code `§14` note); a cross-consumer contamination guard (e.g. a `Workstream`-tag mismatch hard-held before any send) is part of the pattern.
+- **Extraction is deferred until the pattern actually recurs, and even a met threshold may stay deferred.** A shared helper is extracted at the real second consumer with matching shape (e.g. `shared/runner.py` at the second polling daemon; the heartbeat extraction), but §14 preservation can still defer an extraction whose threshold is met (the triple-fire helper at its 4th consumer, §27). Where a cheap parity **test** guarantees two near-identical surfaces stay aligned, prefer the test over forcing a shared module (`tests/test_heartbeat_parity.py`).
+- **A clean-break that retires an input/trigger preserves workstream-agnostic infrastructure a committed future workstream depends on** — tombstone only the superseded entry-point and record the retention rationale so a later "cleanup" does not delete the seed (extended as §49; e.g. the Email-Triage email-path retain).
+
+Rationale: the §14 invariant supersedes "cleaner code is better." Preserving working code keeps the diff small, keeps behavior byte-identical for existing callers, and avoids the churn-and-regression risk that a stylistic rewrite reintroduces on a production tree the daemons run directly.
+
+---
+
+# §15 — Reviewer-Chain Resolution (PTO-aware shift-up)
+> *Reconstructed 2026-07-12 from execution-layer paraphrases; original v10 .docx unavailable — ratify before treating as verbatim.*
+
+Where §4 defines the reviewer chain as a *composition* — three positional slots, primary → secondary → tertiary, each an email, with `delay_to_secondary_hours` / `delay_to_tertiary_hours` measuring the hours after an item lands in the queue before the next slot is paged — **§15 defines how that chain is *resolved* for a given workstream on a given date**, with PTO applied. This is the runtime mechanism, not the roster.
+
+- **Positional offsets, not fixed people.** The chain carries positional offsets `[0, delay_to_secondary_hours, delay_to_tertiary_hours]`. Resolution removes anyone currently out (per §16 ITS_Time_Off) and the **surviving members shift up** into the remaining positions: when the primary is out, the secondary takes the 0-hour slot and the tertiary takes the secondary offset. Coverage is never dropped or paged late merely because an earlier slot is unavailable.
+- **PTO-aware by construction.** Resolution consults the live PTO source (§16) for each candidate on the target date. A reviewer covered by a time-off entry on that date is excluded before offsets are assigned.
+- **Empty chain is a first-class signal, never an auto-route to someone else.** When *every* configured reviewer is out, resolution returns an **empty chain**. Callers treat this as "hold the week and alert the operator out-of-band (Resend)" — the system never silently reassigns the review to an unconfigured party. (Realized in `shared/scheduling.py::resolve_chain` / `ReviewerChain.is_empty`.)
+- **Config source is §26.** The chain *composition* is read from ITS_Config with a `shared.defaults.DEFAULT_REVIEWER_CHAINS` fallback (§26 owns the configuration-source rule); §15 governs only the PTO-applied resolution over that composition.
+
+*Disambiguation note: v10 labels both §4 and §15 "reviewer chain," and §26 "reviewer-chain configuration source." The §4-roles / §15-resolution-mechanism / §26-config-source split above is inferred from the live code's separation of `ReviewerChainConfig` (composition), `resolve_chain` (resolution), and `ChainConfigLoader` (source) and from §18's citation of the resolution as the thing it forward-scans — not from a recovered v10 boundary. [reconstructed — thin evidence for the exact §4/§15/§26 partition; confirm against v10 if recovered]*
+
+---
+
+# §16 — ITS_Time_Off (PTO source of truth)
+> *Reconstructed 2026-07-12 from execution-layer paraphrases; original v10 .docx unavailable — ratify before treating as verbatim.*
+
+**ITS_Time_Off is the canonical Smartsheet source for reviewer/personnel time-off.** Reviewer-chain resolution (§15) and the 14-day forward scan (§18) both read it to decide who is unavailable on a given date. The module that reads it is identity-free by design — identities live in ITS_Config / `shared.defaults`, not in the scheduling code.
+
+- **Schema (as read by `shared/scheduling.py`).** One row per PTO span: `Person` (CONTACT_LIST), `Start Date` (DATE), `End Date` (DATE). The date range is **inclusive on both ends**; `Start Date == End Date` expresses single-day PTO.
+- **Retroactive entries are honored.** A row added today for a date already in the past affects any lookup whose date falls inside the range, regardless of when the row was created — the entry, not its authoring time, is what matters.
+- **Fail-open on read failure.** If the sheet is unreachable, auth is rejected, the sheet is missing, or the payload is malformed, the fetch emits a WARN via `error_log` and returns "nobody is out" (`[]`) rather than raising. A downstream coverage check would rather miss a gap than crash the whole run; the morning log scan reveals which fetch failed and why. (Consistent with the §1 kill-switch / §27 failure-isolation fail-open posture — never silent, but never fatal.)
+- **Per-row robustness.** A single malformed row (unrecoverable email, unparseable dates) is skipped with a WARN; the remainder of the sheet still loads. One bad row must not poison the fetch.
+- **Read amplification is bounded.** A single run constructs one PTO client and caches the fetch for that client's lifetime, so a multi-day, multi-reviewer scan produces a single Smartsheet read; a new run re-fetches (and thus sees newly-added entries).
+
+---
+
+# §17 — Federal-Holiday Business-Day Rule
+> *Reconstructed 2026-07-12 from execution-layer paraphrases; original v10 .docx unavailable — ratify before treating as verbatim.*
+
+**All scheduled date math is business-day-aware against the US federal holiday calendar.** A business day is Monday–Friday that is **not** a US federal holiday (including federally *observed* dates). The customer's business runs on the US **federal** observance calendar; state and bank holidays are intentionally excluded. (Realized via `holidays.country_holidays("US")` in `shared/scheduling.py::is_federal_holiday` / `_is_business_day`.)
+
+- **Generation rolls back; sends roll forward.** A generation run scheduled the business day *before* a send shifts **back** to the most recent business day on or before its target (`shift_gen_date`). An externally-visible send shifts **forward** to the next business day on or after its target (`shift_send_date`) — a send must land on a day someone is actually at work.
+- **Recursive over multi-day spans.** The shift steps one day at a time until it lands on a real business day, so back-to-back non-business days (weekend abutting a holiday, or two adjacent holidays) still resolve to a genuine business day.
+- **Week-boundary selection is deliberately holiday-unaware.** Picking a calendar-week boundary (e.g. the Monday on or before a date) selects the week, not a business day; pair it with the gen/send shift when the run day itself needs holiday handling. The two concerns are kept separate on purpose.
+
+---
+
+# §18 — 14-Day Reviewer-Chain Forward Scan
+> *Reconstructed 2026-07-12 from execution-layer paraphrases; original v10 .docx unavailable — ratify before treating as verbatim.*
+
+**The daily watchdog forward-scans reviewer coverage so a gap is surfaced before it bites, not after a report is stuck with no reviewer.** This is watchdog **Check D**. For each scanned workstream it walks the next **14 days** (`REVIEWER_CHAIN_SCAN_DAYS`), skipping federal holidays (§17 — the business needs no coverage on a closed day), and resolves the reviewer chain (§15, PTO-aware via §16) for each business day. A day whose resolved chain is **empty** is a coverage gap.
+
+- **Forward-looking, complements the reactive checks.** Where other watchdog checks flag things already stale, §18 is anticipatory: it tells the operator *now* that an upcoming window has no available reviewer, giving time to add coverage or adjust PTO/config before the gap arrives.
+- **Routes to the human review surface, one row per workstream.** Detected gaps are logged to `ITS_Review_Queue` as an INFO anomaly row **per workstream** (one row collecting all of that workstream's gap dates, not one row per gap), so the operator sees a single triage item rather than a flood.
+- **Triage-window tuning.** The anomaly rows are written with a `reason`/`sla_tier` chosen so the stale-review detector (Check A) grants a multi-day triage window before re-WARNing, rather than immediately re-alerting on a known, already-surfaced gap.
+- **Known behavior (documented, accepted).** Check D does **not** deduplicate across runs — a persistent gap produces one new row per watchdog run. This was accepted at build time; scan-for-existing-row dedupe is a future enhancement if proliferation becomes painful.
+
+---
+
+# §19 — Smartsheet UI-Only Constraint
+> *Reconstructed 2026-07-12 from execution-layer paraphrases; original v10 .docx unavailable — ratify before treating as verbatim.*
+
+A set of Smartsheet operations have **no API / SDK / MCP primitive** and can only be performed through the Smartsheet web UI: **forms, conditional-formatting rules, filters, and sheet-level column changes** (adding a column to — or retyping a column on — a live sheet). This is a platform constraint, not an ITS choice, and it splits the build labor: **data flows via API/scripts; the UX layer (forms + conditional formatting + filters) is authored once per template sheet in the UI, then propagated to project clones via Save-as-New** (which carries the forms/CF/filters onto each clone). Related: the §35 bounded-enum picklist retrofit and any column-type change are UI-only for the same reason (no API primitive; operator UI required, ~30 s per column).
+
+**Consequence — Notes-encoded machine state.** Because a script cannot always add a purpose-built managed column to a live sheet, per-row machine state that has *no dedicated column* is encoded into the free-text **`Notes`** cell as a machine-parsable tag prefix — **parse-on-read, replace-or-append-on-write**. Canonical uses: `weekly_send` retry state (`[SEND_RETRY_COUNT: N]`, `[LAST_SEND_ERROR: …]`) on `WSR_human_review`, which has no `Send Retry Count` / `Last Send Error` columns; and the D1-join ids (`d1_id=<n>` / `po_id=<n>` / `sc_id=<n>`) that bind an ITS-owned Smartsheet ledger row back to its authoritative D1 record. A row that loses its tag cannot be machine-resolved — that condition is **surfaced, never guessed** (a numberless PO refuses to send rather than fabricate its number). The encoding is deliberately confined to `Notes`; the reviewer edits only human columns (e.g. `Email Body`), never `Notes`.
+
+*(Historical note: `weekly_send.py` at one point cited a non-existent "§23.3" for the UI-only-column constraint; the canonical home is §19 — tracked as a retarget in `docs/tech_debt.md`.)*
+
+---
+
+# §20 — Remote Access
+> *Reconstructed 2026-07-12 from execution-layer paraphrases; original v10 .docx unavailable — ratify before treating as verbatim.*
+
+**All remote access to the ITS host is via Tailscale only. Never expose SSH — or any service — to the public internet.** ITS's own operation requires only **outbound 443** (Smartsheet, Box, Microsoft Graph, Anthropic) — there are **no inbound holes and no public SSH**. Any locally-bound surface (e.g. the operator dashboard on `127.0.0.1:8484`) is reached from other devices **only over the tailnet**, never on `0.0.0.0` and never published — the same "no public-internet service" rule applies to everything in the repo.
+
+Tailscale is the **Tier-3 escalation / remote-support channel for the Developer-Operator (Seth)** — reached for novel or high-capability-class faults — **not** the primary ongoing-operation model. Steady-state operation is Tier-1 self-heal plus the Tier-2 Successor-Operator (see the three-tier maintenance model); the earlier framing that positioned remote support as the standing operator model is superseded. Reverse-access must be verified from a foreign network (a hotspot, not the home/work LAN) before shipment to prove it survives the customer's NAT. **Fallback if Tailscale fails post-shipment:** physical access + a video-call walkthrough, with the hardware-refresh budget (§21) covering a replacement-Mac shipment if remote recovery proves impossible.
+
+---
+
+# §21 — Hardware Lifecycle
+> *Reconstructed 2026-07-12 from execution-layer paraphrases; original v10 .docx unavailable — ratify before treating as verbatim.*
+
+ITS is **local-first on a single MacBook host through Phase 4** — no cloud-server execution is added; each customer runs on their own physical host. The build follows the sandbox-first pattern and then cuts over to the customer site: **Florida (build/dev) → California (customer site)**, with the **production host being the old MacBook Pro** migrated onto and installed at Evergreen at the in-person delivery (target **Aug 7**; the migration off the development MacBook onto the production host is procedure-driven with a **zero double-run window**, per `docs/operations/host_migration_runbook.md`). Post-handover the production MacBook is **customer-owned, sitting at the customer site**, maintained by Solution Smith remotely over Tailscale (§20).
+
+**Refresh cadence:** approximately **$1,200 every 3–4 years, a customer responsibility** — the same budget that funds a replacement-Mac shipment if remote recovery is ever impossible. Because the architecture is deliberately single-host, host death is the dead-man's-switch case (external UptimeRobot ping) and hardware replacement, not failover, is the recovery path. *[reconstructed — thin evidence; confirm against v10 if recovered]*
+
+---
+
+# §22 — Box Paths
+> *Reconstructed 2026-07-12 from execution-layer paraphrases; original v10 .docx unavailable — ratify before treating as verbatim.*
+
+**Box is a document system of record, unchanged by ITS.** Never construct a Box path inline — **resolve every path through `shared/box_client.py` helpers** so a single edit propagates to all callers (`canonical_job_path(customer, job_number, job_name, year)` is the canonical write-path helper; ITS auto-creates job/week folders through the idempotent, race-tolerant find-or-create `get_or_create_folder`). Per-customer project-folder resolution lives in **`shared/defaults.py::BOX_PROJECT_FOLDERS`** — a `project-name → Box folder ID` map, each ID a per-project clone of the canonical **`1111B`** template under the **ITS DATA root** (`382010286207`). This map is a **per-customer-repo invariant: replace it at fork time**; `ITS_Config` rows override at runtime, and the defaults are the missing/invalid-row fallback. Superseded/legacy clones stay **archived, not deleted, for ≥30 days** (§14 preservation), under `ITS DATA / 99. Legacy … Clones /`.
+
+**Filing structure is `ROOT → per-job → per-week`.** Per the operator naming rule, folders ITS creates are **prefixed `ITS`** so the system's own folders are distinguishable from the pre-existing job/category tree. The Box tree **mirrors the Smartsheet job/week hierarchy** (via the shared naming helpers); the compiled weekly packet is filed to the ITS-prefixed week folder, and sanitized photo originals file to **`ITS Photos/<submission_uuid>/`** under the job folder. *(The `ROOT → job → week` mirror and the `ITS`-prefix naming rule are the current as-built realization of this section; the durable v10 rule is "Box is the SoR; resolve all paths through the `box_client` helper + the `BOX_PROJECT_FOLDERS` map, never inline.")*
+
+---
 
 # §23 — Workspace Topology
 
@@ -183,9 +406,74 @@ Workspace/folder/sheet ID inventory. Source of truth is shared/sheet_ids.py. v11
 
 - Field Reports project subfolders: 6 per-project subfolders — see FOLDER_FIELD_REPORTS_* constants.
 
-# §25-§30 — Carry Forward From v10
+# §25 — Per-Workstream Sheets
+> *Reconstructed 2026-07-12 from execution-layer paraphrases; original v10 .docx unavailable — ratify before treating as verbatim.*
 
-Per-workstream sheets (§25), reviewer chain configuration source (§26), Triple-Fire Failure Isolation (§27 — note: alert_dedupe.py is 4th consumer; shared-helper extraction threshold met but deferred per §14), mypy-in-CI (§28), Managed Agents architectural framing (§29 — "Python = deterministic plumbing, Agents = judgment-gaps between them"), SDK-vs-Live Integration Test Discipline (§30 — codified across PRs #47/#48/#49/#51; pytest -m integration against throwaway sandbox resources).
+Each workstream owns its own dedicated Smartsheet sheets rather than co-tenanting rows in a single monolithic sheet. A workstream's structured data — its intake/queue rows, its per-item working rows, and its `<Workstream>_Pending_Review` approval sheet (Invariant 1) — lives in sheets scoped to that workstream and placed in the workspace its audience is entitled to (§23). This keeps audience separation (§23), the per-workstream External Send Gate (Invariant 1), picklist/config scoping (§35), and the reviewer chain (§26) all resolvable one workstream at a time.
+
+Consequence: a new workstream provisions its own sheets (mirroring the `safety_reports/` shape) rather than adding columns to another workstream's sheet; cross-workstream reads go by sheet-ID through `shared/sheet_ids.py` (§24), never by sharing a row surface.
+
+[reconstructed — thin evidence; confirm against v10 if recovered]
+
+Note (version-drift guard): some in-repo code and docs (`shared/picklist_sync.py`, `docs/tech_debt.md`) historically cite "§25" for an unrelated "MCP-gap REST fallback" workaround. Those are flagged in-repo as renumbering mis-cites to be retargeted — the canonical scope of §25 in the live standard is *per-workstream sheets*, not the REST fallback. See the ambiguity note at the end.
+
+---
+
+# §26 — Reviewer Chain Configuration Source
+> *Reconstructed 2026-07-12 from execution-layer paraphrases; original v10 .docx unavailable — ratify before treating as verbatim.*
+
+The reviewer chain's *composition* — who occupies the primary / secondary / tertiary slots for a given workstream, and the delay-to-next-slot hours — is configuration, not code. It is read at runtime from `ITS_Config`, which takes precedence whenever readable. The fallback — used before the sandbox config sheet is provisioned, and as the first-run seed — is `shared.defaults.DEFAULT_REVIEWER_CHAINS`.
+
+Reviewer identity (emails) MUST NOT be hardcoded in `shared/scheduling.py`. Identity references live only in `shared/defaults.py` and `ITS_Config` — a single place a planning-layer human updates when this customer's chain changes. `scheduling.py` reads composition, applies PTO removal (§16) and federal-holiday shifts (§17), and resolves the ordered chain; it never embeds the roster. A missing row in both sources is a loud error ("No reviewer chain configured for workstream …"), never a silent empty chain.
+
+This is distinct from §4/§15, which govern the reviewer-chain *mechanics* (three-tier escalation) and its 14-day forward scan (§18): §26 governs where the chain *comes from*.
+
+---
+
+# §27 — Triple-Fire Failure Isolation
+> *Reconstructed 2026-07-12 from execution-layer paraphrases; original v10 .docx unavailable — ratify before treating as verbatim.*
+
+The CRITICAL alert path fires on three legs (see §3 / §3.1): the `ITS_Errors` Smartsheet row (the per-occurrence RECORD leg) plus two out-of-band PUSH legs — a Resend operator email and a Sentry capture. Each leg is independently **recursion-guarded** and wrapped in a **broad `except`**, so a failure in one leg never blocks the others: an M365/Smartsheet outage that suppresses its own alert row must not suppress the Resend + Sentry legs, and vice-versa. The `Correlation_ID` is threaded across all three legs so an operator can join them.
+
+The isolation rule generalizes beyond alerting: an auxiliary or observability path must never crash the primary work. A deliberately broad catch — e.g. the PTO fetch in `shared/scheduling.py` returning `[]` fail-open rather than crashing the watchdog — is a §27 application, not a lint smell.
+
+`shared/alert_dedupe.py` is the fourth consumer of this path (it gates the two push legs on `(script, error_code)`). The shared-helper extraction threshold has been met but is **deferred per §14** (preservation-over-refactor) — the legs stay inline until a genuine reuse case justifies extraction.
+
+---
+
+# §28 — mypy-in-CI
+> *Reconstructed 2026-07-12 from execution-layer paraphrases; original v10 .docx unavailable — ratify before treating as verbatim.*
+
+`mypy` runs in the GitHub Actions `test` job as a **blocking** gate on every push, held at a **zero-error baseline**. A push that introduces a type error fails CI and does not land. Run `mypy .` locally before pushing — `pytest` + `ruff` alone do not surface type regressions.
+
+The baseline is maintained at 0 errors across all source files; session-log landing assertions record the count ("mypy: 0 errors / N source files") as proof the gate stayed green. §28 is one of the Operational Standards enforced directly in code rather than by convention.
+
+---
+
+# §29 — Managed Agents Architectural Framing
+> *Reconstructed 2026-07-12 from execution-layer paraphrases; original v10 .docx unavailable — ratify before treating as verbatim.*
+
+Managed Agents (autonomous, judgment-bearing Claude agents embedded in ITS) are governed by one framing: **"Python = deterministic plumbing, Agents = judgment-gaps between them."** Deterministic work — moving data, rendering, filing, sending under the gate — stays in Python. An Agent is introduced only to fill a genuine judgment gap *between* deterministic steps, never to replace plumbing a script already does correctly.
+
+No Managed Agents exist in Phase 0 / 1 / 1.5 / 1.6. Agent adoption is evaluated at a single **Phase 3 gate**, where each candidate is tested for **capability-equivalence against Invariants 1 & 2** — an Agent may not weaken the External Send Gate or the adversarial-input posture. The four candidate workstreams considered at that gate are **Closeout Package Assembly, Schedule Digest, Dreaming, and the ITS Chat backend re-evaluation**. This candidate list is planning input, not a roadmap promise; the capability set is re-verified when the gate actually fires.
+
+---
+
+# §30 — SDK-vs-Live Integration Test Discipline
+> *Reconstructed 2026-07-12 from execution-layer paraphrases; original v10 .docx unavailable — ratify before treating as verbatim.*
+
+Any new `shared/*` SDK wrapper that performs **create / update / delete on typed columns or rows** (Smartsheet, Box, Graph, …) ships with a **paired integration test** — `tests/test_<client>_integration.py` — that exercises the **live API against throwaway sandbox resources**, not mocks.
+
+Rationale (codified across PRs #47/#48/#49/#51 — four SDK-vs-Live bugs in two days): `SimpleNamespace` mocks at the SDK boundary pass while the live API rejects. Mocks cannot see live-API enforcement (required fields, body shape, value wrapping/coercion) or SDK runtime state (in-process caching). A green mock test therefore proves nothing about the real call.
+
+Convention:
+
+- Mark the test `-m integration`; **CI skips it by default** — it is operator-run against sandbox resources (create → read/write → delete round-trip).
+- The `sdk-integration-test-scaffold` agent scaffolds the paired test immediately after a wrapper is created or significantly changed.
+- The discipline extends to **daemon integration and any new shared infrastructure** (a breaker, a rate cap, a new exception subtype): mandatory manual **live smoke on the actual daemons before merge**, because existing unit-test mocks predate the new cross-cutting module and cannot exercise it.
+- A deliberately **read-only** wrapper with no write path does not fire §30 (e.g. `shared/active_jobs.py`).
+
+---
 
 # §31 (NEW) — Polling-Daemon-as-Trigger-Primitive Pattern
 
@@ -217,7 +505,7 @@ Every daemon scaffold's DoD includes, explicitly (the 2026-06-28 retrospective f
 | --- | --- | --- | --- |
 | watchdog | Daily 7AM ET | Multi-source | Retrofit pending |
 | picklist_sync | Hourly | Picklist_Sync_Config + master DBs | Retrofit pending |
-| safety_reports.intake_poll | 60s | safety@evergreenmirror.com via Graph | LIVE (PR #60) |
+| safety_reports.intake_poll | — | (Graph email intake) | RETIRED 2026-06-05, tombstone DELETED 2026-07-03 — superseded by the Safety Portal PULL model (portal_poll.py) |
 
 ## Future shared/runner.py Abstraction
 
@@ -233,7 +521,7 @@ ITS_Daemon_Health sheet in System workspace / 04 — Daemons folder (sheet 45293
 
 - Daemon Name (PRIMARY TEXT_NUMBER) — dotted-notation identifier.
 
-- Workstream (PICKLIST: global, safety_reports, po_materials, subcontracts, email_triage, ai_employee).
+- Workstream (PICKLIST: global, safety_reports, progress_reports, field_ops, po_materials, subcontracts, email_triage, ai_employee).
 
 - Enabled (CHECKBOX) — report-filter metadata only; daemon does NOT read this (ARCH-1).
 
@@ -391,7 +679,7 @@ docs/tech_debt.md is the canonical execution-layer tech debt log. Planning-proje
 
 ## Current State
 
-39 entries as of 2026-05-22. Mix of closed/open/partially-mitigated. Notable open items: anomaly_logger SUSPICIOUS_FIELD_PATTERNS FP risk, R2 Watchdog Check E (Phase 1.5 deferral), Picklist_Sync_Config config/state mix, Smartsheet MULTI_PICKLIST round-trip gotcha, safety_reports week-folder race condition, Daily Reports schema gap (no Box Link column).
+~215 entries as of 2026-07-12 (grown well past the 2026-05-22 snapshot; the live set is in `docs/tech_debt.md`, now split into `tech_debt.md` (open) + `tech_debt_closed.md` (archive)). Mix of closed/open/partially-mitigated. Notable open items: anomaly_logger SUSPICIOUS_FIELD_PATTERNS FP risk, R2 Watchdog Check E (Phase 1.5 deferral), Picklist_Sync_Config config/state mix, Smartsheet MULTI_PICKLIST round-trip gotcha, safety_reports week-folder race condition, Daily Reports schema gap (no Box Link column).
 
 # §37 (NEW) — CC Skills Usage Convention
 
@@ -882,7 +1170,68 @@ A control verified only in the **sandbox tenant**, or narrated in `cutover_check
 
 Distinct from gitleaks (which guards *committed source*), a runtime backstop guards **logged** secrets/PII on the paths that emit operator-facing text: the `error_log` triple-fire (Resend / Sentry / ITS_Errors — §3.1) and migration scripts. A `redact` / no-secret-in-logs test asserts these paths never emit a secret or PII value into an alert, a Sentry event, or an `ITS_Errors` row (the triple-fire fans out to three surfaces — the test covers all three, the multi-surface fan-out discipline). This is the logging-path instance of Invariant 2's "damage ceiling" reasoning: even if upstream handling fails, a secret must not reach an operator-facing log. Operational note: the operator's GitHub PAT scope includes `security_events` so the `codeql-fp-triager` can enumerate CodeQL alerts (previously 403 — the alert-enumeration API requires that scope).
 
+# §55 (NEW) — Verification & Truthful-Reporting Discipline
+
+ITS is built and maintained by AI (Claude Code) sessions that can, without discipline, **lie by
+omission, hallucinate current state, or claim work done without validating it.** Three failure
+classes recur: (1) acting on a stale-but-confident claim; (2) claiming a change complete when only
+one of its N surfaces was touched; (3) reporting success without running the validation. This
+section elevates the standing execution-layer reflexes (`docs/HOUSE_REFLEXES.md`) to **canonical
+doctrine**, because truthful, validated work is load-bearing for a system whose first invariant is
+"failures must be observable, recoverable, and **never silent**." The reflexes remain the how-to;
+§55 is the why-it-is-mandatory.
+
+## §55.1 — Verify Before Asserting (anti-hallucination)
+
+Every current-state claim — a file, function, line-range, SHA, PR number, sheet-ID, config value,
+or "X is / is not built" — is a **hypothesis until verified against live HEAD.** A brief, audit,
+memory note, or prior message naming a code shape has drifted between authorship and now: `grep` /
+`Read` the real code and `gh` the real PR before acting or asserting. **Zero grep hits is decisive
+over confident memory.** A datum has **N implementations — enumerate ALL of them** before claiming a
+value / name / behaviour change is done (a filed-PDF name lives in the Box file + the Smartsheet
+attachment + the Worker `Content-Disposition`; a workstream tag lives in `doc_conventions.md` + the
+manifest + the lint constant + its spec test). The `brief-validator` agent automates the pre-action
+check; run it (or do the checks by hand) before editing on any current-state claim.
+
+## §55.2 — Prove the Control Bites (validate enforcement)
+
+A new test, hook, gate, or guard is **worthless until it RED-LIGHTS on a synthetic violation**:
+inject the violation → confirm the control fails → revert. A green control that has never failed is
+not proven. For anything that shells out or hits an SDK, add a **live smoke** on top of the unit
+test — mocks pass but the live Smartsheet / Box / Graph SDK rejects, a recurring class. **Adversarial
+review is definition-of-done on any trust-boundary surface** (an untrusted parse/decode, a
+client-or-operator-fed write route, an external-send path): unit tests structurally cannot find
+injection, double-send windows, or fail-open misconfig — adversarial review (`/security-review`, the
+`ops-stds-enforcer` / `portal-worker-security-reviewer` agents) repeatedly has.
+
+## §55.3 — The Four-Part Landing Verify (validate completion)
+
+A PR is **not "landed"** until all four hold: `state=MERGED` · `mergedAt` non-null ·
+`mergeCommit.oid` present · **main-branch CI on the merge commit = SUCCESS.** Passing the first three
+while failing the fourth (a post-merge push/deploy failure) is *functionally not landed.* Make no
+claim of "merged" / "done" / "shipped" without the four-part verify (`pr-landed-verifier`). Never
+deploy, migrate, or audit from a **stale checkout** — `git pull` to latest `main` first; a
+behind-checkout reports "no migrations to apply" while the live system already expects the new
+tables (the class that caused a universal portal lockout).
+
+## §55.4 — Faithful Reporting (don't lie)
+
+Report outcomes faithfully. If a test failed, say so with the output. If a step was skipped, say
+that. If something is uncertain, say uncertain. State done-and-verified **plainly, without hedging —
+but NEVER claim done without the validation of §55.1–55.3.** The "never silent" invariant applies to
+reporting itself: a silent fallback to a default, a swallowed exception, or a "should work" in place
+of an actual run is a form of lying. When a memory / brief / claim turns out stale, **surface the
+contradiction** rather than proceeding on it (e.g. a doc that says a file exists when `git log` shows
+it never did — report that, don't paper over it).
+
+*Cross-refs: Invariant 1 (External Send Gate) + Invariant 2 (Adversarial Input); §14
+(preservation-over-refactor); §30 (SDK-vs-Live integration discipline); §42 (code-level
+self-documentation); §43 (successor-remediation runbook). Execution-layer detail:
+`docs/HOUSE_REFLEXES.md` §§1–5 + `docs/operations/pr_merge_discipline.md`.*
+
 # Authority
+
+Operational Standards **v21**, 2026-07-12 (verified against exec main; operator-directed doctrine elevation). **New §55 — Verification & Truthful-Reporting Discipline** (§55.1 verify-before-asserting / anti-hallucination · §55.2 prove-the-control-bites · §55.3 the four-part landing verify · §55.4 faithful reporting), elevating the standing execution-layer reflexes (`docs/HOUSE_REFLEXES.md`) to canonical doctrine so future AI sessions do not hallucinate, claim-done-without-validating, or report unfaithfully. **§§4-22 + §25-30 RECONSTRUCTED:** the full v10 bodies were never committed to git (the initial .docx migration brought only the two 'Carry Forward From v10' stubs; the .docx is unavailable), so these 25 sections are faithful reconstructions from the surviving execution-layer paraphrases + code citations — each carries a `> *Reconstructed …*` honesty marker and is subject to correction if the v10 source is recovered. **§4 relabel:** the stub index had mislabeled §4 as "reviewer chain" since v11 (duplicating §15); per 6+ code citations §4 is **Data Fidelity / No-Invented-Field-Data** and the reviewer chain resolves to §15. **Status-fact riders:** §31 roster (`intake_poll` marked retired/deleted, not LIVE), §32 Workstream picklist (+progress_reports, field_ops), §36 tech-debt count (~215 / split file). **Every prior section (§§1–54) otherwise carries forward verbatim** except the three riders; no protective claim is weakened. Companion doctrine bumped in the same pass: Foundation Mission Invariant 1 ("customer-facing" → "external recipient"), Vision & Roadmap §1.4.3 (email-attachment screening = Email-Triage DoD, does not gate Aug-7), Handover Plan → v10 (Check C = 12 jobs, Friday-catch-up closed, 7-workstream roster). v20 retires on acceptance of v21. Canonical git tag: `operational-standards-v21`.
 
 Operational Standards **v20**, 2026-07-06 (verified against exec main `987f4f4`). The **consolidation** bump, operator-directed. **New §§ (its#341 forensic-retrospective candidates, ratified):** §52 narrated-not-enforced — every built control/guarantee ships a binding test **or** a dated exception (the curated `narrated_controls` ledger + the citation-integrity leg of the now-BLOCKING doctrine-drift gate); §53 sandbox-masks-production — the sandbox→production cutover is a **gated** checklist with mechanical pre-cutover verification, not narration; §54 runtime secret/PII-leak backstop — a `redact`/no-secret-in-logs test on the `error_log` triple-fire + migration scripts (distinct from gitleaks) + the `security_events` PAT scope. **Amendments:** §31 daemon-scaffold DoD hardened (`sys.executable` / `RunAtLoad` / external catch-up / empty-commit guard, class #15); §43 coverage audited (every Tier-2-reachable capability ships its entry as DoD). **§23/§24 seventh standalone workspace** (`ITS — Progress Reporting`) ratified as a workspace-topology change (the v17 sixth-workspace precedent). **§51 folded:** the Material List is now **one-way-up (phased; M2b bidirectional receive deferred)** and the low-volume period-split is a direct clause — folding the 2026-07-04 (hours-log low-volume) + 2026-07-06 (Material-List one-way) v19.x riders; the 2026-07-03 §3.1/§3.2 Sentry-leg rider is likewise folded (the §3.1/§3.2 main text already reflects deduped-push). **Every prior section (§§1–51) carries forward verbatim** except the two amendments (§31, §43) and the four folded clarifications; no protective claim is weakened by any fold. v19 retires on acceptance of v20. Canonical git tag: `operational-standards-v20`. The three v19.x rider entries below are retained for provenance, marked **[FOLDED INTO v20]**.
 

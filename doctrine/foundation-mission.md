@@ -47,7 +47,7 @@ Every use of "operator" in any ITS doc must be classifiable to exactly one of th
 
 No external transmission without explicit human approval. Permanent, not time-bounded. Earlier framing in Op Stds v4 that described review as a 30-60 day window is superseded.
 
-- Every workstream that produces customer-facing output uses a <Workstream>_Pending_Review Smartsheet with Approved for Send / Approved By / Approved At / Sent At / Send Status columns.
+- Every workstream that produces output destined for any **external recipient** — a customer, vendor, or subcontractor — uses a <Workstream>_Pending_Review Smartsheet with Approved for Send / Approved By / Approved At / Sent At / Send Status columns.
 
 - Two-process model. Generation scripts (which call the Anthropic API) have zero send capability. Send scripts (which transmit) have zero AI step.
 

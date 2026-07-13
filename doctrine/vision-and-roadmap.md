@@ -84,6 +84,8 @@ Inserted between Phase 1 and Phase 1.5 as a named scope. Three deliverables, all
 
 ### Deliverable 1.4.3 — Attachment Screening Pipeline
 
+> **Amendment 2026-07-12 (per-intake-surface rescope).** The §34 pipeline is SATISFIED for the **portal photo class** — `safety_reports/photo_screen.py` (PRs #271/#272) screens every Safety-Portal photo (magic → Pillow verify / decompression-bomb cap / metadata-destroying re-encode → ClamAV-on-raw) before any render or Box upload. The **arbitrary-file** attachment pipeline (PDF/Office/executables over inbound *email*) has **no live surface until Email Triage** — the email intake poller was retired 2026-06-05 — so it is **Email-Triage's definition-of-done and does NOT gate the Aug-7 cutover.** Layers 1-3 for email attachments stay scheduled at Email Triage; they are not an Aug-7 precondition.
+
 - Implement Layers 1-3 per Op Stds v11 §34: static signatures + format-aware structural inspection + ClamAV via pyclamd.
 
 - EICAR test fixtures verify pipeline health.
