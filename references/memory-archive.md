@@ -3730,3 +3730,40 @@ convention) — this session's own uncommitted `docs/tech_debt.md` edits survive
 overlap). Nothing landed past `fbd77a0` as of this archive entry's own close.
 
 Numbered `§G63` from the fetched `origin/main` copy of `memory-archive.md` (highest existing was `§G62`).
+
+## §G64 — 2026-07-12→13 Operational Standards **v21**: quality-discipline elevation + reconstruction of the lost v10 sections (blueprint #66 + exec #551/#553/#555)
+
+The follow-up to the §G63 doc-reconciliation. The operator answered four scope decisions, then directed an
+**operational-standards elevation** ("update our operational standards … so future sessions don't lie or
+hallucinate and actually validate the work") and "commit and merge everything." Session log:
+`session-logs/2026-07-12_doctrine-elevation-v21.md`.
+
+### §G64.1 — The lost-doctrine discovery
+`# §§4-22 — Carry Forward From v10` and `# §25-§30 — Carry Forward From v10` were **stubs from the very first
+commit** ("Initial migration from .docx corpus"); the full bodies were **never in git** (the .docx brought
+only the deltas + the two pointers) and the operator does not have the .docx → **genuinely unrecoverable**.
+Reconstructed the 25 sections from surviving execution-layer paraphrases + `§N` code citations (6-agent
+workflow), each marked `> *Reconstructed…*`. **§4 was mislabeled** "reviewer chain" (dup §15) since v11 — 6+
+code citations (`seed_its_active_jobs.py "§4 — Address from live data ONLY"`, tech_debt, session logs,
+info-gap, this archive) resolve §4 as **Data Fidelity / No-Invented-Field-Data**; reviewer chain = §15.
+
+### §G64.2 — What landed (Op Stds v20 → v21, blueprint #66, `1e24574`)
+NEW **§55 — Verification & Truthful-Reporting Discipline** (55.1 verify-before-asserting / 55.2 prove-the-
+control-bites / 55.3 four-part landing verify / 55.4 faithful reporting), elevating `HOUSE_REFLEXES` to
+canonical doctrine. §§4-22 + §25-30 reconstructed (§4 relabeled). Riders §31/§32/§36. Companions: FM
+Invariant 1 "customer-facing"→"external recipient"; Vision §1.4.3 (email screening = Email-Triage DoD, not an
+Aug-7 gate); **Handover → v10** (Check C = 12 jobs, Friday-catch-up closed via Check I, 7-workstream roster).
+
+### §G64.3 — Operator decisions Q1-Q4
+Q1 SC-S4 subcontract SEND = **best-effort Aug-7 target, NOT a blocker** (#551). Q2 amend all three companions.
+Q3 reconstruct (don't restore "verbatim v10"). Q4 **`po-send` stays launchd-UNLOADED** at cutover (VC-02
+`DARK_UNLOADED_LABELS`; docs 15→14 loaded) (#551).
+
+### §G64.4 — Cross-repo sync (exec #553/#555) + the §55-in-practice note
+`#553` synced `doctrine_manifest.yaml` (op_stds 20→21, max_section 54→55, handover 9→10) + CLAUDE.md/README/
+agent version refs → v21 so M1/M7 drift stays green. `#555` reconciled the README to as-built (all 8 packages
++ 15 daemons — a gap the reconciliation missed; caught by the operator asking "is the README updated?" →
+verified-not-assumed, §55.1 in practice). The 105→155 KB doctrine rewrite itself ran through an assert-heavy
+dry-run-verified transformer + the `check_doctrine_drift` oracle — §55.2, not "should be fine."
+
+Numbered `§G64` (highest existing was `§G63`). All PRs `gh pr view`-verified MERGED four-part clean.
