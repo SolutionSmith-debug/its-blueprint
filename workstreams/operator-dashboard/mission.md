@@ -22,8 +22,10 @@ Give the operator **one screen** of ITS runtime health — and a **tightly-gated
 - **Tier 2 — PIN-gated ACT surface (D1-2 PR #519, D1-3 PR #523).** Three privileged routes over a **fixed `(Setting, Workstream)` registry**:
   - **Class A** — `POST /act/config`: plain-PIN `ITS_Config` editor over the registry (per-key typed validators; non-editable rows refused: `external_send_gate`, `system.state`, `config_actuator`, `*.poll_interval_seconds`).
   - **Class B** — `POST /act/config/elevated`: **elevated-confirm** ceremony (re-enter PIN **and** type the exact target name) for identity / trust / send-poller-activation edits.
-  - **Class C** — `POST /act/secret/rotate`: **write-only** secret rotation, registry-bound (`registry.SECRETS`) — never reads a secret back, never logs a value; Box refresh token is guided-only.
+  - **Class C** — `POST /act/secret/rotate` (+ `POST /act/pin/change`, the operator-PIN change): **write-only** credential rotation, registry-bound (`registry.SECRETS`) — never reads a secret back, never logs a value; Box refresh token is guided-only; the operator-PIN change requires the CURRENT PIN + the new PIN entered twice, and a LOST PIN recovers only from the terminal.
   Every applied edit + escalation writes a `config_audit` row to `ITS_Errors`.
+
+**Class C is Developer-Operator-only** (§44 *Developer-Operator credential self-service* rider, 2026-07-14): the "Tier 2" heading above names the app's ACT *layer*, not the §44 maintenance role — Class-A pause/tune is §44-Tier-2-eligible, but Class-C credential rotation is scoped to the **Developer-Operator** (gated by proof of the current credential; a Successor-Operator does not hold or rotate secrets). Later routes (D1-3b interval edit, Block-3 daemon control / breaker clear) are Class-B; see the exec runbook for the full route set.
 
 ## 3. Auth posture (as-built)
 
