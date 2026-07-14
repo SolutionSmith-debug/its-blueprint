@@ -3920,3 +3920,126 @@ this session's own tip (`629e0b8b`) — **PR #591** (`9dca3b0`, "seed the 11 rem
 5 interval + 6 generate keys"), an unrelated config-migration chore from a separate concurrent session. Not
 audited by this entry; noted here only so a future session doesn't mistake `629e0b8b` for the current
 `origin/main` tip. Numbered `§G66` (highest existing on the fetched `origin/main` was `§G65`).
+
+## §G67 — 2026-07-14 WS2 dashboard session 3 (back-nav + config seed + clear-error-log verb) + live error-chase, five findings not yet actioned
+
+### §G67.1 — Three PRs merged, four-part clean (tip main-branch CI `36be5048` = SUCCESS)
+
+**#587 (`53b2d573`) — back-nav banner-extension + rename.** Drill-down (`/view/{panel_id}`) and the config
+editor had only a small 13px text link back to `/` — easy to miss, and there's no browser back button in the
+standalone Dock-app window (#581). Replaced with the operator's canonical back/home control: a sticky banner-
+extension strip (`.chrome` wrapper + `.subnav`) mirroring the Safety Portal's `BackHomeNav`, themed to the
+dashboard's British-Racing-Green + gold field, reading "← Back to dashboard." The read-only status grid
+itself carries no strip. Also renamed the heartbeats panel title "Daemon liveness (local)" → "Daemon status
+(local)." Cosmetic/UI only — no capability, gate, or send-path change; ships DARK unchanged.
+
+**#591 (`9dca3b03`) — seeded the 11 remaining un-seeded `ITS_Config` rows.** Found in a 2026-07-14 audit (76
+present vs 86 should-exist): 5 launchd `*.poll_interval_seconds` rows (`weekly_send`/`portal_poll`/
+`compile_now_poll`/`progress_send`/`fieldops_sync`) and 6 weekly-compile `REQUIRED_CONFIG` keys
+(`evergreen_contact_name` + `weekly_generate.{job_timeout_seconds, merge_memory_ceiling_bytes}` under each of
+`safety_reports`/`progress_reports`). Seeded at the already-live/already-installed defaults, so **behaviorally
+inert** — no gate is among the 11, this only silences low-volume `config_row_missing` WARNs and un-blocks the
+dashboard's edit-interval verb (which refuses a daemon with no row at all). Live-verified idempotent (11/11
+create, re-run 11/11 skip), sheet 76→87. **This is the audit closing the gap §G66.5 flagged** — the prior
+maintenance pass found `origin/main` had advanced one commit past its own tip via this same PR and explicitly
+declined to audit it ("not audited by this entry"); this entry is that audit. Confirmed unrelated to the
+debt-zero/security-scrub session (a separate concurrent thread) and to this session's own dashboard work — a
+third, independent thread landing the same day.
+
+**#594 (`36be5048`) — dashboard Class-B clear-error-log verb.** The operator-triggered, no-age-floor
+complement to watchdog Check O's automatic row-cap rotation — the on-demand storm-clear the 2026-07-13
+`ITS_Errors` incident wanted (the sheet was still ~95% stale `config_row_missing` residue from that
+firehose). New `shared/errors_rotation.py` extracts Check O's terminality predicate
+(`errors_row_is_terminal`/`row_age_date`) as the single source of truth — `scripts/watchdog.py` now delegates
+to it via thin aliases, closing a would-be drift between the watchdog's auto-rotation and the dashboard's
+manual verb (HOUSE_REFLEXES §1). `operator_dashboard/act/errors_ops.clear_error_log` deletes **terminal rows
+only** (every INFO/WARN/ERROR + already-resolved CRITICAL); an **open CRITICAL is never deleted** (Check B's
+"am I on fire" surface) — snapshot-then-delete so the single closing audit row (`errors_log_cleared`) is
+written last and can never be in its own delete set. Guards: 200-row batches, 4,600/run cap, every Smartsheet
+call fenced (breaker-open → error outcome, never a raise). `POST /act/errors/clear` is elevated (re-PIN +
+typed `clear-error-log` confirm), optional `older_than_days`. Ships DARK (fail-closed until
+`ITS_OPERATOR_PIN`). 12 new tests prove-the-control-bites (an injected open CRITICAL survives every clear;
+audit-trail preserved; older-than filter; per-run cap; fail-closed route touches no Smartsheet; watchdog
+reuses the shared predicate via an identity assert). Live dry-run smoke on the real (unclean) `ITS_Errors`
+(6,249 rows, zero deletes performed by the smoke itself) confirmed the math before the real wipe.
+
+### §G67.2 — The forensic wipe (operator-ratified, applied via the new verb, not a commit)
+
+Applying `clear_error_log` live (no age floor) took `ITS_Errors` **6,249 → 217** — 215 open CRITICALs (never
+touched, by construction) + 2 `errors_log_cleared` audit rows (this run's own record + one from a prior dry
+run). This is the real remediation of the sheet the 2026-07-13 incident (§G65.1) had already drained once
+(20,000 → 6,185) but which had re-filled with more of the same storm residue in the interim. The 215 open
+CRITICALs are **not yet individually triaged** — see §G67.3 finding 5 below.
+
+### §G67.3 — Five live error-chase findings, none actioned this session (tech_debt.md DASH-5..10)
+
+Chasing the remaining ~6,000 rows (pre-wipe) and the 215 post-wipe open CRITICALs surfaced:
+
+1. **Both out-of-band CRITICAL-alert legs are down.** `ITS_RESEND_API_KEY` is present in Keychain but
+   **invalid** (401 on send); `ITS_SENTRY_DSN` is present but **empty** (`BadDsn`). `shared/error_log.py`'s
+   triple-fire is therefore local-`ITS_Errors`-record-only right now — a real CRITICAL is still recorded (the
+   forensic leg holds) but pages nobody via Resend and lands nowhere in Sentry. Secrets/credentials are a
+   FIXED §44 high-capability class — flagged for Seth's rotation, not touched. **HIGH priority** — this is the
+   watchdog's only proven-live alert path today being the external UptimeRobot dead-man's switch, not the
+   in-process triple-fire.
+2. **A Smartsheet access-token flap invalidated the fleet 17:41–21:06 UTC 2026-07-14**, self-recovered, valid
+   now at session close. Root cause of the flap itself not chased further (self-healed before it mattered);
+   noted as context for why several of the ~6,000 pre-wipe rows clustered in that window.
+3. **The three named error classes chased (subcontract `bearer_rejected`, `config_actuator`, a send-lane
+   error) all resolved benign.** The subcontract 401 was a **gate-flipped-before-Worker-secret-bound race** —
+   a daemon's `ITS_Config` polling gate was flipped `True` before its matching Cloudflare Worker
+   secret/route was actually deployed, producing a benign-but-noisy bearer-rejected storm on every cycle
+   until the deploy caught up. **Activation lesson recorded in tech_debt.md DASH-hint and HOUSE_REFLEXES-
+   adjacent:** flip a daemon's polling gate only *after* its matching Worker secret is live, never before.
+   The `config_actuator`-attributed row was likewise benign but took a source read to conclude (see finding
+   4) rather than being legible from the `ITS_Errors` row alone.
+4. **`config_actuator.py`'s dozen-plus broad `except Exception as exc:  # noqa: BLE001` sites** are each
+   individually justified ("any actuation failure is terminal+alerted," "never wedge the cycle") but make
+   root-causing a specific incident slower than necessary — a future pass giving each site a more specific
+   `error_code`/message would make the *next* config_actuator incident self-diagnosing from the `ITS_Errors`
+   row alone, without a source read. Tracked `docs/tech_debt.md` DASH-6, low urgency (not a correctness bug).
+5. **`po_send`/`po_send_poll` — config-ahead-of-deploy discrepancy, Send-Gate-adjacent, Seth-owned.** The
+   chase found a "`po_send_poll` (no marker)" signal (the daemon has never actually run) while
+   `po_materials.po_send.polling_enabled` reads live as `True` — diverging from the `false` value
+   `scripts/migrations/seed_po_materials_config.py` seeds and from the pre-existing `docs/tech_debt.md` CO-1
+   description of the current state. Independently confirmed via `launchctl list` +
+   `~/Library/LaunchAgents/`: no `org.solutionsmith.its.po-send*` plist is installed or loaded, only the
+   template exists on disk at `scripts/launchd/org.solutionsmith.its.po-send.plist` — consistent with the
+   intentional `VC-02 DARK_UNLOADED_LABELS` cutover posture (`po-send` stays unloaded), but if the config
+   gate has genuinely drifted `True` while nothing runs it, that's a live config-vs-reality mismatch worth an
+   explicit Seth reconciliation (re-flip to `false` to match the dark posture, or install+load the plist if
+   PO send is now intentionally being activated). Not actioned — External Send Gate is a FIXED §44
+   high-capability class. Tracked `docs/tech_debt.md` DASH-7.
+
+Two forward-looking, not-yet-built items also recorded in `docs/tech_debt.md` this session: **DASH-8** — the
+dashboard has no "mark this CRITICAL resolved" verb (only `clear_error_log`'s terminal-only delete exists;
+resolving an open CRITICAL still needs a direct Smartsheet edit); **DASH-9** — the 215 open-CRITICAL backlog
+left by the wipe needs an operator (or future DASH-8) triage pass so watchdog Check B isn't reading "215
+things on fire" as a silently-normalized baseline forever.
+
+### §G67.4 — Confirmed doc-drift (already tracked, re-verified live, not fixed here)
+
+CLAUDE.md's `operator_dashboard/` "What's stubbed vs. real" row still reads "No launchd plist yet (D1-3b)" —
+independently re-confirmed stale this session: `launchctl list` shows `org.solutionsmith.its.dashboard`
+genuinely loaded and running, and the plist is installed from `scripts/launchd/org.solutionsmith.its.
+dashboard.plist`. This is the **already-tracked** `docs/tech_debt.md` WS2-2 entry (parked 2026-07-13,
+"CLAUDE.md was a high-contention shared file the sibling session was also editing... fold into the next
+doc-reconciliation pass") — not a new finding, just re-verified true and left un-touched for the same reason
+it was originally parked (a doc-reconciliation-scoped fix, not a mid-session CLAUDE.md edit).
+
+### §G67.5 — Decision captured, not built: dashboard native-app repackaging
+
+Operator directed **Option A** for a future session: repackage the operator dashboard as a native macOS
+`.app` via `pywebview` + `py2app`, keeping the existing Tailscale-only exposure model completely unchanged
+(no new network surface — purely a nicer launch/window shell than the current browser-tab + web-app-manifest
+Dock shortcut from #581). Not scoped or built this session; recorded so it isn't re-litigated. Tracked
+`docs/tech_debt.md` DASH-10.
+
+### §G67.6 — Parallel session avoided, concurrent-session note
+
+A separate, parallel bug-fix session owned branch `fix/sc-cfg-2-max-address` (subcontracts Worker:
+`constants.ts`/`index.ts`/`subcontract.ts`/`po.ts`/`fieldops_job_write.ts`) at the same time as this session —
+those files were deliberately not touched here. This is the third independent same-day thread (alongside the
+debt-zero/security-scrub session of §G66 and the #591 config-seed thread audited in §G67.1) — three sessions
+landed to `origin/main` on 2026-07-14 without collision. Numbered `§G67` (highest existing on the fetched
+`origin/main` was `§G66`).
