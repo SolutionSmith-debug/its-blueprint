@@ -11,6 +11,8 @@ tags: [push-vs-record, picklist-hardening, attachment-screening, polling-daemon,
 
 **ITS Operational Standards v21**
 
+*v21.x rider (2026-07-14, operator-ratified): §44 — **Developer-Operator credential self-service (current-credential-gated)**, a bounded exception to the secrets/auth Tier-2 prohibition. The operator-dashboard Class-C surface (secret rotation + operator-PIN change) is **Developer-Operator-only**, gated by proof of the current credential; initial provisioning + lost-credential recovery stay terminal-only, and the External Send Gate + §50 remain outside the carve-out. Version unchanged (v21) — folds at the next consolidation, like the prior v19.x riders.*
+
 2026-07-06 — v20 consolidation: §§52–54 added (narrated-not-enforced + citation integrity; sandbox-masks-production; runtime secret/PII backstop — its#341); §31/§43 hardened; §23/§24 seventh standalone workspace (ITS — Progress Reporting); §51 Material-List one-way + low-volume period-split folded from the v19.x riders
 
 2026-06-29 — §§50–51 added: the privileged code-actuation gate (§50) + ITS-owned structured-SoR write-back (§51) — ratifying two long-carried propose-only candidates
@@ -1060,6 +1062,10 @@ HIGH-capability-class is defined STRUCTURALLY, not by how well something is docu
 - **secrets / auth** (Keychain, tokens, credentials, approver-principal configuration);
 - **doctrine** (any change to a doctrine doc or an invariant);
 - anything **requiring a code change**.
+
+## Developer-Operator credential self-service (current-credential-gated) — a bounded exception (v21.x rider, ratified 2026-07-14)
+
+The "secrets / auth" prohibition above binds the **Successor-Operator** (Tier 2) — a trained operator who does **not** hold the system's credentials. It does **not** forbid the **Developer-Operator**, who holds them, from *rotating a credential he already possesses* through the PIN-gated operator dashboard, **provided the action is gated by proof of the current credential**. The dashboard's **Class-C** surface is such a capability: operator-secret rotation (`operator_dashboard/act/secret_rotate.py`) and operator-PIN change (`operator_dashboard/act/pin_change.py`) each require the elevated ceremony — re-entry of the **current** operator PIN plus a typed confirmation — so the write can only be exercised by a party who **already possesses the gate credential**, i.e. the Developer-Operator. This is categorically distinct from (a) a Successor-Operator (who does not hold the credentials) gaining secret-write power, and (b) unauthenticated secret exposure or rotation; it is **Developer-Operator self-service, not a Tier-2 action** — the dashboard's Class-C surface is scoped **Developer-Operator-only** (its Class-A pause/tune actions remain Tier-2-eligible). Two boundaries preserve the root of trust and are **not** in the carve-out: **(1)** *initial provisioning* and *lost-credential recovery* stay **terminal-only** (the macOS Keychain / local-machine access is the anchor — a self-rotation can neither bootstrap nor recover a credential the actor does not already hold); **(2)** the **External Send Gate** (FM Invariant 1) and **privileged code-actuation** (§50) remain outside this exception — the dashboard never transmits and never deploys. Every such rotation is audit-trailed (§3.1). The exception is deliberately narrow: it authorizes *current-credential-gated self-rotation of an operator-held secret by its holder*, nothing more.
 
 ## The escalation boundary (the "both" rule)
 
