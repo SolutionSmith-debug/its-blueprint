@@ -3824,3 +3824,99 @@ The combined **live smoke** (B attachment pool→screen→Box→PO_Log incl. mal
 datalist autofill) is the open post-deploy verification. Two merge-conflict resolutions (A→B, B→C) both keep-both;
 the B/A `po_poll.py` conflict had a tangled git-mis-anchored shared tail that would have left an `error_log` call
 unterminated — flagged + resolved correctly. Numbered `§G65` (highest existing was `§G64`).
+
+## §G66 — 2026-07-14 Debt-Zero + Security-Scrub autonomous session — 8 PRs, two verify-first corrections, four items re-parked
+
+### §G66.1 — 8 PRs merged, four-part clean (tip main-branch CI `629e0b8b` = SUCCESS)
+
+**#584 (`8d11d10`) — Block A security scrub.** Removed every `@evergreenrenewables.com` production identity
+from guard-scoped code (`.py`/`.ts`/`.tsx`): 25 substitutions across 10 files — personal addresses (tealap@,
+benf@, teala@) removed entirely, role addresses (e.g. a generic safety/procurement contact) rewritten to
+`@example.com`; seed-data comments reworded to stop naming real people/domains. Added a new
+`.gitleaks-identity.toml` config + a **second** gitleaks CI step (`gitleaks dir`, working-tree scan) alongside
+the pre-existing full-history `gitleaks git .` pass — see §G66.2 for why these must stay two separate scan
+modes. Deliberately left untouched: `purchaser.json` (real, legitimate business config, not a leak), docs, and
+the bare-domain reference at `approval_verification.py:40`. Prove-it-bites verified (synthetic real-domain
+string injected, confirmed the new `dir` scan catches it, reverted). **#585 (`45fe4df`) — CO-1:**
+`po_send_poll.DEFAULT_POLLING_ENABLED` True→False — a missing `ITS_Config` row now fails safe (daemon does
+NOT send) instead of fail-open (daemon sends). **#586 (`7855893`) — C5:** `anomaly_logger`'s
+`^system_`/`^role_`/`^ignore_` prefix globs anchored to specific control-name strings, ending a recurring FP
+class where any field merely starting with one of those prefixes tripped a false anomaly flag. **#588
+(`ba87b39`) — C3/D2-3:** `docs_pdf --upload` dark-gated Box publish leg, mock-only (no live Box call exercised
+this session). **#589 (`4b9950f`) — item-7:** portal tab title + inline-SVG favicon (Evergreen ITS Portal
+branding, cosmetic). **#590 (`de83852`) — SC-CFG-2:** hoisted the Worker's hardcoded `512` into a shared
+`constants.ts` `MAX_ADDRESS` — `portal-worker-security-reviewer` CLEAN. **#592 (`3c20b55`) — Block D:** a
+123-entry `docs/tech_debt.md` debt-zero triage — every open entry given a disposition (12 moved to
+tracked-active work, 110 re-parked with a reason), reorganized into an owner-bucketed index. **#593
+(`629e0b8b`) — session log:** `docs/session_logs/2026-07-14_debt-zero-and-security-scrub.md`.
+
+### §G66.2 — Two verify-first corrections (overturn prior claims — record, don't repeat the old version)
+
+**1. The `gitleaks git .` full-history scan was ALREADY CLEAN on pinned 8.30.1 — there was nothing to
+fingerprint-pin.** Before building the Block-A domain guard, the working assumption was that a fingerprint
+allowlist entry might be needed to pin known-clean matches (the two `§54` redaction-test fixtures reference
+example secret-shaped strings). Verified live: gitleaks' own default example-value allowlist already excludes
+both fixtures from the full-history pass — zero findings, no pin needed. **The reusable technique this session
+converted into a permanent rule:** a `@domain` guard for a domain that is PRESENT IN GIT HISTORY (as
+`@evergreenrenewables.com` is, pre-scrub) must run as a **working-tree-only** scan (`gitleaks dir`), never
+folded into the **full-history** (`gitleaks git .`) pass — history is immutable, so a history-scanning domain
+guard would red-line CI forever on commits that can no longer be edited. The two gitleaks CI steps are
+intentionally different scan modes catching intentionally different things: `git .` = secrets ever committed
+(retroactive, allowlist-aware); `dir` (new, PR #584) = production-identity strings in the CURRENT tree
+(prospective, `.gitleaks-identity.toml`-scoped).
+
+**2. `smartsheet-python-sdk` 4.2.0 RESTORES `smartsheet.exceptions` — the exec `tech_debt.md` "release
+>3.9.0 dropped it" entry is stale/version-specific, not currently true.** All three names
+`shared/smartsheet_client.py` imports (`ApiError`, `HttpError`, `SmartsheetException`) are present on 4.2.0
+(the currently pinned/installable release), and the full MOCKED `pytest` suite passes unmodified against it.
+The claim may have been accurate for some intermediate release the tech-debt entry was written against, but
+was never re-verified against the current latest before being carried forward. **Not yet fully closed:** an
+operator-run `pytest -m integration` pass on 4.2.0 is the remaining step before loosening the pin (currently
+`<3.10.0`) toward something like `<5.0.0` — mocked-green is necessary but not sufficient per the SDK-vs-Live
+discipline (Op Stds §30). **Rule for future sessions:** a pinned-dependency tech-debt entry citing a specific
+SDK-version regression needs re-verification against the CURRENT latest release before being repeated or acted
+on — intermediate-version behavior doesn't necessarily hold at the version actually available today.
+
+### §G66.3 — Four Block-C items re-parked with findings, deliberately NOT shipped
+
+- **C2 (`scheduled_send` fail-closed on a missing/malformed config value)** — the External Send Gate is one of
+  the four FIXED high-capability-class categories (Op Stds §44 both-rule); C1 (PR #585, same session) got an
+  explicit "nothing else on the send path needs the same treatment" co-resolution from the operator, but C2
+  itself did not receive that co-resolution — re-parked, escalates to Seth rather than actioned on the C1
+  precedent alone.
+- **C4 / item-9 (fail-closed guard-hook when the `.claude` relative symlink dangles)** — investigated and
+  found the premise doesn't apply to the exec repo as scoped: the exec-side hooks are REAL FILES, not the
+  vulnerable relative-symlink shape. DR-D1's actual target is the BLUEPRINT repo's OWN relative-symlink
+  `.claude` hooks. A fail-closed `SessionStart` assertion there has a chicken-and-egg problem (the assertion
+  script can't run if the very symlink it's checking has dangled) plus a real blast-radius risk (bricking CC
+  entirely on a false positive) that needs operator-present validation before shipping — re-parked to Seth.
+  Watchdog Check M already detects the dangling-symlink condition post-hoc today, so this is a hardening
+  gap, not an undetected one.
+- **C6 / §404 (indexed lookup for `hours_log`)** — a premature optimization for the current low-volume access
+  pattern; re-parked to the phase-1.5 performance pass rather than built now (matches the standing "prefer
+  simple-correct over premature optimization for an unverified constraint" reflex).
+- **C7 / §466 (SDK version pin)** — directly downstream of the §G66.2 correction above: mocked-green on 4.2.0
+  is verified, but the pin change itself is held for the operator's live `pytest -m integration` run on 4.2.0,
+  then a one-line pin bump.
+
+### §G66.4 — Operator flags raised, not actioned this session
+
+- **Personnel-directory exposure in exec ops/cutover docs.** `docs/operations/production_repoint_changeset.md`,
+  `docs/operations/cutover_checklist.md`, and `docs/reports/2026-07-09_po_corpus_analysis.md` (all exec-side)
+  carry a full personnel directory — real names (Jacob Stephens, Ben Finkhousen, Tiffany Montastirsky, Teala
+  Paradise) paired with real `@evergreenrenewables.com` emails. Unlike the Block-A guard-scoped code (which is
+  now clean), these are prose ops docs the guard doesn't reach. Flagged for Seth's move-to-blueprint /
+  redact-in-place decision — contingent on whether the exec repo is public (same trigger the original
+  gitleaks-baseline note assumed: "repo stays public").
+- **SC3c-1 (supersede check-then-act race in the shared `po.ts`/`subcontract.ts` money/legal path) surfaced,
+  not landed.** Touches the shared money-and-legal-terms change surface both workstreams depend on — needs a
+  joint re-review (both `ops-stds-enforcer` and `portal-worker-security-reviewer`, given the TS-boundary
+  overlap) plus a live double-submit smoke before it ships, not an autonomous same-session build.
+
+### §G66.5 — Concurrent-session note (this agent's own reflex, applied to itself)
+
+A `git fetch` at the start of THIS maintenance pass found `origin/main` had already advanced one commit past
+this session's own tip (`629e0b8b`) — **PR #591** (`9dca3b0`, "seed the 11 remaining un-seeded ITS_Config rows,
+5 interval + 6 generate keys"), an unrelated config-migration chore from a separate concurrent session. Not
+audited by this entry; noted here only so a future session doesn't mistake `629e0b8b` for the current
+`origin/main` tip. Numbered `§G66` (highest existing on the fetched `origin/main` was `§G65`).
