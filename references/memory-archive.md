@@ -3767,3 +3767,60 @@ verified-not-assumed, §55.1 in practice). The 105→155 KB doctrine rewrite its
 dry-run-verified transformer + the `check_doctrine_drift` oracle — §55.2, not "should be fine."
 
 Numbered `§G64` (highest existing was `§G63`). All PRs `gh pr view`-verified MERGED four-part clean.
+
+## §G65 — 2026-07-13 (pt 2): ITS_Errors row-cap incident + Features A/B/C (per-job tracking · PO attachments · delivery-contact autofill)
+
+### §G65.1 — The incident (mis-attributed, root-caused, permanently fixed)
+The #560/#561 punch-list item "**ITS_Review_Queue at ~20k cap** blocking review recording" was **mis-attributed**:
+`ITS_Review_Queue` is healthy (~278 rows). The sheet that hit Smartsheet's **20,000-row HARD cap** (errorCode
+5634, ~11:15 UTC) was **`ITS_Errors`** — so every error/CRITICAL record was being dropped system-wide and Check B
+(open-CRITICALs) was going blind. Two compounding causes: **(a)** 5 unseeded `ITS_Config` rows made
+compile_now_poll / portal_poll / progress_send_poll WARN a missing-declared-key row **every cycle** (~1,400–4,500
+rows/day — the exact "seed the dark gate row" reflex miss); **(b)** watchdog **Check O could never rotate** because
+its 90-day retention exceeds the ~8-week system age → nothing was ever age-eligible → it fired CRITICAL two days
+running, powerless. **Fix chain (#562, `ec25f94`, four-part clean):** seed the 5 rows at live defaults (storm
+stopped, zero new WARNs) → operator-approved manual drain of 13,815 terminal rows >48h old (**20,000 → 6,185**,
+213 open CRITICALs + 48h forensics retained) → commit `scripts/migrations/seed_daemon_gate_config.py` + VC-03
+enrollment of 3 keys → **Check O storm-mode fallback**: over the rotate mark with nothing 90d-eligible, delete
+oldest terminal rows older than a NEW `SHEET_ROW_STORM_FLOOR_DAYS=2` floor (never open CRITICALs / undated), WARN +
+never-silent record; CRITICAL only if even the floor is empty.
+
+### §G65.2 — Two live-found latent bugs (mocks-passed-live-failed, §55.2)
+**(1) Delete-batch URL-length overflow.** `SHEET_ROW_ROTATION_DELETE_BATCH = 450` **fails live** with HTTP 400
+(the Smartsheet SDK passes row IDs in the URL query string; 450 sixteen-digit IDs overflow the URL length cap).
+Check O had NEVER deleted anything (nothing was ever age-eligible), so the latent bug shipped un-exercised.
+Corrected to **200** (live-verified draining 13,815 rows, zero 400s), `MAX_BATCHES_PER_RUN` 10→23 to hold the
+~4,500/run budget; the **false `"Smartsheet caps at 450"` docstring** in `smartsheet_client.delete_rows` corrected
+(multi-surface fan-out — the disproven claim lived on the wrapper too). **(2) job_sheet create→read 404/1006.**
+Feature A's live smoke hit a Smartsheet eventual-consistency window — `add_rows` ~2s after
+`create_sheet_in_folder_from_template` 404'd (errorCode 1006), succeeded ~60s later → a brand-new job's FIRST
+filing would silently lose its per-job row. Fix: a bounded post-create **readiness probe** (5×~2s, create-path
+only, non-404 re-raises, exhaustion returns the id + WARN — never hangs the daemon).
+
+### §G65.3 — Features A/B/C (all merged same-day, four-part clean, ship DARK)
+**A (#563, `09ab217`)** per-job Smartsheet folder+sheet for subcontracts + POs: `shared/job_sheet.py`
+(`ensure_job_sheet` — dynamic find-or-create per-job folder + structure-cloned tracking sheet, **§51 A1
+margin-check on create**, readiness probe, race-safe both levels); `FOLDER_SC_JOBS`/`FOLDER_PO_JOBS` (created live);
+parameterized `{sub,po}_log.append_filed_row(..., sheet_id=)`; **best-effort fenced** per-job mirror in both polls
+(`*_perjob_sheet_failed` WARN, **NO auto-retry — a miss is permanent**, flat Log + Box stay SoR); §43 Symptom-13
+both runbooks; §30 integration test. Live smoke created SC sheet `5718146009747332` + PO sheet `2590963141660548`
+under job "Portal create test". **B (#564, `7e96736`)** first §34 **DOC-attachment** screener
+(`po_materials/po_attach_screen.py`) + Worker `po_attachments.ts` + **migration 0053** (D1 pool + chunks,
+`po-att:v1` HMAC, draft-time bounds-gate, cascade-delete on delete-draft + prune). Adversarial 3-lens review found
+**1 BLOCKER** — same-named attachments collided into one Box version + deleted the first Smartsheet attachment
+(silent data loss); fixed by keying the filed name on the D1 attachment id — plus W5 parent-status fail-closed
+guard, malicious one-shot flag, bidi-filename rejection. Operator scoped screening depth as **limited-blast-radius**
+→ truthful documentation of the PDF/OpenXML best-effort posture (`tech_debt` ATT-5 ObjStm blind spot / ATT-6 DDE),
+not deep parsing. ClamAV gate `po_materials.po_attach_screen.clamav_enabled` seeded false. **C (#566, `2e141ca`)**
+config-editable delivery-contact list + builder `<datalist>` autofill — **scope corrected by brief-validator**: the
+`delivery_contact_*` fields + render + job-stakeholder ship-to autofill ALREADY existed (migration 0043, PR #504);
+C added ONLY the `delivery_contacts` §50 config artifact + `_apply_delivery_contacts_edit` + editor + datalist
+(case-INSENSITIVE match, aligned to the server dedupe). No migration/daemon/ITS_Config-row. Both reviews CLEAN.
+
+### §G65.4 — Open post-session item
+The batched **migrate (0053) + `npm run deploy`** (carries #554–#560 + B + C) is being run **by the operator**;
+everything ships **DARK** (po_poll/subcontract_poll per-job mirror + attachment passes `polling_enabled=false`).
+The combined **live smoke** (B attachment pool→screen→Box→PO_Log incl. malicious-refused; C config-edit→served→
+datalist autofill) is the open post-deploy verification. Two merge-conflict resolutions (A→B, B→C) both keep-both;
+the B/A `po_poll.py` conflict had a tangled git-mis-anchored shared tail that would have left an `error_log` call
+unterminated — flagged + resolved correctly. Numbered `§G65` (highest existing was `§G64`).
