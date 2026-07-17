@@ -4043,3 +4043,156 @@ those files were deliberately not touched here. This is the third independent sa
 debt-zero/security-scrub session of §G66 and the #591 config-seed thread audited in §G67.1) — three sessions
 landed to `origin/main` on 2026-07-14 without collision. Numbered `§G67` (highest existing on the fetched
 `origin/main` was `§G66`).
+
+## §G68 — 2026-07-14→17: alert-hygiene + dashboard resolve verb + SC-S4 subcontract send lane + documentation-corpus program + error-flood correction
+
+Ten exec PRs (#596–#605, all four-part verified, exec HEAD now `d9a87e5`) plus two operational (no-git-trace)
+events spanning 2026-07-14 evening through 2026-07-17: a dashboard alert-hygiene fix, a new Class-B
+dashboard verb + backlog triage, the subcontracts send lane, a five-tranche documentation-corpus +
+troubleshooting-tree program, and — the correction this section exists to record — a 2026-07-15 diagnosis
+that **retracted** two "live" findings §G67 had flagged as real (DASH-5/DASH-7). Numbered `§G68` (highest
+existing on the fetched `origin/main` was `§G67`).
+
+### §G68.1 — #596/#597: config_actuator alert-hygiene + dashboard mark-errors-resolved verb + backlog triage
+
+**#596 (`a4a9985`, 2026-07-14 22:39:55Z).** `po_materials/config_actuator.py`'s `_read_str_setting` caught
+only `(SmartsheetNotFoundError, SmartsheetCircuitOpenError)`; any other `SmartsheetError` (a transient
+timeout / `SmartsheetAuthError` during the 2026-07-14 fleet-wide token flap already logged in §G67) escaped
+`_polling_enabled` — the first per-cycle caller, upstream of `@its_error_log` — and paged as an "unhandled"
+CRITICAL every 120s cycle. Widened the except to a fail-soft WARN + fallback, mirroring
+`required_config.resolve_and_log`'s transient branch. Cosmetic alert-hygiene, no happy-path behavior change,
+prove-it-bites tested.
+
+**#597 (`94edcc9`, 2026-07-14 22:55:18Z) — the dashboard's "solve it" verb, paired with #594's "sweep it."**
+New Class-B `mark_errors_resolved` (`operator_dashboard/act/errors_ops.py` + `_audit_errors_resolved`) stamps
+`Resolved At` on **open CRITICAL** `ITS_Errors` rows matching a **required** Script and/or Error-code filter
+— an unfiltered mass-resolve is refused (it would empty watchdog Check B's "am I on fire" surface) — making
+them terminal (the shared `errors_rotation` predicate) so the existing `clear_error_log` (#594) can then
+sweep them. Idempotent (never re-stamps an already-terminal row); elevated-confirm phrase "mark-resolved";
+audit `error_code=errors_resolved_marked`, non-paging. Wired in one PR: the route, the `config.html` form,
+the mutation-route registry test (seven→nine — the comment claiming seven was already stale), and CLAUDE.md
+(which also fixed the §G67.4-tracked stale "No launchd plist yet (D1-3b)" line — the dashboard row now reads
+"launchd-managed"; a residual second copy of that same stale claim survives at `scripts/verify_cutover.py:73`,
+untouched by #597 — a small multi-surface-fan-out miss, `docs/tech_debt.md` WS2-2).
+
+**Backlog triage, 2026-07-16/17 (operational, no PR).** Using the new verb, the operator marked 83 of the
+215 open-CRITICAL rows §G67.3/DASH-9 left post-wipe as resolved — 50 `intake_poll` (the retired daemon) + 33
+smoke/test rows — bringing the genuine open-CRITICAL backlog to **132**, still awaiting individual triage
+(`docs/tech_debt.md` DASH-9, updated in place).
+
+### §G68.2 — #599: SC-S4 subcontract send lane (ships dark, PO-mirror), four-part clean
+
+**PR #599 (`fb906b2`, 2026-07-15T14:13:43Z).** The subcontract workstream's send half — the External-Send-Gate
+lane to the subcontractor, mirroring `po_send`. `subcontract_send.py` (a `SendConfig` binding the shared
+`weekly_send` engine: recipient = subcontractor Contact Email from `ITS_Subcontractors` by Sub Key, **EMPTY CC
+by design** — no distribution list — from `procurement@`, reusing PO's mailbox by a 2026-07-15 operator
+decision) + `subcontract_send_poll.py` (15-min poller, F22 against `WORKSPACE_SUBCONTRACTS`, `DEFAULT_
+POLLING_ENABLED=False` fail-safe). **Combined-package decision (2026-07-15, operator):** the subcontractor
+receives **ONE** `Subcontract Package.zip` (body + Exhibit A + Annex C SoV) via a new deterministic
+`subcontract_docx.zip_package` (§47-idempotent — pinned member `date_time`/sorted order/fixed deflate),
+filed by `subcontract_poll` as a 4th Box upload and linked in the review row's "Compiled PDF" (the ledger
+receipt stays the `.docx`). Chosen over per-file multi-attachment specifically to avoid a shared-engine
+multi-attach change. **The only shared-engine touch: `weekly_send._attachment_content_type`** — filename-
+derived (`.pdf`→`application/pdf`, byte-identical for safety/progress/PO; `.zip`→`application/zip`) —
+prove-it-bites in `test_weekly_send` confirmed the three PDF workstreams unaffected. Registries reconciled in
+the one PR: `SEND_SCRIPTS`, a seed migration (4 dark rows, seeded live 2026-07-15), plist + `install.sh`,
+watchdog `TRACKED_JOBS`, `VC-03`, config dictionary + `config_defaults.json` (regen) + manifest sha,
+`daemon_ops` interval registry (9 daemons), CLAUDE.md, §43 `docs/runbooks/subcontract_send.md`, a smoke
+script. `ops-stds-enforcer` review WARN-only (no BLOCK). Live smoke GREEN (8 stages) same day.
+**Known residual, NOT fixed by this PR:** `docs/enablement/subcontracts.md`'s top callout was fixed by the
+next day's docs-corpus Tranche D (#603, §G68.5) but a second, deeper assertion in the same file ("there's no
+send code yet") survived that sweep too — `docs/tech_debt.md`, new entry.
+
+### §G68.3 — Live activation: both PO-send and subcontract-send lanes brought LIVE (2026-07-16/17, operational — no git trace)
+
+The operator flipped both `po_materials.po_send.polling_enabled` and `subcontracts.subcontract_send.
+polling_enabled` to `true` and loaded both plists (`org.solutionsmith.its.po-send`,
+`org.solutionsmith.its.subcontract-send`) — the last of the three preconditions #599 named for subcontract
+go-live ((a) live smoke — done at merge, (b) `procurement@` in the Application Access Policy scope, (c)
+real approvers shared into `ITS — Subcontracts`) plus the analogous PO precondition. Both daemons confirmed
+healthy post-activation: fresh markers/heartbeats, zero errors. **End-to-end verified, not just gate-flipped:**
+a real Graph self-send from `procurement@` succeeded, and the operator independently confirmed the
+Application Access Policy scope via Exchange Online PowerShell `Test-ApplicationAccessPolicy`. This directly
+resolves `docs/tech_debt.md` DASH-7 (§G68.4 below) — the earlier "config-ahead-of-deploy" divergence chased in
+§G67.3 is now moot; `po_send.polling_enabled=true` is the intended live state, not drift. **Doc-currency note
+(not fixed here):** CLAUDE.md's "What's stubbed vs. real" table still frames both lanes by their dark-ships-
+by-default posture and doesn't yet say either is live — `docs/tech_debt.md`, new entry; CLAUDE.md is a
+high-contention shared file out of this maintenance pass's edit scope.
+
+### §G68.4 — 2026-07-15 error-flood diagnosis: DASH-5/DASH-7 retracted (correction, no code changed)
+
+A diagnosis-only session (no commits) decomposed "today's massive error log" into two unrelated phenomena —
+full detail in auto-memory `project_error-flood-diagnosis-2026-07-15.md`:
+
+1. **Storm A (2026-07-15 08:35–09:36Z) — REAL, vendor-side.** A Smartsheet US outage (status.smartsheet.com,
+   major impact, resolved 09:55Z). The circuit breaker behaved textbook (tripped at 5 failures, self-closed
+   after 9 failed probes). Zero business-data loss, but **1,264 of ~1,368 `ITS_Errors` record-writes were
+   permanently lost** (`error_log.py:133` wraps the write in `circuit_breaker.bypass()` with no retry/queue) —
+   `~/its/logs/2026-07-15.log` is the only full record. A total Smartsheet outage by itself paged the operator
+   exactly once, and only coincidentally. Both gaps (record-loss-on-outage, zero-page blind spot) are now open
+   `docs/tech_debt.md` entries, Seth-owned, not fixed this session.
+2. **Storm B (2026-07-14 17:41–22:49Z) — PHANTOM, pytest pollution.** ~13–15 pytest runs during the 07-14 dev
+   session made REAL network calls with `tests/conftest.py`'s stub creds (`test-{service}`) and their
+   `shared.error_log` writes landed in the SAME live dated log as real daemon activity: 2,285 Smartsheet 401s
+   + 27 Resend 401 + 27 Sentry `BadDsn`, all test-generated, against 457 clean live daemon cycles. **This
+   FALSIFIES §G67.3/`docs/tech_debt.md` DASH-5's "both out-of-band alert legs are down" finding** — real
+   CRITICALs alerted successfully both before (07-14 19:59Z) and after (07-15 08:35Z) the window. **Do NOT
+   rotate `ITS_RESEND_API_KEY` / `ITS_SENTRY_DSN` on the retracted finding.** No secret rotation ever actually
+   ran (zero `secret ROTATED` audit lines across 58 logs). The pollution mechanism itself is confirmed
+   active/recurring (re-fired again 2026-07-15 13:41Z) and is now its own open tech-debt item.
+3. **`po_send_poll` was never activated, not down** — resolves `docs/tech_debt.md` DASH-7 (§G67.3): no plist
+   was ever installed, and `ITS_Config` rows genuinely read `polling_enabled='false'` as seeded/documented; all
+   `po_send_poll` log lines in the window were pytest. (§G68.3 above records the subsequent deliberate
+   activation two days later — a different, later, intentional event, not a contradiction of this finding.)
+4. **Host timezone is EDT (UTC-4), not Pacific** — any PDT-based mtime/window math on this host is off by 3h.
+
+Both `docs/tech_debt.md` DASH-5 and DASH-7 are annotated in place (RETRACTED / RESOLVED respectively) rather
+than moved to `tech_debt_closed.md` — they are bullets within a shared dated section, not standalone `##`
+entries, and the file already has a same-pattern precedent (WS2-1's in-place "RESOLVED" note).
+
+### §G68.5 — Documentation-corpus + interactive troubleshooting-tree program, 5 tranches (#598/#600–#605), all four-part clean
+
+Executes the standing operator directive (auto-memory `feedback_documentation-program.md`) that every ITS
+function gets a guide/manual/troubleshooting tree. Extraction-first discipline throughout: every factual
+paragraph carries an invisible `<!-- src: file:line | verified DATE -->` citation (stripped from the
+rendered PDF, auditable in git) — accuracy over volume.
+
+- **Tranche A — Tier-1 references (#598, `618dd36`, 2026-07-15T14:02:31Z; session log #600, `39f9dc0`).**
+  8 docs under `docs/references/` (`system_architecture`, `daemon_reference`, `data_model_reference`,
+  `integration_reference`, `security_trust_model`, `escalation_matrix`, `glossary`, `documentation_index`).
+  Manifest loader gained an optional `audience:` field. Built by a Workflow (6 extract+draft agents →
+  adversarial verify); refutations corrected before merge.
+- **Tranche B — troubleshooting tree (#601, `5e45581`).** `docs/troubleshooting/tree.yaml` — 10 end-to-end
+  workflows (safety report · progress report · field-ops sync · purchase order · subcontract · email intake ·
+  config-change §50 rail · dashboard ops · daemon plane · publish/Box filing), each step carrying
+  `what_happens`/`healthy_signals`/`failure_modes` (symptom · signals · ordered checks/resolutions · class ·
+  runbook · watchdog_check) + `schema.md` + a shared `troubleshooting/` loader package +
+  `scripts/build_troubleshooting_guide.py` (deterministic tree→guide). CI-blocking coverage tests
+  (`tests/test_troubleshooting_tree.py`) are the completion meter: every daemon (17) / watchdog check (20) /
+  HELD state (6) / runbook (37) covered, extracted from LIVE code. `class` enum = `daniel_solo | seth_coresolve`
+  (display role-based).
+- **Tranche C — dashboard tree (#602, `62105c8`).** `operator_dashboard/troubleshoot.py` — read-only, htmx-
+  driven `/troubleshoot` (workflow cards → step-chain → failure modes, `?q=` keyword filter narrowing to
+  matching symptoms/signals) + `/doc/{path}` allowlisted markdown viewer (`docs/runbooks/` ·
+  `docs/enablement/` · `docs/references/` only; path-traversal rejected; `markdown-it` `html=False` escapes
+  raw HTML). Zero mutation routes. Escalation made hard to miss: green "Operator-resolvable" vs gold-bordered
+  "Escalate to Seth" class badges. Fail-soft boot; Playwright-verified.
+- **Tranche D — currency pass (#603, `19b618f`).** Fixed real drift against live HEAD: `daemon_reference.md`
+  16→**17** launchd agents (#599 added `subcontract-send`); `subcontracts.md`'s top-of-doc "sending is not
+  built yet" callout corrected to reflect SC-S4 shipping dark (the residual second stale line deeper in the
+  same file, §G68.2, survived this pass — a fan-out miss). Idempotent `scripts/build_runbook_xrefs.py`
+  inserted reverse tree→runbook cross-link blocks into the 29 referenced runbooks, plus a currency test.
+- **Tranche E — distribution (#604, `972a0a9`; session log #605, `d9a87e5`).** `build_docs_pdfs --upload
+  --dry-run` (prints the exact Box publish plan — gate state, target folder, 22 files INDEX-first with
+  sha8+audience, makes no Box call; the real `--upload` leg now also publishes INDEX first); fail-soft on an
+  unreachable/unset config (`DARK`/`<unset>`). `scripts/migrations/build_docs_index_sheet.py` — idempotent
+  find-or-create builder for `ITS_Documentation_Index`, THE one authorized live Smartsheet write in this
+  program (mock-tested, deferred this session per the Storm-A Smartsheet 401 window — operator-run). New
+  dashboard `/docs` corpus page.
+
+**Manifest now carries 22 docs** (`tests/test_docs_pdf.py::test_committed_manifest_round_trips` pins the key
+set). **Operator punch-list (not this session):** run the index-sheet builder live; Box-publish on the
+production host at cutover (seed `docs_pdf.upload.box_folder_id` + flip `docs_pdf.upload.enabled`); Seth's
+15-min review of `escalation_matrix.md` + `security_trust_model.md` before publishing (they speak with the
+system's authority on who-does-what); dashboard `/troubleshoot`+`/docs` go live on the dashboard's next
+restart (read pages are PIN-free even though the dashboard ships dark-until-PIN overall).
