@@ -4196,3 +4196,127 @@ production host at cutover (seed `docs_pdf.upload.box_folder_id` + flip `docs_pd
 15-min review of `escalation_matrix.md` + `security_trust_model.md` before publishing (they speak with the
 system's authority on who-does-what); dashboard `/troubleshoot`+`/docs` go live on the dashboard's next
 restart (read pages are PIN-free even though the dashboard ships dark-until-PIN overall).
+
+## §G69 — 2026-07-17 (continuation): error-flood diagnosis wrap-up — alert-hygiene fix, dashboard observability fixes, live open-CRITICAL triage 134→9
+
+Closes the loop the §G68.4 diagnosis opened. Two exec PRs (#608/#609, both four-part verified, exec HEAD now
+`b60ab1e`) plus a live triage pass (operational, no git trace). Numbered `§G69` (highest existing on the
+fetched `origin/main` was `§G68`).
+
+### §G69.1 — Root cause: transient Smartsheet-outage fallout, LOW severity, system responded correctly
+
+The operator's standing "~dozen errors/day" complaint was traced to a window of transient Smartsheet
+API failures spanning roughly **2026-07-12→07-16** — HTTP 500/502/503/504, `ReadTimeout`, and circuit-open
+entries scattered across the fleet. **Verdict: LOW severity.** This is NOT a new incident and NOT the
+2026-07-15 Storm A/B pair already diagnosed in §G68.4 (those were a specific 08:35–09:36Z vendor outage plus
+pytest pollution) — it is the broader ambient rate of transient Smartsheet errors any 24/7 polling fleet
+absorbs, which the existing defense-in-depth handled exactly as designed: SDK backoff-retry → 30s timeout →
+circuit breaker (CLOSED→OPEN→HALF_OPEN→CLOSED) → fail-open to cached/default state. Breaker is CLOSED and
+reads are healthy as of this session — no data loss, no missed customer-facing sends, nothing Seth needs to
+act on beyond the two fixes below (which are alert-*hygiene*, not correctness fixes).
+
+**Deliberate non-build:** a heavy-read retry layer on top of the existing stack was considered and explicitly
+rejected — `shared/smartsheet_client.py` already has SDK-level retry, a 30s timeout, and the circuit breaker;
+another retry tier would only hammer an already-degraded backend harder during exactly the window it's
+supposed to protect. This is a "don't harden dormant subsystems" / "prefer simple-correct" call, not a gap.
+
+### §G69.2 — #608 (`24e343a`, 2026-07-17T11:33:27-04:00): `resolve_and_log` per-key WARN flood → one summary WARN per pass
+
+`shared/required_config.resolve_and_log` logged one `config_read_error` WARN **per declared key** on any
+transient/circuit-open/timeout/auth read failure. During a breaker-open window the breaker short-circuits
+every `get_setting` call, so a daemon with N declared `REQUIRED_CONFIG` keys emitted N WARNs **per cycle** —
+across ~7 daemons this was the dominant daily `ITS_Errors` noise source, the exact mechanism underlying the
+"~dozen errors/day" complaint this session diagnosed. Fix: transient failures are now COLLECTED into a
+`transient_failures: list[tuple[str, str]]` during the per-key loop and summarized into **one** WARN at the
+end of the pass ("config read failed for N of M key(s) this cycle — using defaults (fail-open): `<exc
+types>`. Keys: `<comma-joined>`"). The **missing-ROW** WARN (a row that doesn't exist in `ITS_Config` at all —
+genuinely actionable, "go seed this key") is UNCHANGED and stays per-key; only the transient branch is
+summarized. Fail-open behavior is unchanged (every failed key still resolves to its declared default);
+`error_code` stays `config_read_error` so existing rotation/filters/runbooks don't need updating.
+Prove-it-bites: 5-keys-all-failing → exactly ONE WARN (was 5); mixed missing+transient → 1 per-key missing
+WARN + 1 summary; all-clean → zero WARNs. Live-smoked against real Smartsheet. pytest 3526/0, mypy clean
+(393 files), ruff clean.
+
+### §G69.3 — #609 (`b60ab1e`, 2026-07-17T12:42:01-04:00): dashboard Open-CRITICALs panel + daemon `-15` false-error fix
+
+Two dashboard observability gaps surfaced while triaging the flood, both fixed in one PR:
+
+1. **New `OpenCriticalsSource`** (`operator_dashboard/sources/smartsheet_panels.py`) — a read-only panel
+   counting UNRESOLVED CRITICAL `ITS_Errors` rows sheet-wide, grouped by Script/Error with the oldest
+   occurrence surfaced, green when clear. Reuses the same cached `ITS_Errors` read the existing recency panel
+   (`ErrorsRecentSource`, most-recent 25 rows any severity) already makes — zero extra Smartsheet calls — and
+   the CANONICAL `shared.errors_rotation.errors_row_is_terminal` predicate, so "open CRITICAL" on this panel
+   means exactly what the `mark_errors_resolved` verb and watchdog Check O's rotation mean; no drift between
+   what the dashboard shows and what the mark-resolved/clear verbs act on. Before this, the dashboard had no
+   view of the open-CRITICAL working set at all — the backlog (and the effect of resolving it) was invisible
+   even though watchdog Check B tracks it every cycle.
+2. **Daemon panel `-15` false-error** — the panel's health check read `status != "0"` BEFORE checking whether
+   the daemon was actually running. `launchd`'s `KeepAlive` restarts a stopped-OR-crashed process and the
+   exit-status field it reports afterward is the LAST exit, not "did this crash" — `-15` is a graceful SIGTERM
+   (a restart/reboot), not a fault. The dashboard itself (a KeepAlive server) always carries a stale `-15`
+   after any restart of itself, so its own panel entry permanently read ERROR. Fixed: a live pid now reads OK
+   (last-exit shown informationally only); a loaded-but-NOT-running daemon with a non-zero exit still reads
+   ERROR ("exited N"). Generalizes beyond this one instance — see the new info-gap §5 trap (any
+   `launchd`-managed liveness panel needs to check liveness before exit code).
+
+Prove-it-bites: open panel counts only open CRITICALs (resolved + WARN excluded), green when clear; a running
+daemon with `-15` → OK, a stopped daemon with exit 1 → ERROR. Live-smoked against the real `ITS_Errors` sheet
+(showed the 9 open rows the same-session triage below left behind). pytest 3529/0, mypy clean (393 files),
+ruff clean.
+
+### §G69.4 — Live open-CRITICAL triage (operational, no git trace, 2026-07-17): backlog 134→9
+
+Using the #597 `mark_errors_resolved` verb, dry-run→live per `(Script, Error-code)` filter (unfiltered
+mass-resolve remains refused by construction), audit-stamped `its-diagnosis-2026-07-17`: resolved **92
+transient + 33 historical** open-CRITICAL `ITS_Errors` rows. This is a DIFFERENT count from the 2026-07-16/17
+partial pass §G68.1 recorded (83 resolved, 215→132) — the backlog had grown back to 134 by the time this
+session's own diagnosis started (ongoing transient-outage-window CRITICALs accruing between the two passes),
+and this pass takes it from **134→9**.
+
+**The 9 residual rows, individually accounted for, none silently left:**
+- **7× `safety_reports.intake` / `uncaught_exception`** — a REAL, still-open bug: `'tuple' object has no
+  attribute 'value'` on the LEGACY/dormant email-intake code path (the portal-marker branch is the live path
+  per CLAUDE.md; `intake_poll.py` itself was deleted 2026-07-03, but `intake.py`'s email-ingestion stages are
+  still present as dormant code and this exception is firing from within them). NOT fixed this session — left
+  open deliberately, tracked `docs/tech_debt.md`. Trigger: next `safety_reports/intake.py` touch, or a
+  decision on whether the dormant email-ingestion stages should be excised entirely now that the portal is
+  the sole live transport.
+- **2× `scripts.watchdog` / `critical`** — residue from the already-fixed 2026-07-13 row-cap incident (§G65);
+  the underlying cause (Check O storm-mode fallback) shipped in PR #562 and has been live since. Safe to
+  resolve; kept unresolved here only as a deliberate historical record of the incident, not an oversight.
+
+`docs/tech_debt.md` DASH-9 updated in place to reflect the new count (was tracking 132 as of §G68.1).
+
+### §G69.5 — Also confirmed this session (verify-first, not new findings)
+
+- **Picklist-sync audit re-confirmed CLEAN** — a live run exits 0; the dashboard's earlier "exit 1" reading
+  for this check was a stale last-exit value, not a live failure (same FP shape as §G69.3's `-15` bug, a
+  different instance of "don't trust a monitoring panel's cached exit code without checking liveness/recency
+  first").
+- **`ITS_Review_Queue` row count independently checked for the first time** (§G65/§G68.3 both flagged this as
+  not-yet-re-checked). **294 PENDING rows**, of which **285** are a single recurring flag: "weekly compile:
+  job JOB-XXXXX has no safety-reports contact (TO)" — re-raised every Friday `weekly_generate` compile since
+  2026-06-07, overwhelmingly against sandbox/test jobs (Bradley, Brimfield, Huntley, Rockford — none of which
+  are believed to be real live customer jobs) that were never given a safety-reports contact and never will be
+  under current test-data hygiene. **NOT bulk-cleared or root-caused this session** — mark-resolved would
+  clear the count but the same 285 rows re-accrue every Friday until the root cause is addressed (populate
+  contacts in `ITS_Active_Jobs`, or deactivate the dead sandbox jobs). Scoped as an open item for next
+  session — see the info-gap §8 Open-queue entry.
+
+### §G69.6 — Two items explicitly deferred, operator wants both next session
+
+1. **Dashboard Restart-dashboard verb** — a PIN-gated Class-B ACT: detached `launchctl kickstart -k` on the
+   dashboard's own launchd label (`org.solutionsmith.its.dashboard`), restart-only, deliberately NOT a
+   git-pull/deploy verb. This crosses the dashboard's usual self-exclusion invariant ("a service must not stop
+   itself via its own UI") — the operator has pre-authorized the exception for this specific verb. No
+   "reload" script exists today (confirmed — grepped `operator_dashboard/act/` for any restart/reload verb,
+   none found). DoD per the operator: PIN-gated; the detached spawn must survive the dashboard process's own
+   SIGTERM (the classic self-restart footgun — a naive `subprocess.run` child dies with its parent unless
+   properly detached); tests; a live verify that the dashboard actually comes back up.
+2. **`ITS_Review_Queue` bulk-clear + root cause** — see §G69.5 above. Not started.
+
+**Also flagged, not fixed:** the LIVE dashboard process (pid 55622, confirmed via the daemon panel this
+session) is still running pre-corpus code — `/troubleshoot`, `/docs`, and #609's new Open-CRITICALs panel +
+`-15` fix are all code-complete on `origin/main` but not yet SERVING until the dashboard restarts. The
+restart-button item above would make this a one-click operator action instead of a manual `launchctl
+kickstart -k`.
