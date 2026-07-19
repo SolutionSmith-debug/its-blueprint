@@ -4320,3 +4320,162 @@ session) is still running pre-corpus code — `/troubleshoot`, `/docs`, and #609
 `-15` fix are all code-complete on `origin/main` but not yet SERVING until the dashboard restarts. The
 restart-button item above would make this a one-click operator action instead of a manual `launchctl
 kickstart -k`.
+
+## §G70 — 2026-07-19: forensic error-triage survey + dashboard system map (PRs #613/#614) — DASH-9 tuple-bug claim FALSIFIED, Resend subject-newline bug found+fixed
+
+A 5-agent forensic survey delivered on the two items §G69.6 left open (the restart-dashboard verb, the
+review-queue backlog) and, in the course of the survey, root-caused all 13 then-open CRITICALs. Two exec PRs
+(#613 `f8156a8`, #614 `eee155d`, both four-part verified — `gh pr view` confirms `state: MERGED`, matching
+`mergeCommit.oid`, and `ci`+`CodeQL` `conclusion: success` on both merge-commit SHAs — exec HEAD now
+`eee155d`). Numbered `§G70` (highest existing on the fetched `origin/main` was `§G69`).
+
+### §G70.1 — DASH-9's "7× real still-open tuple bug" claim is FALSIFIED
+
+§G69.4 recorded 7 `safety_reports.intake` / `uncaught_exception` rows (`'tuple' object has no attribute
+'value'`) as "a REAL, still-open bug… on the LEGACY/dormant email-intake code path," carried forward
+unquestioned across `docs/tech_debt.md` DASH-9, this doc's own §G69.4, and the 2026-07-17 info-gap entry.
+This session traced the actual traceback text on all 7 rows and found: mock-object frame reprs and pytest
+`tmpdir` paths embedded in the stack, all 7 timestamped within a single 9-minute window on **2026-05-21**, and
+confirmed the live production `kill_switch` code path cannot produce the `'tuple' object has no attribute
+'value'` shape at all. **Verdict: pytest pollution, not a real bug** — no dormant-email-path fix or excision
+decision is needed. This is a SECOND, independent instance of the pytest-pollution misdiagnosis class first
+named in §G68.4 (2026-07-15) — that instance was a volume artifact (thousands of noisy rows read as "both
+alert legs down"); this instance shows the SAME contamination mechanism can also produce a small, low-volume,
+superficially-plausible CONTENT that survives three separate sessions' worth of "real bug" characterization
+before being checked. **Widened rule** (now in info-gap §5): check the actual traceback text — mock reprs,
+tmpdir paths, test-fixture names — before accepting an `ITS_Errors` row's category, not just the
+volume/timing heuristic §G68.4 established. The 2 residual `scripts.watchdog` / `critical` rows from the
+already-fixed 2026-07-13 row-cap incident (§G65) are independently reconfirmed stale (zero recurrence since
+the PR #562 fix). Both classes cleared as benign; `docs/tech_debt.md` DASH-9 carries the dated correction in
+place (not moved/reworded elsewhere).
+
+### §G70.2 — DASH-13's "285× no-safety-contact" characterization was also stale
+
+§G69.5 characterized the `ITS_Review_Queue` 294-PENDING backlog as "285 no-safety-contact, re-raised every
+Friday, against dead sandbox jobs." A live re-read this session found the true composition had shifted:
+**296 PENDING** = **277× "weekly compile failed"** (189 of those a single-day 2026-06-13 compile-storm for
+the since-deleted `JOB-000013` — i.e. one incident, not an ongoing weekly recurrence), only **6× no-contact**
+(all dated 2026-06-07, jobs since deleted, structurally cannot recur), plus **13 misc**. Only **3 jobs**
+remain in `ITS_Active_Jobs` at all (`JOB-000017`/`-018`/`-027`, all sandbox fixtures; `-027` has a blank
+Safety Reports Contact Email — the one row that CAN still recur weekly). The prior characterization wasn't
+wrong about the backlog being sandbox-driven, but the specific mechanism (one-day storm vs. weekly-recurring
+flag) and magnitude were off — corrected here rather than silently overwritten, per the doc's own
+verify-before-asserting standard.
+
+### §G70.3 — PR #613 (`f8156a8`) — four error-hygiene fixes
+
+1. **Resend CRITICAL alert subject breaks on an embedded newline — a REAL bug, not a misdiagnosis.**
+   `shared/error_log.py` built the Resend email subject from the first 80 characters of the raw error message.
+   A message carrying a `\n` within those 80 characters (e.g. an HTML error body embedded verbatim,
+   `HTTP 502: <html>\n...`) made Resend reject the send outright: **HTTP 422, "The \n is not allowed in the
+   subject field."** The failure is silent from the operator's vantage point — the local `ITS_Errors` row
+   still gets written fine (masking the alert-path failure), but the wake-up email never arrives. Confirmed
+   **3 occurrences since 2026-06-27** before being caught this session. Fix: collapse all whitespace runs to a
+   single space (`" ".join(message.split())`) BEFORE truncating to build the subject; the body keeps the raw
+   (redacted) message unchanged. New info-gap §5 trap.
+2. **Config-read transient fence gap — root cause of 3 of the 4 CRITICALs newly opened 2026-07-17/18.** Three
+   daemon-local `_read_str_setting` readers (`po_materials/po_poll.py`, `subcontracts/subcontract_poll.py`,
+   `safety_reports/send_poll_core.py`) caught only `SmartsheetNotFoundError` + `SmartsheetCircuitOpenError`
+   before falling back to a default — a single-cycle transient (read-timeout, HTTP 500/502) raises the generic
+   `SmartsheetError` base class, which escaped uncaught to `@its_error_log` as a full CRITICAL instead of a
+   WARN+fallback. Confirms the session-summary framing: these 4 new CRITICALs were independent Smartsheet
+   background transients escaping a narrow exception fence, **NOT a regression from #608/#609** (which touched
+   a different code path, `required_config.resolve_and_log`). Fix: catch the `SmartsheetError` base → WARN
+   `error_code=config_read_error` + fallback, mirroring the existing circuit-open disposition.
+   **`safety_reports/send_poll_core.py`'s `_load_authorized_approvers` (the F22 fail-CLOSED security gate) was
+   deliberately left untouched** — a config-read failure feeding an approval-authority list must escalate, not
+   silently fall back to a default.
+3. **`compile_now_poll` scan-phase mislabeling.** `_compile_triggered_job` reads the week sheet + Rollup rows
+   for EVERY Active job each ~90s cycle BEFORE knowing whether that job is actually triggered. A transient
+   during that routine pre-trigger scan was misreported as `compile_now_poll.compile_failed` (ERROR) AND
+   seeded an `ITS_Review_Queue` PENDING row — a direct contributor to the 296-row backlog corrected in §G70.2.
+   Fix: the scan phase is now fenced separately via a new `_ScanFailedError` — pre-trigger failures log
+   `compile_now_poll.scan_failed` (ERROR, no review row); post-trigger-confirmed failures keep today's
+   fail-loud `compile_failed` + review row exactly as before.
+4. **`generate_core._safe_review_queue` review-row dedupe.** Every failed compile attempt appended a NEW
+   PENDING row with no de-duplication — a stuck Compile-Now retrying every 90s during the 2026-06-13
+   Smartsheet outage wrote **189 rows for ONE job in ONE day** (the single-day storm identified in §G70.2).
+   Fix: before adding, check PENDING rows (`review_queue.get_pending`) for a matching job+week summary prefix
+   (the error CLASS is excluded from the match — a repeat is a duplicate even if the exception type differs)
+   and suppress with a WARN (never silent) rather than appending again. **FAIL-OPEN by design:** a dedupe-read
+   error still appends — the first signal is never lost to a broken dedupe check. Both `weekly_generate` and
+   `compile_now_poll` inherit the fix via the shared `generate_core` module.
+
+**Confirmed NOT fixed — the same config-read fence gap remains in 3 replicas**, verified live via `grep` this
+session (all three still catch only `SmartsheetNotFoundError`/`SmartsheetCircuitOpenError`, not the
+`SmartsheetError` base): `compile_now_poll.py`'s own `_read_str_setting`, `field_ops/fieldops_sync.py`, and
+`safety_reports/generate_core.py`. Flagged in `docs/tech_debt.md` as a follow-up candidate — the fix pattern
+from PR #613 is a direct 3-file port, not a design question.
+
+Verification (from the PR): all 8 discriminating new tests red-lighted against the pre-fix code (sources
+temporarily reverted to `origin/main`), then green with the fixes — prove-the-control-bites. Hermetic
+throughout (Smartsheet/Resend fully mocked, no live calls). Gates: ruff clean, mypy 0/393 files, pytest 3540
+passed / 49 deselected, `check_doctrine_drift --strict` no blocking drift.
+
+### §G70.4 — PR #614 (`eee155d`) — `/system` live system map + DASH-12/DASH-13 verbs
+
+**The `/system` live system map** (`operator_dashboard/system_map.py`) — a single-page view of the whole ITS
+system: **43 nodes / 52 edges**, laid out in trust-gradient lanes (untrusted external input on one side,
+ITS-owned internal state on the other), with the **External Send Gate (Invariant 1) drawn as a literal gold
+wall** between generation and send nodes. Nodes carry live badges (open-CRITICAL count, config-gate state,
+launchd load state) sourced from the same read-only `DataSource` panels the rest of the dashboard already
+uses — no new Smartsheet/launchd read paths. An htmx-driven node rail plus deep links running BOTH directions:
+a node click can jump to its §43 runbook or a pre-expanded `/troubleshoot?wf=&step=` deep link; conversely an
+`ITS_Errors` row or the config editor can deep-link back into the map focused on the relevant node
+(`/system?focus=`) or filtered (`/config?f=` prefill). **`tests/test_system_map.py` adds registry-parity
+teeth:** a new launchd plist or a new `scripts/watchdog.TRACKED_JOBS` marker that has no corresponding
+`system_map.py` node now fails CI. **This will trip on the in-flight RFQ/estimate-lane daemon** (blueprint PO
+mission v6 §10, ADR-0004, landed earlier the same day as `227e69b` — see auto-memory
+`project_rfq-estimate-lane-designed.md`, build deferred post-Aug-7) the moment that lane's PR adds a plist —
+its PR will need to add a `system_map` node in the same PR, a new instance of the "reconcile every registry in
+the same PR" definition-of-done (HOUSE_REFLEXES §1) that a fresh session should know about ahead of time.
+
+**DASH-12 — Restart-dashboard verb**, the item §G69.6 left open: `operator_dashboard/act/dashboard_ops.py` +
+`POST /act/dashboard/restart` (Class B, elevated-confirm `restart-dashboard`). Writes the audit row **BEFORE**
+spawning, then launches a detached `/bin/sh -c 'sleep 1; exec launchctl kickstart -k
+gui/<uid>/org.solutionsmith.its.dashboard'` with `start_new_session=True` and closed stdio, so the child
+survives the dashboard's own SIGTERM (the classic self-restart footgun `§G69.6` flagged as a DoD requirement).
+Restart-ONLY by construction — `daemon_ops.controllable_labels()` still excludes the dashboard from the
+general daemon-control surface; `tests/test_dashboard_restart.py` locks the restart-only command allowlist.
+§43 entry added to `docs/runbooks/operator_dashboard_config_editor.md`; the operator's pre-authorized
+self-exclusion exception is documented in the verb's own module docstring.
+
+**DASH-13 — Review-queue resolve verb**, the other item §G69.6 left open:
+`operator_dashboard/act/review_ops.py` + `POST /act/review/resolve` (Class B, elevated `resolve-review`,
+filter-required — no unfiltered mass-resolve, mirroring the DASH-8 mark-errors-resolved pattern — preview
+mode before commit, nothing deleted). Used live this session (audit-stamped `its-diagnosis-2026-07-19`) to
+reject the 232 stale rows identified in §G70.2, taking `ITS_Review_Queue` from 296 → 64 PENDING.
+
+Also in #614: a pulse strip (live activity summary at the top of the dashboard home), a config-editor section
+rail + live filter (`?f=` query-param prefill), and general table/design polish. Mutating-route registry lock
+now covers 11 routes (was 9 before DASH-12/13).
+
+### §G70.5 — Live rollout + final dispositions
+
+`~/its` pulled to `eee155d`, the dashboard process restarted (closing the §G69.6 "still serving pre-corpus
+code" gap in the same session that flagged it), all new routes (`/system`, the two new ACT verbs) confirmed
+serving. **Dispositions, audit-stamped `its-diagnosis-2026-07-19`:**
+- Open CRITICALs: **13 → 0** (the DASH-9 7 falsified + 2 stale row-cap rows cleared per §G70.1; the 4 new
+  07-17/18 transients resolved once their root cause — the config-read fence gap, §G70.3 — was fixed).
+- `ITS_Review_Queue`: **296 → 64 PENDING** (232 stale deleted-job rows REJECTED via the new DASH-13 verb; 64
+  remain for the operator — 51 rows tied to the 3 live sandbox jobs + 13 misc).
+
+### §G70.6 — Operator-decision queue (none actioned autonomously)
+
+1. **Deactivate the 3 sandbox jobs** `JOB-000017`/`-018`/`-027` — must be done **PORTAL-SIDE** (D1 job
+   lifecycle → inactive); a sheet-side `ITS_Active_Jobs` flip alone gets silently overwritten by
+   `fieldops_sync`'s down-sync on the next portal edit (a known mirror-loop shape, see
+   `docs/HOUSE_REFLEXES.md` §7's "Mirror-loop re-creation" entry for the general pattern) — OR keep them as
+   test fixtures and populate `JOB-000027`'s blank Safety Reports Contact Email so its weekly-compile flag
+   stops recurring.
+2. **The 64 remaining `ITS_Review_Queue` rows** — left for operator triage, not bulk-resolved.
+3. **`sheet_capacity` margin==cap (60/60) `ITS_Config` misconfig** — every per-job Smartsheet sheet-create logs
+   a WARN because the configured margin equals the cap rather than sitting under it; an `ITS_Config` value
+   fix, not a code fix. `docs/tech_debt.md` DASH-13 item (c).
+4. **The 3 remaining config-read fence-gap replicas** (§G70.3) — `compile_now_poll`, `fieldops_sync`,
+   `generate_core`; a direct port of PR #613's fix pattern, queued as a follow-up candidate.
+
+`docs/tech_debt.md` DASH-9/DASH-12/DASH-13 were updated in place by PRs #613/#614 themselves — not duplicated
+here or in `docs/tech_debt.md` again by this maintenance pass. See auto-memory
+`project_dashboard-system-map-2026-07-19.md` for the session's own compact narrative; info-gap doc §1/§5/§8
+carry the pointer-level summary for a fresh session's quick orientation.
