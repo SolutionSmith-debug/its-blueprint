@@ -4479,3 +4479,132 @@ serving. **Dispositions, audit-stamped `its-diagnosis-2026-07-19`:**
 here or in `docs/tech_debt.md` again by this maintenance pass. See auto-memory
 `project_dashboard-system-map-2026-07-19.md` for the session's own compact narrative; info-gap doc §1/§5/§8
 carry the pointer-level summary for a fresh session's quick orientation.
+
+## §G71 — 2026-07-20: PO-hub tab fold + RFQ/estimate lane go-live + jobs SoR gains a structured job number/address
+
+A long operator-driven live-demo session in `~/its` (7 exec PRs, #628-#636, all four-part verified — exec
+HEAD now `af3b6295`). This is the operational-detail record; the narrative is already comprehensively
+captured in `docs/session_logs/2026-07-20_po-hub-tab-fold.md` and is not re-told here — this section holds
+what a fresh session needs that the session log doesn't already surface at the right granularity: the
+still-open RFQ/estimate-lane backfill gap this doc had, the two recurring bug classes, and the exact live
+state after activation. Numbered `§G71` (highest existing on the fetched `origin/main` was `§G70`).
+
+### §G71.1 — The prior session's own close-pass gap: RFQ/estimate lane build (07-19 evening) was never captured here
+
+The 2026-07-19-evening session (`docs/session_logs/2026-07-19_rfq-estimate-lane-build-and-mirror-golive.md`)
+landed 5 exec PRs (#618/#620/#621/#623/#626) building the entire `po_materials` RFQ/estimate sub-lane — but
+the info-gap doc's "Last refreshed" line and §8 Recently-landed list still ended at PR #614 (the earlier
+same-day forensic-triage session) when this maintenance pass began. **Root cause not diagnosed** (the prior
+session may not have invoked `session-close-maintainer`, or invoked it and the update didn't land) — flagged
+here rather than investigated further, since the gap is now closed. Backfilled into info-gap §8 Recently
+Landed as its own dated bullet, distinct from today's activation bullet, so the historical record stays
+accurate about WHEN each half landed.
+
+### §G71.2 — What landed today (PRs #629/#630/#632/#633/#634/#635/#636)
+
+- **#629 (`bd4c0e3`) — PO-hub tab fold.** New `PurchaseOrdersPage` hub folds RFQs + Vendor Estimates into
+  the Purchase Orders SPA page as tabs (`/purchase-orders`, `/purchase-orders/rfqs`,
+  `/purchase-orders/estimates`; pre-fold `/estimates`+`/rfqs` survive as parse-only aliases). Panels mount
+  once and stay alive (`hidden`) across tab flips so a half-built wizard survives navigation. New-PO-from-
+  estimate routes through the EXISTING ADR-0004 disposition fidelity gate — the fold adds navigation, never
+  a bypass. **CRITICAL finding, fixed same PR:** `key={openId}` on `EstimateDispositionPage` is load-bearing
+  — the new cross-tab retarget is the first-ever path that changes `openId` while a disposition instance
+  stays mounted; without the key, estimate A's loaded-preview evidence and manual Tier-3 lines would carry
+  into estimate B's import, a fidelity-gate bypass the Worker's server-side twin cannot detect (it counts
+  previews that EXIST, not pages the reviewer actually viewed). Locked by a hub test proven to red-light
+  with the key removed (inject → fail → revert, §55.2 in practice).
+- **#630 (`8309d5d`) — RFQ vendor quick-add.** Free-text vendor entry on the RFQ builder mints a real
+  `ITS_Vendors` directory row via the existing `POST /api/po/vendors` (never a keyless vendor — the send
+  lane resolves recipients from `ITS_Vendors` by Vendor Key, ADR-0004 decision 9). Adversarial review fixed
+  a never-silent violation at the 12-vendor cap (create-then-silently-not-join under a success banner — now
+  refused BEFORE the create).
+- **#632 (`6d2b9f3`) — estimate pending-key wire fix.** `worker/po_estimates.ts` serves `{estimates: []}`;
+  `shared/portal_client.get_estimates_pending` was reading `{pending: []}` — both sides' unit tests mocked
+  their OWN assumption of the wire shape, so mocks-pass-live-fails shipped clean. The operator's live
+  quote-form upload sat stuck at `pending` for **~21 hours** (silent — no exception, just zero rows
+  processed every cycle). New cross-runtime parity test:
+  `tests/test_portal_client.py::test_estimates_pending_wire_key_parity` reads the response key from BOTH the
+  Worker's actual route source and the Python client's actual parse code, not two independent mocks — the
+  reusable antidote for this bug class. Post-fix: the upload processed within a cycle
+  (`extracted`→`filled_form`→auto-bound to `RFQ-2026.123-001`/`VEN-000005`), **the first live R4
+  quote-form round-trip to actually complete.**
+- **#633 (`533f523`) — RFQ filing parity.** `RFQ_Log` ledger rows now carry the RFQ PDF + quote form inline
+  (self-healing — re-attaches on every service pass rather than fresh-append-only, closing a gap where a
+  coincident attach+receipt failure would have been a permanent miss) plus a per-job
+  `<Jobs>/<job>/RFQs` mirror sheet via `shared/job_sheet.ensure_job_sheet` (job_sheet's third consumer,
+  after subcontracts and POs). A one-shot backfill repaired the existing `RFQ-2026.123-001` row and created
+  the Coker per-job RFQs mirror sheet.
+- **#634 (`f34b826`) — migration 0057, MIGRATED + DEPLOYED on operator go-ahead.** `jobs.job_no` (the
+  Evergreen `YYYY.NNN` number — distinct from the internal `JOB-######` key) + `address_city`/`address_state`/
+  `address_zip`. Auto-fill on the job dropdown in all four builders (stored-first, name-prefix fallback);
+  Job Tracker create/edit forms carry the fields; the routing editor now opens SEEDED (closes a
+  blank-editor silent-wipe hazard); ship-to serves the structured block. **MAJOR finding, fixed pre-merge:**
+  the new job-detail route would have served the WSR/WPR send-recipient/CC email lists to read-tier
+  accounts — a least-privilege regression caught by review, now gated `cap.jobtracker.manage`-only and
+  locked by a submitter-tier test. Existing jobs (all but Coker) have empty `job_no`/address until an
+  operator edits them via the tracker.
+- **#635 (`8bc582e`) — `shared/sustained_failure.py`.** Answers "why did the dashboard show nothing during
+  the 21h estimate outage from #632": the daemons ARE fully wired (system-map nodes, watchdog markers,
+  daemon-health rows all present) — but the storm logged per-cycle **ERROR**, and every fire surface
+  (open-CRITICALs panel, triple-fire, `/system` badges) keys on **CRITICAL**. New
+  `SustainedFailureCounter` (extracted from `fieldops_sync`/`portal_poll`'s existing private per-daemon
+  copies, §14 — four live consumers is the reuse threshold) persists a consecutive-failure count via
+  `state_io`; wired into the four `po_materials`/`subcontracts` poll daemons' pending-fetch sites — 5
+  consecutive failing cycles escalate to a `<lane>_pending_fetch_sustained` CRITICAL (fire surfaces +
+  triple-fire push). `fieldops_sync`/`portal_poll` deliberately kept their own pre-existing copies rather
+  than being migrated onto the shared module this session — flagged as future-convergence tech debt, not a
+  live bug (`docs/tech_debt.md`).
+- **#636 (`8f41338`) — full edit-job page.** The tracker's job editor is now "Edit job details": editable
+  `project_name` (COALESCE semantics — absent payload = unchanged, never blankable) with an in-UI hint that
+  per-job Box/Smartsheet folders are keyed by name, so a rename affects FUTURE filings only, not existing
+  ones. Worker `/contacts` route gained the optional `project_name` field.
+- **Coker job (JOB-000028) filled** (operator request, direct D1 write, mirror-safe): `job_no=2026.123`,
+  address `2160 Coker Butte Rd / Medford / OR / 97504` (split from the RFQ's one-line free-text entry),
+  version bump + `sync_state=pending` so the up-sync mirrors it into `ITS_Active_Jobs`.
+
+### §G71.3 — Live activation: the RFQ/estimate lane is now end-to-end LIVE on the mirror
+
+The 2026-07-19-evening build (§G71.1) shipped dark with a full deploy list still pending. This session
+completed it: `~/its` pulled to `af3b6295`, migration 0057 applied `--remote`, Worker/SPA deployed multiple
+times across the session (final deploy `eb79e0b4`). Combined with the 07-19 deploy list, the estimate
+importer and RFQ generation/filing lanes are confirmed live via the #632 fix's real end-to-end quote-form
+round-trip. **The RFQ send lane (`po_materials.rfq_send`) alone remains dark** — that flip is a FIXED
+high-capability-class External-Send-Gate action reserved for the operator, unaffected by anything built or
+activated this session.
+
+### §G71.4 — Two recurring bug/operational classes worth naming (folded into info-gap §5/§6)
+
+1. **Cloudflare edge post-deploy propagation window (~1 minute).** Reproduced a second time (first:
+   2026-07-14 diagnosis) — the operator's "changes not visible" report was, again, not a deploy failure;
+   the edge serves a cached HTML `HIT` for roughly a minute before converging, and a hard-refresh
+   (`no-cache`) punches through immediately. Verify via the deploy output's version/asset hash before
+   treating visible staleness as a bug.
+2. **`vite dev` is unusable for any CSP-sensitive smoke** — its inline module preamble trips the deployed
+   Worker's CSP. `wrangler dev --local` against the BUILT assets is the actual smoke path. Separately, Vite's
+   workspace-root detection fails when the tree root is a `git worktree` (a `.git` FILE, not a directory) —
+   denied the Worker's `../po_materials/terms/*.md?raw` imports during a `vite dev` attempt from
+   `~its-po-tabs`; worked around with an uncommitted temporary `server.fs.allow`, not a real fix.
+   `wrangler dev --local` sidesteps both issues and is the worktree-safe default.
+
+### §G71.5 — Process note: the `git checkout <file>` footgun recurred (PR #630)
+
+A `git checkout <file>` run after a prove-it-bites injection (per §2's mandatory RED-light-then-revert
+discipline) wiped the file's uncommitted fixes along with the reverted injection — the same whole-file-wipe
+footgun already named in info-gap §5 (2026-07-09, PR #489) and HOUSE_REFLEXES §1. Re-applied the fixes; no
+new doc entry needed since the class is already documented — noted here only because it recurred and the
+recovery worked. Future instances: `cp`-backup or a targeted patch-revert before injecting, not
+`git checkout` after.
+
+### §G71.6 — Operator queue at close (none actioned autonomously)
+
+1. American Steel vendor estimate sits `extracted` awaiting portal disposition (Tier-3 human-accept step).
+2. One `RFQ_Pending_Review` row PENDING send approval — External Send Gate, operator-only; approving it
+   alone does not dispatch while `rfq_send` stays dark.
+3. Legacy jobs besides Coker still lack `job_no`/structured address — per-job manual backfill via the
+   tracker, no bulk script.
+4. `fieldops_sync`/`portal_poll` sustained-failure-counter convergence onto `shared/sustained_failure.py` —
+   tracked, not scheduled.
+
+`docs/tech_debt.md` carries the tracked entries (sustained-failure convergence, legacy-job backfill); info-gap
+doc §1/§5/§6/§8 carry the pointer-level summary. See `docs/session_logs/2026-07-20_po-hub-tab-fold.md` for
+the full narrative + verification block.
