@@ -4608,3 +4608,291 @@ recovery worked. Future instances: `cp`-backup or a targeted patch-revert before
 `docs/tech_debt.md` carries the tracked entries (sustained-failure convergence, legacy-job backfill); info-gap
 doc §1/§5/§6/§8 carry the pointer-level summary. See `docs/session_logs/2026-07-20_po-hub-tab-fold.md` for
 the full narrative + verification block.
+
+## §G72 — 2026-07-20/21: dashboard registry-drift audit surfaces a LIVE-STATE finding, the "auth storm" was
+pytest, and an 8-area coverage-gap hunt (exec PRs #627/#637/#638/#639/#640/#642/#643/#644, exec HEAD now
+`e8e6107`)
+
+A dense two-day arc, all eight PRs four-part verified (main-branch CI on the merge commit confirmed
+SUCCESS for the tip). Numbered `§G72` (highest existing on the fetched `origin/main` was `§G71`). This
+picks up immediately after §G71's own close (which covered through PR #636 / exec `af3b6295`); §G71.3
+already flagged the RFQ **send** lane as the one thing left dark — this section is where that flag turned
+out to be wrong.
+
+### §G72.1 — PR #627 (`167243b`): an 8-surface adversarial audit of `operator_dashboard/` against the
+RFQ/vendor-estimate lane
+
+The lane shipped dark 2026-07-19 with 3 daemons, 3 ITS-owned sheets, and 11 `ITS_Config` rows; the
+question was whether the console actually represents it. The obs panels turned out to be genuinely
+data-driven already (launchd glob, heartbeat glob, marker panel off `TRACKED_JOBS`, error deep-links,
+review-queue-off-the-live-sheet) — no change needed there. Four **hardcoded** registries had drifted:
+
+- `act/daemon_ops` knew 9 interval daemons; `install.sh` knew 12 — the 3 new daemons couldn't be retuned
+  from the console.
+- `act/registry` was missing 4 gates the system map already advertised: the lane's three
+  `polling_enabled` rows **and** `subcontracts.subcontract_send.polling_enabled` — missed when the SC-S4
+  send lane shipped (2026-07-15/16), a full session before this one, and never caught until now.
+- The send-queue panel omitted `RFQ_Pending_Review`, so that lane's PENDING/HELD/FAILED backlog read
+  "all clear" while actually invisible.
+- `system_map` had no sheet nodes for the 3 sheets, and — the real bug — **no `human approval` edge into
+  `rfq_send`**, so the External Send Gate crossing was not drawn for this lane at all.
+
+The estimate-extraction tier gates (`estimate_poll` Tier-1/Tier-2/OCR model selection) were deliberately
+surfaced **READ-ONLY** (`CLASS_E_DISPLAY`), not editable — no model has been qualified against the
+production corpus via `scripts/eval_estimate_ladder.py` yet, so the console shows state without inviting
+a flip. Five parity teeth added, each proven red-first: interval registry vs `install.sh`; every send-half
+node has an inbound human-approval edge; every node gate is reachable in the editor; withheld gates stay
+visible read-only; the send-queue panel covers every review sheet feeding a send node.
+
+A second pass (same PR) found the `Check U` badges on `sheet_po_pending_review` /
+`sheet_subcontract_pending_review` (and the new RFQ node, propagated from the first pass) were **false** —
+Check U's `_APPROVER_WORKSPACES` only ever covered Safety Portal + Progress Reporting. All three badges
+were removed and the real gap filed to `docs/tech_debt.md` rather than left silently claimed (§55: a
+control that claims to run when it doesn't is worse than an acknowledged gap). That filed gap is the one
+PR #638/#639 close in §G72.4 below.
+
+### §G72.2 — THE LIVE-STATE FINDING: every send gate on the mirror reads `true`, including `rfq_send` —
+docs/memory/CLAUDE.md all still said "ships dark"
+
+While verifying the PR, a live `ITS_Config` check turned up that the console's own gate-editor notes were
+asserting a **false current-state claim**: every send gate on `evergreenmirror.com` reads `true` —
+`po_materials.rfq_send.polling_enabled`, `po_send`, `subcontract_send`, `weekly_send`, `progress_send`,
+plus `estimate_poll`/`rfq_poll` — while the editor's static notes, `CLAUDE.md`'s own `po_materials/rfq_*`
+row, and this archive's own §G71.3 all still said "ships dark" / "the RFQ send lane alone remains dark."
+The extraction tiers (`estimate_poll.tier1_enabled` etc.) are correctly `false` — only the send/generation
+gates drifted.
+
+**What #627 fixed, precisely:** the *dashboard's own* editor/system-map notes no longer assert a live-state
+phrase at all (new tooth: no REGISTRY note may contain a live-state phrase; the value column is the one
+place state is asserted) — this is a §55.4 truthful-reporting fix, not a behavior change, and it does not
+touch the gate value. A follow-up adversarial pass on the same branch also fixed two related things: the
+`rfq_send` code comment had overclaimed that `first_activation_gated` (tier "A") "refuses activation
+outright" — false, `apply_elevated_edit` (the D1-3 escalate path, PIN + typed confirm + attestation) CAN
+complete a false→true send-gate flip today, so per §44 the boundary is training-bounded, not structurally
+enforced, and the comment now says so; and the go-live ATTESTATION checkbox had nothing on-screen to
+attest to (`read_registry_state` didn't carry the row's `ITS_Config` Description the way the read-only
+Class-E path did) — gated rows now render their Description so the attestation isn't blind.
+
+**What #627 did NOT do, and what is still genuinely open (operator-owned, not actioned autonomously):**
+
+1. **Whether `rfq_send` (and its procurement siblings) *should* be live is unresolved.** The gate reading
+   `true` might be exactly correct (an earlier session's deliberate go-live), or it might be a premature
+   flip nobody meant to leave standing — this maintenance pass has no way to distinguish those from the
+   config value alone, and the `rfq_send` row's own Description still lists preconditions next to a `true`
+   value. This is squarely a FIXED §44 high-capability External-Send-Gate decision; Seth's call.
+2. **`CLAUDE.md`'s `po_materials/rfq_*` table row is still stale** (verified this session — grep, not
+   memory): it still reads "ships **dark**... Go-live = FIXED high-class External-Send-Gate flip
+   (`polling_enabled` true + load the plist → Seth)" and separately still says "16 tracked jobs" in two
+   spots (`TRACKED_JOBS` grew to 18 in PR #642, §G72.4 below, and neither `CLAUDE.md` line was touched in
+   that PR either). `CLAUDE.md` is not one of this maintenance agent's living-doc surfaces (it's the
+   canonical execution-repo doc, normally updated in the PR that changes the fact it describes) — flagged
+   here + in `docs/tech_debt.md` rather than edited directly.
+3. **Whether the console's activation *tier* for this class of gate should be `elevated_confirm` rather
+   than `first_activation_gated`** — a separate question from (1), since the emergency PAUSE direction
+   deliberately stays fast-brake either way; only the false→true crossing's ceremony is in question.
+
+This is the headline finding of the whole two-day arc: not a bug that was fixed, but a documentation/
+memory surface (including this very archive) that had fallen behind a real activation nobody had gone
+back to confirm or reconcile. Treat every "ships dark" claim about a procurement send lane as unverified
+until re-checked against the live `ITS_Config` value, not this doc.
+
+### §G72.3 — PR #628 (`9ef92d9`, merged 2026-07-20 before this arc's PR #627, but its throughline
+completes here): `po_creds_missing` was a false CRITICAL, and the fix that closed it was already written
+once
+
+At 2026-07-20 04:42:18Z `po_poll` paged CRITICAL claiming PO credentials were missing. They were not — 3.4
+seconds earlier a single Smartsheet GET on `safety_reports.portal.worker_base_url` had blipped
+(`SmartsheetError`), and `_read_str_setting` swallowed that failure into its `""` fallback, which
+`_resolve_credentials` could not distinguish from a genuinely-unset row — the fail-closed branch paged,
+misdirecting the §43 operator repair toward re-provisioning secrets (a FIXED high-capability action) for a
+condition needing no action at all (it self-healed the very next 90s cycle; 9,092 cycles that day were
+fine).
+
+**The multi-surface-fan-out angle:** `portal_poll.py` had already hit and fixed this exact bug — its own
+docstring says so verbatim ("previously the circuit-open case swallowed to `""` and looked identical to a
+genuine misconfig"). The fix was never fanned out to its siblings. `po_poll`, `rfq_poll`, `estimate_poll`,
+`subcontract_poll`, and `field_ops.fieldops_sync` all still carried the original bug.
+
+**The fix:** new `shared/creds_resolution.py` hoists `portal_poll`'s exception taxonomy unchanged and
+classifies a base-URL read three ways — `str` (row read, poll), `TransientUnavailable` (read failed;
+circuit-open or a pre-breaker-trip blip → WARN + skip, self-heals), `None` (genuinely absent/blank →
+CRITICAL, will not self-heal). `SmartsheetAuthError`/`SmartsheetPermissionError` still propagate
+uncaught — a revoked token or lost share must never be classified "transient." Wired into the five broken
+pullers (six counting `portal_poll`, which now just re-exports the shared names — its 79 tests and call
+sites untouched). **Extended to eight** by PR #642 (§G72.4 below): `config_actuator` and `publish_daemon`
+adopted the same module when their own missing-marker gap was found in the same hunt.
+
+### §G72.4 — PR #637 (`6771491`): the 07-19 "Smartsheet auth storm" was pytest — three autouse guards, 88
+genuine violations found on first run
+
+13,850 auth-401 lines hit the live operator log on 2026-07-19 (~80% of that day's WARN/ERROR/CRITICAL
+volume) — this had now been mis-diagnosed as a production incident **three separate times** (07-14: 4,464
+lines; 07-15: 7,829; 07-19: 13,850). Root cause: `tests/conftest.py`'s Keychain stub returns
+`f"test-{service}"`, and its own docstring claimed this "prevents accidental live network calls" — it
+never did. A placeholder token makes an outbound call *fail*, it does not stop the socket opening. Unit
+tests were genuinely reaching `api.smartsheet.com`, `api.resend.com`, and Sentry on every run, and because
+`error_log.LOG_DIR` is an absolute path, the 401 noise landed in the operator's real log regardless of
+which checkout ran pytest.
+
+**Worse than noise, found in the same diagnosis:** unit tests attempted 265 real row writes against the
+**production `ITS_Errors` sheet** in one day, and a test-emitted CRITICAL genuinely attempted to **page
+the operator through Resend**. Both were stopped only by the stub credential being invalid — a wrong
+password was doing a security boundary's job by accident.
+
+**Three new autouse fixtures** in `conftest.py`, mirroring the existing `_forbid_live_state_writes`
+pattern (same fail-loud style, same `integration`-marker opt-out):
+- `_forbid_external_network` — guards `socket.connect`/`connect_ex`; one control covers every client
+  library at once (requests/urllib3/Smartsheet SDK/resend/sentry_sdk) rather than a mock per SDK.
+  Loopback + `AF_UNIX` stay allowed (in-process ASGI test clients aren't the hazard).
+- `_redirect_live_log_dir` — sends `error_log`'s daily file to tmp (redirect, not forbid — logging is
+  what many of these tests are *testing*; they must not do it in the operator's file).
+- `_neutralize_error_log_egress` — keeps `error_log` local (no `ITS_Errors` row, no Resend, no Sentry);
+  the five files whose *subject* is those legs opt out and keep testing the real functions.
+
+Initially failed **88 tests**, every one a genuine violation traced to `error_log.log()` firing for real
+against the ITS_Errors write leg; neutralizing that leg resolved all but one
+(`test_config_paths_mirror_live_shared_constants`, whose LOGS assertion the redirect made vacuous — fixed
+to compare against the genuine live path, with the dashboard's own `LOGS_DIR` deliberately left
+**unredirected** since it's read-only, so that drift guard keeps biting instead of comparing tmp to tmp).
+`tests/test_conftest_guards.py` self-tests all three guards + the loopback carve-out, each committing the
+synthetic violation its fixture exists to catch, red-before-green. Measured effect: one test file that used
+to write 45 lines into the live operator log now writes zero.
+
+### §G72.5 — Coverage-gap hunt (PRs #638/#639/#640/#642): 38 candidates for "a control whose hardcoded
+scope quietly stopped covering the system," 22 confirmed, 16 refuted
+
+An adversarial hunt for exactly the class PR #627's Check-U discovery exemplified — deliberately run wide
+across watchdog checks, CI parity guards, cutover registries, Worker D1 hygiene, and docs, rather than
+patching Check U alone and moving on.
+
+**#638 (`1e7b341`) — Check U's own workspace-scope gap, closed.** `_APPROVER_WORKSPACES` watched Safety
+Portal + Progress Reporting only; `po_send`/`rfq_send`/`subcontract_send` — the three lanes that transmit
+to **outside vendors**, all three live — were unwatched, so an approver silently added to Purchase Orders
+or Subcontracts gained send-release authority undetected. Now covers all four workspaces (Purchase Orders
+serves both `po_send` and `rfq_send`); new entries seed cleanly with no false first-run WARN. New test
+`test_approver_workspaces_cover_every_send_lane` derives the required set by importing all five send
+daemons' `f22_workspace_id` — kept in the *test*, not `watchdog.py`, so the watchdog process itself never
+imports `graph_client.send_mail` and gains send capability. Verified red first, naming the exact uncovered
+workspaces.
+
+**#639 (`5bb8d18`) — the same blind spot in Checks N/T, plus two vacuous parity guards.**
+- Check N (stuck SENDING) scanned `WSR` only; Check T (stale HELD, 24h) scanned `WSR`+`WPR` only — both
+  now derive from one `_REVIEW_SHEETS` table covering all five review sheets, so a row stuck SENDING on
+  `po_send`/`rfq_send`/`subcontract_send` (previously invisible — and by design such a row is *never*
+  re-dispatched, so it would have sat silently unsent forever) now reports. Check N also gained per-sheet
+  fail-soft (one lane's read error can't hide the other four).
+- `test_heartbeat_parity` walked 3 of 5 daemon packages (8 of 14 live heartbeat daemons unguarded); its
+  `>= 6` floor had been tuned to exactly the vacuous state, so it stayed green forever. Replaced with
+  self-maintaining discovery from disk.
+- `test_state_write_discipline` walked 4 roots while claiming parity with F02's 7; now **imports** that
+  tuple so they can't drift again (widening surfaced two writes, both verified legitimate watchdog markers
+  outside `~/its/state` and allowlisted).
+- F02's `WALKED_ROOTS` omitted `troubleshooting/` and `docs_pdf/` — demonstrated directly: two synthetic
+  `import requests`/`import socket` files sitting in those roots got an ALL-CLEAR without the new roots
+  and RED-lit with them.
+- The troubleshooting-tree docs claimed several procurement/subcontract gates were still "(dark)" when
+  all seven read `true` — static assertions replaced with live-value pointers; guide regenerated, manifest
+  sha re-recorded.
+
+**#640 (`7eef95a`) — "the newest lane's care left the older twins behind," twice.**
+- `GATED_SCRIPTS` enrolled the RFQ/estimate lane's naming/log/review-row modules but not their PO/
+  subcontract/progress twins (`po_naming.py`, `po_log.py`, `po_review.py`, `rfq_review.py`,
+  `subcontract_review.py`, `wsr_review.py`, `wpr_review.py`, `vendors.py`, `terms.py`, `money.py`,
+  `exhibit.py`, `governing_law.py` — 13 files). None carries a `_generate`/`_send`/`_poll` suffix, so the
+  enrollment meta-test never demanded them either — they fell through both nets, with the five
+  review-row writers mattering most (they stage the exact rows the send daemons dispatch, sitting
+  directly on the External Send Gate boundary). All 13 AST-verified clean *before* enrolling — this adds
+  enforcement, it does not paper over an existing violation.
+- VC-03 cutover config grew 35→44 rows: the `po_poll` gate trio (structurally identical to the enrolled
+  subcontract trio, and unlike it currently *live*), the four `fieldops_sync` per-stream sub-gates (only
+  the master gate was enrolled), and `config_actuator.polling_enabled`/`publish_daemon.polling_enabled`
+  (both daemons loaded and gate-ON, neither runtime gate enrolled — the §50 privileged-actuation rail
+  could arrive at a new host with no switch present). All new rows `non_empty`, never forced `true`.
+
+**#642 (`72bfd8d`) — third and final batch, Worker-side.** Needed a `wrangler deploy` (D1 already current,
+57 applied = 57 local — no migration required). Note: this PR replaces #641, whose *first* commit
+contained a fake test password that tripped the blocking gitleaks **full-history** scan; force-push is
+hook-blocked in this environment, so the identical final tree was re-landed as a fresh single commit and
+`fix/worker-coverage` (the #641 branch) was deleted via the API to stop it poisoning later scans (`gh api`,
+not `git push -f` — the hook still holds).
+- Four privilege-mutating routes behind `PORTAL_ADMIN_API_TOKEN` (create-at-any-role, role change,
+  password reset, disable/enable) wrote a bare `.run()` with **no `audit_log` row**, while their in-app
+  `/api/admin/*` twins audited every equivalent action — an account minted through the operator bearer was
+  indistinguishable from one minted by a logged-in admin. Now mutation + audit in one `db.batch` (the "W4"
+  pattern), audit conditional on `changes()=1`, actions namespaced `operator_user_*`.
+- `purge-job` documents itself as "the explicit operator cleanup path" that cascades `time_entries`/
+  `task_assignments`/`inspections`/`checklist_instances`/`equipment_location` — **it cascaded none of
+  them**, silently orphaning D1-primary rows behind a deleted job while reporting a tidy `ok:true`. All
+  five now cascade, children first.
+- The D1 size tripwire (the only guard against Cloudflare's 10 GB ceiling) missed both ADR-0004 estimate
+  byte pools; the RFQ lane had **no prune stage at all** (drafts/line-items/up-to-12-vendor-rows
+  accumulated forever) — added, with the numbering-reuse guard its twin already has.
+- `config_actuator` and `publish_daemon` wrote no Check-C marker and were absent from `TRACKED_JOBS`
+  (**16 → 18**) — if either died, nothing reported it. Both now write a marker only after real work (a
+  halted path leaves it stale rather than faking freshness) and both adopt `shared/creds_resolution`
+  (§G72.3), bringing the creds tooth to **all eight** pullers. A marker-writer/window parity test was
+  added since removing a daemon from `TRACKED_JOBS` previously red-lit nothing.
+
+**Net disposition:** 38 candidates surveyed across the three PRs → 22 confirmed and fixed, 16 refuted on
+adversarial re-check (not itemized here — see each PR body for its own refuted list). Every fixed control
+verified red-before-green per §55.2; #642's own verification block: vitest 1131 passed (66 files),
+`npm run typecheck` clean across all three tsconfigs, pytest green, mypy 443 files, ruff clean, gitleaks
+clean history.
+
+### §G72.6 — Tail items in the same arc: #643 (dashboard SIGTERM cosmetic fix) and #644 (compile_now_poll
+sustained-escalation)
+
+- **#643 (`b671a42`).** `launchctl list`'s `LastExitStatus` reports the *previous* instance's exit — for a
+  long-running `KeepAlive` service like the dashboard, that means the panel reads a raw `-15` forever after
+  any deliberate restart, cosmetically flagging the one panel whose job is telling the operator what's
+  actually faulty. Investigated first (all 10 lifetime shutdowns are graceful SIGTERM sequences, zero
+  crash tracebacks, DASH-12's restart verb has never even fired) — no rogue killer. A running daemon's
+  negative last-exit now renders a neutral signal label with the raw value in a tooltip (deliberately not
+  worded "restart" — an external SIGTERM is indistinguishable on disk from a deliberate one, and asserting
+  intent unprovable would itself be a §55.4 violation). The loaded-but-not-running red branch is untouched.
+- **#644 (`e8e6107`).** `compile_now_poll` wrote one uncapped `scan_failed` ERROR row per job per failing
+  cycle — 31 rows since 07-20 during ordinary flakiness, and at 25 jobs' cadence this alone would exhaust
+  the entire 20,000-row cap in under a day (the row-cap-incident class from 2026-07-13, §G65). It is also
+  the one writer whose volume scales with the *business* rather than the *error*, and the shared circuit
+  breaker can never trip on scattered per-job flakes (successes interleave and reset the 5-consecutive
+  counter). Fixed: one summarized ERROR row per pass (the #608 pattern) carrying the real exception (not
+  just a bare `except Exception` swallow — otherwise a genuine schema-change `TypeError` presents
+  identically to a Smartsheet 500 and misdirects the operator to a "just wait, self-heals" runbook); a
+  **fraction-based** (≥50% of scanned jobs failed) sustained-escalation predicate, since strict all-failed
+  never fires during a partial outage and any-failed would page in ~7.5 minutes for one flaky sheet; a
+  geometric CRITICAL ladder (2x, 4x, 8x…) rather than every-cycle, since an open CRITICAL is never terminal
+  and firing every cycle would mint rows rotation can never reclaim — the same lockout class that hit
+  19,975/20,000 on 07-12/07-13.
+
+### §G72.7 — Deploy + verified state at close
+
+`safety.evergreenmirror.com` Worker deployed, version `a0e01f32` (picks up #642's Worker-side fixes). D1
+was independently verified already current before deploying — 57 migrations applied = 57 local, latest
+`0057` — so **no migration was required** this pass. Exec `main` (origin) tip `e8e6107`; all 6 CI check
+runs on that commit (test / secrets / portal / 3x CodeQL Analyze) completed `success` — the fourth
+four-part-verify leg is clean. **Local `~/its` checkout was 2 commits behind origin (`#643`/`#644`) at
+this maintenance pass's own survey** — the exact scenario this agent's process step 1 exists to catch;
+every count/number in this section is taken from the fetched `origin/main`, not the stale local tree.
+
+### §G72.8 — Operator queue at close (none actioned autonomously)
+
+1. **Whether `po_materials.rfq_send` (and siblings) should actually be live** — §G72.2. FIXED high-class,
+   Seth-owned.
+2. **Whether the dashboard's activation tier for a send-gate crossing should be `elevated_confirm`** —
+   §G72.2, same decision family as (1) but distinct.
+3. **`CLAUDE.md` docs-currency pass** — the `po_materials/rfq_*` row's "ships dark" claim and the "16
+   tracked jobs" count (now 18) are both stale; not edited by this maintenance pass (out of its living-doc
+   charter) — see `docs/tech_debt.md`.
+4. **Transient-Smartsheet-CRITICAL exposure on 2 more surfaces**, found this session, not fixed:
+   `send_poll_core._load_authorized_approvers` (all five send-poll daemons, deliberately unfenced by
+   design) and a 4th replica of the DASH-14/#613 fence gap in `safety_reports/publish_daemon.py`. See
+   `docs/tech_debt.md`.
+5. `config_actuator`/`po_poll` workstream-scope divergence on `safety_reports.portal.worker_base_url` —
+   low-urgency doctrine-adjacent note, preserved byte-for-byte, not a live bug.
+6. Two low-severity docs-currency residuals: `verify_cutover.py`'s VC-01 docstring says 18 secrets
+   (actual 20); the dashboard registry enrolls `subcontract_send.polling_enabled` but not its
+   `from_mailbox`/`scheduled_send_local` siblings (parity gap vs. `rfq_send`'s full three).
+
+`docs/tech_debt.md` carries all six as tracked entries; info-gap doc §5/§8 carry the pointer-level summary
++ the corrected "Recently landed"/"Open queue" state. See `gh pr view` on #627/#637/#638/#639/#640/#642/
+#643/#644 for full PR bodies — not re-told verbatim here.
