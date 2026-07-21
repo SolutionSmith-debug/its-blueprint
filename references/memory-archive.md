@@ -4609,9 +4609,7 @@ recovery worked. Future instances: `cp`-backup or a targeted patch-revert before
 doc §1/§5/§6/§8 carry the pointer-level summary. See `docs/session_logs/2026-07-20_po-hub-tab-fold.md` for
 the full narrative + verification block.
 
-## §G72 — 2026-07-20/21: dashboard registry-drift audit surfaces a LIVE-STATE finding, the "auth storm" was
-pytest, and an 8-area coverage-gap hunt (exec PRs #627/#637/#638/#639/#640/#642/#643/#644, exec HEAD now
-`e8e6107`)
+## §G72 — 2026-07-20/21: dashboard registry-drift audit surfaces a LIVE-STATE finding, the "auth storm" was pytest, and an 8-area coverage-gap hunt (exec PRs #627/#637/#638/#639/#640/#642/#643/#644, exec HEAD now `e8e6107`)
 
 A dense two-day arc, all eight PRs four-part verified (main-branch CI on the merge commit confirmed
 SUCCESS for the tip). Numbered `§G72` (highest existing on the fetched `origin/main` was `§G71`). This
@@ -4619,8 +4617,7 @@ picks up immediately after §G71's own close (which covered through PR #636 / ex
 already flagged the RFQ **send** lane as the one thing left dark — this section is where that flag turned
 out to be wrong.
 
-### §G72.1 — PR #627 (`167243b`): an 8-surface adversarial audit of `operator_dashboard/` against the
-RFQ/vendor-estimate lane
+### §G72.1 — PR #627 (`167243b`): an 8-surface adversarial audit of `operator_dashboard/` against the RFQ/vendor-estimate lane
 
 The lane shipped dark 2026-07-19 with 3 daemons, 3 ITS-owned sheets, and 11 `ITS_Config` rows; the
 question was whether the console actually represents it. The obs panels turned out to be genuinely
@@ -4651,8 +4648,7 @@ were removed and the real gap filed to `docs/tech_debt.md` rather than left sile
 control that claims to run when it doesn't is worse than an acknowledged gap). That filed gap is the one
 PR #638/#639 close in §G72.4 below.
 
-### §G72.2 — THE LIVE-STATE FINDING: every send gate on the mirror reads `true`, including `rfq_send` —
-docs/memory/CLAUDE.md all still said "ships dark"
+### §G72.2 — THE LIVE-STATE FINDING: every send gate on the mirror reads `true`, including `rfq_send` — docs/memory/CLAUDE.md all still said "ships dark"
 
 While verifying the PR, a live `ITS_Config` check turned up that the console's own gate-editor notes were
 asserting a **false current-state claim**: every send gate on `evergreenmirror.com` reads `true` —
@@ -4696,9 +4692,7 @@ memory surface (including this very archive) that had fallen behind a real activ
 back to confirm or reconcile. Treat every "ships dark" claim about a procurement send lane as unverified
 until re-checked against the live `ITS_Config` value, not this doc.
 
-### §G72.3 — PR #628 (`9ef92d9`, merged 2026-07-20 before this arc's PR #627, but its throughline
-completes here): `po_creds_missing` was a false CRITICAL, and the fix that closed it was already written
-once
+### §G72.3 — PR #628 (`9ef92d9`, merged 2026-07-20 before this arc's PR #627, but its throughline completes here): `po_creds_missing` was a false CRITICAL, and the fix that closed it was already written once
 
 At 2026-07-20 04:42:18Z `po_poll` paged CRITICAL claiming PO credentials were missing. They were not — 3.4
 seconds earlier a single Smartsheet GET on `safety_reports.portal.worker_base_url` had blipped
@@ -4722,8 +4716,7 @@ pullers (six counting `portal_poll`, which now just re-exports the shared names 
 sites untouched). **Extended to eight** by PR #642 (§G72.4 below): `config_actuator` and `publish_daemon`
 adopted the same module when their own missing-marker gap was found in the same hunt.
 
-### §G72.4 — PR #637 (`6771491`): the 07-19 "Smartsheet auth storm" was pytest — three autouse guards, 88
-genuine violations found on first run
+### §G72.4 — PR #637 (`6771491`): the 07-19 "Smartsheet auth storm" was pytest — three autouse guards, 88 genuine violations found on first run
 
 13,850 auth-401 lines hit the live operator log on 2026-07-19 (~80% of that day's WARN/ERROR/CRITICAL
 volume) — this had now been mis-diagnosed as a production incident **three separate times** (07-14: 4,464
@@ -4758,8 +4751,7 @@ to compare against the genuine live path, with the dashboard's own `LOGS_DIR` de
 synthetic violation its fixture exists to catch, red-before-green. Measured effect: one test file that used
 to write 45 lines into the live operator log now writes zero.
 
-### §G72.5 — Coverage-gap hunt (PRs #638/#639/#640/#642): 38 candidates for "a control whose hardcoded
-scope quietly stopped covering the system," 22 confirmed, 16 refuted
+### §G72.5 — Coverage-gap hunt (PRs #638/#639/#640/#642): 38 candidates for "a control whose hardcoded scope quietly stopped covering the system," 22 confirmed, 16 refuted
 
 An adversarial hunt for exactly the class PR #627's Check-U discovery exemplified — deliberately run wide
 across watchdog checks, CI parity guards, cutover registries, Worker D1 hygiene, and docs, rather than
@@ -4839,8 +4831,7 @@ verified red-before-green per §55.2; #642's own verification block: vitest 1131
 `npm run typecheck` clean across all three tsconfigs, pytest green, mypy 443 files, ruff clean, gitleaks
 clean history.
 
-### §G72.6 — Tail items in the same arc: #643 (dashboard SIGTERM cosmetic fix) and #644 (compile_now_poll
-sustained-escalation)
+### §G72.6 — Tail items in the same arc: #643 (dashboard SIGTERM cosmetic fix) and #644 (compile_now_poll sustained-escalation)
 
 - **#643 (`b671a42`).** `launchctl list`'s `LastExitStatus` reports the *previous* instance's exit — for a
   long-running `KeepAlive` service like the dashboard, that means the panel reads a raw `-15` forever after
