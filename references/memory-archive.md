@@ -4887,3 +4887,168 @@ every count/number in this section is taken from the fetched `origin/main`, not 
 `docs/tech_debt.md` carries all six as tracked entries; info-gap doc §5/§8 carry the pointer-level summary
 + the corrected "Recently landed"/"Open queue" state. See `gh pr view` on #627/#637/#638/#639/#640/#642/
 #643/#644 for full PR bodies — not re-told verbatim here.
+
+## §G73 — 2026-07-21→22: Phase-1 gap builders + `~/its/logs` growth bound, two-brief session (exec PRs #649/#650/#651, exec HEAD now `5c744fa`)
+
+Numbered `§G73` — the highest section on the FETCHED `origin/main` was `§G71`; the local checkout also
+carried an already-committed-but-unpushed `§G72` (the 2026-07-20/21 coverage-gap-hunt session) at the
+time this section was authored, so `§G73` is one past the true current state of the lineage, not one past
+origin's stale `§G71`. This session picks up immediately after §G72's close.
+
+### §G73.1 — Brief 1: Phase-1 pre-builder-family gap builders (PR #649, `f7fc716`)
+
+Production cutover swaps `ITS_SMARTSHEET_TOKEN` to a dedicated ITS identity on Evergreen's **production**
+Smartsheet plan and re-provisions ITS's own operational surfaces there. Three Smartsheet surfaces (`ITS —
+System` workspace + its 4 folders, the 5 System sheets, `ITS –– Safety Portal` workspace + folders) and
+two Box mirror-tree roots predated the existing builder family and had no builder at all. Authored four
+missing ones — `build_system_workspace.py`, `build_safety_portal_workspace.py`, `build_system_sheets.py`,
+`build_box_roots.py` — **authoring only; CC never ran a live create.** One unified fail-closed adoption
+policy across the 3 Smartsheet builders (an adversarial review found the first cut had diverged per-builder,
+then re-proved the fix by injection): create-only (GET + create-POST only, no mutate/rename/re-parent/
+re-share/delete), exact-name adopt-don't-touch, scoped creation, idempotent no-op, y/N confirm before the
+first create, no secrets in output, duplicate-name ambiguity is LOUD. A wrong-plan sandbox workspace shared
+into the production identity → `accessLevel != OWNER` fails closed, nonzero exit, no FLIP-BLOCK id leak;
+absent `accessLevel` fails closed; an ambiguous PARENT container (>1 name match) fails closed (only a
+**terminal** leaf adopts-first-and-warns); `build_box_roots` surfaces the authenticated Box login, WARNs on
+mismatch vs. `EXPECTED_BOX_LOGIN`, and names the account in its y/N prompt — Box has no owner-of-root
+discriminator, so the human confirmation IS the control.
+
+**Two stale-brief facts corrected against the LIVE tenant, not the brief's assumption:** the Safety-Portal
+folder is `00_Safety Portal`, NOT `Safety Portal` — a second folder `00_Form Catalog` holds
+`ITS_Forms_Catalog`; exact-name find on the brief's stated name would have created a duplicate. And FIVE
+sheets named `ITS_Errors` coexist in `02 — Logs` — find-first-match is not the live one
+(`27291433258884`), so every find now counts all exact-name matches and WARNs with every id rather than
+silently trusting whichever one the API returns first.
+
+**Registry reconciliation, same PR (HOUSE_REFLEXES §1):** `verify_cutover` VC-03 enrolls the 2 Box
+`portal_root_folder_id` rows (`non_empty`, no `sandbox_scan` — numeric folder ids carry no
+`evergreenmirror` marker to scan); `shared/sheet_ids.py` gains `FOLDER_FORM_CATALOG`; `docs/tech_debt.md`
+CO-3 amended (presence is now enrollable even though `sandbox_scan` correctly stays N/A) + new CO-4 flags
+that `build_its_active_jobs_sheet.py`/`build_its_forms_catalog_sheet.py` are STALE — both still hardcode
+`WORKSPACE_OPERATIONS`+`"Safety Portal"`, the pre-2026-06-05 location, so a fresh-tenant run would silently
+create a THIRD, wrongly-named `Safety Portal` folder under ITS — Operations and print an aliased bootstrap
+constant whose paste would overwrite the real Safety-Portal folder id — deliberately out of scope for #649,
+recorded rather than left silent; `README.md` gains the Phase-1 cutover builder run-order block.
+
+### §G73.2 — Brief 2: bounding `~/its/logs` growth, Stage 1 + Stage 2 (PRs #650/#651, `23888a0`/`5c744fa`)
+
+`~/its/logs` had grown 265 MB / ~8 MB per day / 26× in 9 weeks. Disk was explicitly re-verified NOT the
+problem (1.1 TiB free) — the real problem is corpus legibility and unbounded growth, so the fix targets
+sources first, then a bound, not a symptom-only prune.
+
+**Stage 1 (#650, LIVE in `~/its`) — cut the two measured drivers at the source.**
+`shared/required_config.resolve_and_log`'s success path emitted one INFO line PER RESOLVED KEY; because
+these are one-shot-per-`StartInterval` daemons that re-run their config pass every cycle
+(`fieldops_sync` 10 keys × 631/day, `portal_poll` 4 × 959, `po_poll` 6 × 655), that class alone was 44.6%
+of the entire log corpus. Now emits ONE summary line per pass naming every resolved key + value + source —
+satisfies HOUSE_REFLEXES §5's "log each resolved setting with its source" while cutting volume ~70%. The
+per-key `config_row_missing` WARN stays per-key (individually actionable); the summarized
+`config_read_error` transient WARN, the returned dict, and fail-open are all unchanged. Separately,
+`shared/error_log._local_log`'s `print(line)` echoed every line to stdout, which launchd captures
+verbatim into `logs/launchd/<daemon>.out.log` — a ~0%-unique duplicate of the daily file, 46% of the
+corpus. Gated to `severity is not Severity.INFO`; the daily `<date>.log` write stays unconditional
+(remains the complete record). The two below-boundary `local_log` callers (`smartsheet_client`,
+`circuit_breaker`) both pass `Severity.WARN`, so outage-speech is preserved. Deletes nothing, ships no new
+capability, contains no irreversible operation — deliberately staged before Stage 2.
+
+**Stage 2 (#651, LIVE in the daily 07:00 watchdog) — watchdog Check W caps the rest.** New
+`_check_log_dir_rotation` (registered last in `CHECKS`) backed by new `shared/log_rotation.py`. **v1 NEVER
+deletes** — the only irreversible operation (delete) ships separately, after an off-host copy exists (see
+§G73.6). `logs/<date>.log` older than 14 LOCAL days gzip-in-place (streamed to a temp file, verified by a
+round-trip sha256+length check, `os.replace`d onto the `.gz` target, THEN the original removed — never the
+reverse); `logs/launchd/<daemon>.out.log` gets copy → verified `.gz` sibling → `os.truncate(path, 0)` IN
+PLACE (inode preserved — the ONLY operation ever applied to a launchd path is a truncate; unlink/rename
+would strand the KeepAlive dashboard's held fd forever, since no SIGHUP handler exists to make it reopen);
+`.err.log` is never touched (the incident file, 29–68% unique). Per-file 1 GiB size cap (an oversized log
+is skipped + surfaced, never read fully into RAM) + streamed 1 MiB-chunk gzip + a monotonic per-run
+deadline so the check cannot hang the 07:00 run and starve the F16 UptimeRobot heartbeat. Reuses Check B's
+`_open_critical_rows` for an open-CRITICAL whole-lane hold (an incident-hold-only cycle writes no
+duplicate row); MAINTENANCE-aware (records, doesn't page in a MAINTENANCE window). One orchestrator,
+`run_log_rotation(skip_launchd=…)` — the watchdog delegates to it, no dead public entry point that could
+truncate mid-incident. Seven safety controls proven by injection (truncate→unlink/rename, current-date
+guard, escalation on/off, capped-ladder-vs-`has_crossed_threshold`, size-cap skip, incident-hold-no-row).
+
+### §G73.3 — The pinned-decision deviation: dropping the brief's per-file mtime incident-skip guard, ratified live by Seth
+
+The brief pinned a per-file *"skip any launchd file whose `st_mtime` is within N minutes"* incident guard.
+The implementation dropped it — flagged explicitly in the PR rather than silently kept — and Seth ratified
+the deviation after a full danger/purpose/doctrine walk-through, live, this session:
+
+- **It defeated the check's own purpose.** `portal_poll`'s `.out.log` is the largest `.out.log` target
+  (~36 MB) and writes every ~60s, so its mtime is ALWAYS "recent" — the guard would have made it NEVER
+  eligible for truncation, permanently exempting exactly the file the check most needs to bound. A check
+  that runs green every day while the file it most needs to bound grows forever is a SILENT FAILURE — the
+  exact anti-pattern ITS doctrine ("failures observable, recoverable, never silent") exists against. The
+  deviation is therefore doctrine-ALIGNED, not a doctrine change — but it IS a code change (Op Stds §44
+  category 4, a FIXED high-capability class), which is why it was held for Seth rather than auto-merged
+  even though it's doctrine-aligned.
+- **The danger is minor and recoverable.** The only case the mtime-skip protected — truncating a file
+  mid-`tail -f` at 07:00 — loses NO data: copy-gz-truncate archives to a verified `.gz` BEFORE truncating,
+  and `tail -f` survives an in-place truncate on POSIX. The real "operator debugging a live storm" case is
+  covered by the open-CRITICAL whole-lane hold instead (verified fail-closed: an unreadable signal is
+  treated as "assume incident, hold").
+- **If the operator-courtesy is ever wanted back:** "Option B" — restore the mtime-skip but gate it with a
+  size-ceiling override (e.g. a file over ~5 MB truncates regardless of recent mtime), preserving the
+  courtesy for small files while still bounding the big ones. Estimated ~15 lines + a test. **Not built —
+  the deviation is accepted as-shipped.** Tracked in `docs/tech_debt.md` as a possible future refinement,
+  not a gap.
+
+### §G73.4 — Two design reconciliations made during the verification pass, not specified in either brief
+
+- **Routine Check W prune logs at `CheckResult` INFO, not WARN.** A daily-truncate check that WARNs on
+  every normal run would re-open the exact `ITS_Errors` near-cap lockout class that hit 19,975/20,000 on
+  2026-07-12/13 — a check whose NORMAL operation is "truncate a file" cannot itself be a per-cycle WARN
+  source. Abnormal conditions (oversized file skipped, gzip failure) still WARN + write an explicit
+  never-silent `log_dir_rotation` row OUTSIDE the `CheckResult` (a MAINTENANCE-mode downgrade would
+  otherwise erase a `CheckResult`-only WARN).
+- **The CAPPED `sustained_failure.is_escalation_cycle` ladder, never `has_crossed_threshold`.** The latter
+  mints one unrotatable open-CRITICAL every single day forever once past threshold — since an open
+  CRITICAL is never terminal per `shared/errors_rotation`, that's the same unreclaimable-row lockout shape
+  again. Check W is enrolled in `tests/test_transient_fence.py`'s `LADDER_CONSUMERS` (the AST-enforced
+  registry that any escalating module must really CALL the shared helper, not hand-roll `n >= …
+  CRITICAL_THRESHOLD`) — confirming Check W is not a second private copy of the ladder pattern the fleet
+  has been converging away from (see the `docs/tech_debt.md` compile_now_poll/fieldops_sync/portal_poll
+  convergence entries).
+
+### §G73.5 — Production-identity CI guard gotcha, hit building #649
+
+The `secrets` CI job runs a SECOND, distinct step beyond gitleaks: a working-tree `gitleaks dir` scan
+(config `.gitleaks-identity.toml`) that flags any real `<local>@evergreenrenewables.com` email literal in
+`.py`/`.ts`/`.tsx` source — the sandbox-first pattern deliberately keeps the production domain out of code
+(tests/seeds use `@example.com`/mirror addresses instead). It does NOT match a bare domain with no local
+part (a doctrinal comment mentioning `evergreenrenewables.com` alone is fine) — only actual `@`-emails.
+`build_box_roots.py` hardcoded `EXPECTED_BOX_LOGIN = "its@evergreenrenewables.com"` for its Box-identity
+confirmation guard, which reads as a real production-identity literal and RED-lit the `secrets` job's
+"Guard against production-identity re-entry in code" step — NOT the gitleaks-secrets step, a distinction
+worth keeping straight when triaging a red `secrets` job. **Fix pattern, generalizable to any future
+builder/config that needs to reference a production identity:** compose the identity from bare constants
+at runtime (`EXPECTED_BOX_LOCALPART = "its"`; `EXPECTED_BOX_DOMAIN = "evergreenrenewables.com"` — bare
+domain, guard-exempt; `EXPECTED_BOX_LOGIN = f"{EXPECTED_BOX_LOCALPART}@{EXPECTED_BOX_DOMAIN}"` — computed,
+not a literal) so the joined `@`-email never appears as a source literal; the runtime value is
+byte-identical. Verify locally BEFORE pushing: `git grep -nE "[A-Za-z0-9._%+-]+@evergreenrenewables\.com"
+-- '*.py' '*.ts' '*.tsx'` must return zero hits. See auto-memory `production-identity-ci-guard.md`.
+
+### §G73.6 — Operator queue at close
+
+1. **Check W's first live 07:00 run will truncate every eligible `.out.log` at once (~120 MB reclaim
+   estimated).** It is archive-verified-first and injection-tested, but for a first-ever file-mutating
+   operation against live logs, run it once by hand first — `python -m scripts.watchdog --dry` to preview,
+   then once for real, eyeball the new `.gz` siblings — before trusting the unattended cron. Not yet done
+   as of this session's close.
+2. **The off-host-copy decision (Seth-owned, FIXED high-class, Op Stds §44).** Check W v1 archives but
+   never deletes, so `.gz` files accumulate under `~/its/logs/` bounded only by disk (1.1 TiB free, not
+   urgent). The delete stage is explicitly deferred until an off-host copy of the forensic record exists —
+   `shared/redact.py`/the §54 backstop doctrine rules out Box as the destination (an Evergreen customer
+   SoR, not an ITS operational archive target), so the real open question is which off-host mechanism
+   (dedicated cloud bucket, encrypted external volume on a schedule, etc.) Seth wants. Tracked in
+   `docs/tech_debt.md`.
+3. **Option B (mtime-skip + size-ceiling restore) is a possible future refinement, not built** — see
+   §G73.3. Only worth doing if the operator later wants the mid-tail courtesy back for some smaller
+   daemon's `.out.log`.
+
+Do NOT re-build any of this — both briefs are fully merged and live. Method used throughout: fork-worktree
+workflows + adversarial multi-lens review + prove-it-bites injections (each of the safety controls named
+above was RED-lit on a synthetic violation before being trusted). See auto-memory
+`project_cutover-builders-and-logs-growth-2026-07-21.md` + `production-identity-ci-guard.md` (topic-level
+detail, not duplicated here); info-gap doc §8 carries the pointer-level "Recently landed"/"Open queue"
+summary.
