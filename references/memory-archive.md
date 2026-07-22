@@ -5052,3 +5052,193 @@ above was RED-lit on a synthetic violation before being trusted). See auto-memor
 `project_cutover-builders-and-logs-growth-2026-07-21.md` + `production-identity-ci-guard.md` (topic-level
 detail, not duplicated here); info-gap doc §8 carries the pointer-level "Recently landed"/"Open queue"
 summary.
+
+## §G74 — 2026-07-22: branch-protection hardening (CL-23 closure) + 5-PR system-completeness sweep + `ITS_Documentation_Index` live build (exec PRs #654–#658, exec HEAD now `a2623fd`)
+
+Numbered `§G74` — the highest section on the FETCHED `origin/main` was `§G73` (this session's own
+`git fetch origin` immediately before writing confirmed it), so this is the correct next number, no
+concurrent-session collision. This is the 2026-07-22 afternoon session, picking up immediately after §G73's
+close (same day, second session).
+
+### §G74.1 — Branch protection hardened on `main`, bite-proven — closes CL-23
+
+Branch protection on `SolutionSmith-debug/its` `main` had been configured 2026-05-24 but with
+`enforce_admins=false` — a trap this doc's own "Recently landed" line read as "Branch protection on main"
+without qualifying that `enforce_admins=false` means the rule set never binds the repo's own admin (Seth,
+or CC running as him), the only account that actually pushes. CL-23 ("`main` UNPROTECTED") sat at the top of
+the Aug-7 delivery punch-list because of exactly this. This session flipped it: required status checks
+widened `["test"]` → `["test","portal","secrets"]`, `enforce_admins` `false` → `true`, strict up-to-date
+kept, still **no** required PR reviews (solo + CC, CI is the gate). Confirmed via
+`gh api repos/SolutionSmith-debug/its/branches/main/protection`:
+
+```
+required_status_checks: {strict: true, contexts: [test, portal, secrets]}
+enforce_admins: {enabled: true}
+allow_force_pushes: {enabled: false}
+allow_deletions: {enabled: false}
+```
+
+**Bite-proven, not just config-read** — a direct push to `main` was attempted and server-rejected after the
+flip, the standard for this doc's "prove the control bites" convention (HOUSE_REFLEXES §2). **Consequence for
+every future session:** EVERY change to this repo now rides a PR, docs included — a direct
+`git push origin main` for even a one-line doc fix will be rejected — and a PR that falls BEHIND `main`
+during the strict-status-check window needs `gh pr update-branch <N>` (re-runs CI) before it can merge.
+
+### §G74.2 — #654 (`f2bb9a0`): `verify_cutover --profile phase1-hybrid` — named sandbox-scan exemptions, checklist §3.5
+
+The Evergreen Phase-1 cutover (due Tue 2026-07-22 per the checklist) is deliberately **hybrid**: Smartsheet +
+Box + M365 move to production tenants while the Safety Portal deliberately **stays** on
+`safety.evergreenmirror.com`. The existing `verify_cutover.py` sandbox-scan gate has only a blanket
+`--allow-sandbox` waiver (correctly refused as a shippable verdict per §52/§53 narrated-not-enforced /
+sandbox-masks-production doctrine) — it cannot express "pass with exactly these three mirror-domain rows
+still mirror, fail on any other mirror residue." New `PROFILES` data table: `phase1-hybrid` names the exact
+three `(key, workstream)` `safety_reports.portal.worker_base_url` rows expected to still read the mirror
+domain. VC-03 exempts profile rows from the **domain scan only** — presence + non-empty are still asserted —
+and every exercised exemption prints in the PASS summary, never silently. `--profile` and `--allow-sandbox`
+are mutually exclusive. **Live read-only smoke against the mirror** (`--profile phase1-hybrid --only config`)
+FAILed naming exactly the six not-yet-repointed rows (5× `from_mailbox` + `system.operator_email` — the
+Wed/Thu M365 leg) while correctly exempting the three worker_base_url rows — both directions of the profile
+proven live, not just unit-tested. `docs/operations/cutover_checklist.md` gained a CL-12 note.
+
+### §G74.3 — #655 (`16acbf3`): dashboard system-map depth — operator briefs, doc links, live Smartsheet out-links, full sheet coverage
+
+The `/system` map's Smartsheet nodes were join-key stubs (bare numeric sheet id, no doc link, several sheets
+missing entirely) — a non-technical operator could see the topology but not learn what any sheet IS or what
+to do with it. New `sheet_briefs.py` keys plain-language operator briefs (what it is / who writes it / what
+you do) to each sheet node; `MapNode` grows `docs=(label, path)` doc links. **New nodes:** Orphaned Reports
+(previously invisible despite being a live routing target), `ITS_Forms_Catalog`, and a `registry_sheets`
+split — `ITS_Quarantine`, `ITS_Project_Routing`, `ITS_Time_Off` (takes the Check-D badge),
+`Picklist_Sync_Config` promoted to a satellite chip — 4 registry satellites total; the residual master-DB
+node rewritten to drop a decommissioned Vendor/Subcontractor-DB claim. Stale badges fixed after the earlier
+five-lane send-daemon unification: Check N now on all five send daemons (was `weekly_send`-only); Check T on
+all three procurement review sheets. Six `runbook=` gaps filled; **3 new §43-shaped runbooks** added
+(`its_errors_triage.md`, `review_queue_triage.md`, `time_off_reviewer_chain.md`), verbs/columns verified
+against live code, `tree.yaml` + guide + manifest sha256 regenerated. A cached fail-soft Smartsheet permalink
+fetch adds an "open in Smartsheet ↗" link on every sheet node (a permalink is not derivable from the numeric
+id alone). Parity teeth extended in `tests/test_system_map.py`: every registered watchdog letter must be
+badged on a node (letter set pinned to `len(CHECKS)`); every live `SHEET_*` constant must be on the map or
+exempted with a reason (+ reverse check); every sheet node must carry a brief; briefs are banned from
+asserting live state (caught two violating phrases during development — the same class of trap as the
+`enforce_admins`/CL-23 finding above, and the same class HOUSE_REFLEXES §5 codifies generally).
+
+### §G74.4 — #656 (`e5f08e5`): CO-4 Safety-Portal builder repoint (cutover-blocking) + CO-2 live-clamd EICAR smoke + ledger truth-up
+
+**CO-4, HIGH, was cutover-blocking for the next day's production-builder run.**
+`build_its_active_jobs_sheet.py` + `build_its_forms_catalog_sheet.py` still targeted the pre-2026-06-05
+location (`ITS — Operations` / `"Safety Portal"`, not `00_Safety Portal`/`00_Form Catalog` under
+`WORKSPACE_SAFETY_PORTAL`) — flagged as CO-4 back in §G73.1's own §649 writeup but deliberately left
+out-of-scope there. On a fresh production tenant either builder would have created a THIRD, orphaned
+`Safety Portal` folder and the bootstrap constant it printed would have overwritten the REAL folder id via
+the `FOLDER_OPERATIONS_SAFETY_PORTAL` alias. Both builders now target `WORKSPACE_SAFETY_PORTAL` with the
+live folder names and emit the real constants — **live-smoked on the mirror: both dry-runs FIND the exact
+live folder/sheet ids** (`6663869084002180` / `3559329820370820`) matching `shared/sheet_ids.py`.
+`safety_portal_config_sheets.md`'s runbook location note fixed in the same pass.
+
+**CO-2, prove-the-control-bites:** two live-clamd tests added — an actual EICAR string through the REAL
+`photo_screen` daemon path must return `FOUND`, plus a clean photo through the full screening ladder with
+`clamav_enabled=True`. Both skip-if-no-clamd (CI + this dev Mac skip; the production Mac exercises them for
+real at the Phase-C hardening gate, still open — see §G74.8).
+
+**Ledger truth-up in `docs/tech_debt.md`, mechanical evidence for each closure:** CO-1 was already RESOLVED
+2026-07-14 (PR #585, `45fe4df` — `DEFAULT_POLLING_ENABLED=False` reverified at HEAD; the tech-debt entry was
+just stale, not the fix). Two long-stale `[CUTOVER-BLOCKING]` entries closed with mechanical evidence:
+PR-5/migration-0012 deploy — confirmed via a remote `wrangler d1 migrations list` returning "No migrations
+to apply" at `f2bb9a0` plus live 401-JSON route probes against the deployed Worker; Phase-5 deploy
+prerequisites — confirmed already completed by the 2026-06-08 go-live. **This info-gap doc and CLAUDE.md's
+own "What's stubbed vs. real" table carried the SAME stale PR-5/favicon claims** (see the info-gap §5/§8
+edits this session made alongside this section) — the same closure needed applying on the blueprint side
+independently, since the exec-side tech_debt.md fix does not automatically propagate to this doc.
+
+### §G74.5 — #657 (`202b7b6`): operator-dashboard config-editor reorg — curated order, stable anchors, group intros, ON/OFF pills
+
+The `/config` page had grown into a ~10,000px wall sorted `(tier, group, setting)` — an alphabetical
+accident, positional `#grp-N` anchors that shifted whenever a group was added, no section explanations, and
+raw `true`/`false` strings a non-technical operator had to parse cold. New `GROUP_ORDER` curates a real
+reading order (daily gates → send gates → windows → behavior → knobs → data → brake → identity → trust →
+endpoint); `GROUP_INTROS` gives one plain-language SEMANTIC sentence per section — what the group MEANS,
+never live state (the existing no-live-state-assertion test, the same class from HOUSE_REFLEXES §5's
+"static text must never assert a LIVE gate state" rule, now scans these intro strings too, catching the same
+trap class documented in §G74.1/§G74.3 a third time this session); `GROUP_ACCENTS` gives the send-gate
+section the gold External-Send-Gate accent and the global-brake section the red one, matching the `/system`
+rail's own accent language. `group_slug()` gives stable slug anchors that don't shift when ordering changes
+(the config-filter.js rail-href resolution needed no change — it resolves generically). Live boolean values
+now render as ON/OFF pills — this IS live-rendered state and is explicitly allowed (only the static intro
+prose is banned from asserting it). Write flow (routes, ceremonies, validators, audit calls, outcome kinds,
+per-row `#out-<slug>` htmx targets) is byte-identical — this is a read-surface reorg only. 39 new/changed
+tests incl. `GROUP_ORDER` covering every registry group exactly once and tier-homogeneity per group.
+
+### §G74.6 — #658 (`a2623fd`): watchdog per-check sweep-results file + dashboard `WatchdogSweepSource` panel
+
+"Did last night's 07:00 sweep run, and which checks passed" had NO surface — a fully-green sweep was
+invisible by construction, since only a FIRING check ever left an `ITS_Errors` row, and the dashboard's
+existing watchdog panel mirrored Check-C markers only (staleness, not pass/fail per check). New
+`CHECK_LETTERS` (fn → letter) registry in `scripts/watchdog.py`, parity-tested against `CHECKS` — **21
+registered callables, 22 `_check_*` defs, 20 distinct letters A–W** (this session also reconciled
+CLAUDE.md's own watchdog-count claim, which had drifted to "20 registered/21 defs, letters A–V/19 distinct"
+— stale since Check W landed in §651/§G73). `_run_check` now returns a sweep record carrying the RAW
+pre-MAINTENANCE-downgrade severity (a harness failure records as ERROR); `main()` persists
+`{run_at, alerts_suppressed, results[]}` to `state/watchdog_results.json` via
+`state_io.atomic_write_json` — best-effort, never blocks the existing retry summary / liveness marker /
+heartbeat beacon. New `operator_dashboard` panel `WatchdogSweepSource` (letters + verdicts + sweep age; a
+sweep older than 26h WARNs even when every check inside it was green; MAINTENANCE sweeps annotated; a
+missing results file renders as an informational first-run state, not an error; a `getattr` fallback
+tolerates an older observed live tree during the deploy window itself). An autouse test fixture redirects
+the results path to a tmp dir so no watchdog test can ever write the live state file.
+
+### §G74.7 — `ITS_Documentation_Index` built + seeded live on the mirror; two builder seams found + fixed
+
+`scripts/migrations/build_docs_index_sheet.py` (originally landed 2026-07-15, PR #604, Tranche E of the
+documentation-corpus program) was run live against the mirror this session and produced the sheet for the
+first time: **22 rows, sheet id `5219712047730564`**; `system.docs_index_sheet_id` recorded in `ITS_Config`
+under Workstream `infrastructure`. The live run hit two seams in the existing builder, both root-caused and
+fixed (the fixes ride the in-flight close-out PR — see §G74.8, not yet merged to `main` as of this section's
+writing, so the fix commit SHA is not cited here per this doc's own predicted-PR-number discipline):
+
+1. **Create→read propagation window aborted verify-after.** The SAME class already documented in this doc's
+   §5 "Smartsheet create→read propagation window" entry (2026-07-13, PR #563/Feature A) — a just-created
+   sheet can 404 on the very next read. This builder's verify-after step wasn't budgeting for the window and
+   aborted on the FIRST live run. This is now the class's third confirmed recurrence (Feature A in
+   `job_sheet.py`, then again elsewhere, now here) — worth defaulting every new create-then-immediately-use
+   builder to the bounded-readiness-probe pattern rather than rediscovering the window per-builder.
+2. **`_record_sheet_id` assumed `get_setting` returns `None` on a missing key — it raises
+   `SmartsheetNotFoundError` instead.** A REST/dict-get mental model ("read a config value, get `None` back
+   if absent, branch on that") doesn't hold for `shared.smartsheet_client.get_setting` — it raises on a
+   missing row. `_record_sheet_id` used the `None`-branch to decide "not yet recorded, go create it" and
+   crashed on the genuinely-expected first-run case instead. Fixed by catching the exception explicitly.
+
+Both are now recorded as new §5 entries in the info-gap doc (this session's companion edit) so a future
+`ITS_Config`-reading builder doesn't rediscover either independently.
+
+### §G74.8 — Post-merge live sweep + operator queue at close
+
+**Post-merge live verification (all 5 PRs):** a full watchdog sweep ran clean — **21/21 checks INFO green**.
+The operator dashboard was restarted twice via the DASH-12 kickstart verb to pick up the new code: once
+after #655 + #657 landed, again after #658 landed (each restart confirmed serving the new panel/nodes before
+moving on).
+
+**Still open for Seth, not detailed further in this session's own closing summary — confirm scope before
+acting on any of these:**
+
+1. **E1/E2 Smartsheet admin asks** — day-1 critical-path items for the cutover.
+2. **WAF rate-limit item, due Thursday** — Cloudflare-side, likely related to the still-undiagnosed
+   `/pending-jobs` intermittent-failure root cause (suspected bot-fight-mode/WAF, open since 2026-07-05,
+   info-gap §8 "Open queue").
+3. **Phase-C EICAR smoke** — the live-clamd EICAR smoke §G74.4 added (CO-2) covers the Safety-Portal photo
+   path; a separate Phase-C-scoped smoke against the production Mac's real `clamd` remains to run.
+4. **pytest-pollutes-live-logs test-infra hardening, recommended pre-Monday** — a further pass beyond PR
+   #637's 3 autouse guards (network/log/egress, 2026-07-21, `tests/conftest.py`) was identified but not
+   built this session.
+5. **`safety_intake` heartbeat/marker residue file-delete** — `safety_reports/intake_poll.py` was DELETED
+   2026-07-03 (tombstone verified via `launchctl list` at the time), but its `ITS_Daemon_Health` row and/or
+   Check-C marker file may still have residue on disk/sheet; a one-time cleanup, not yet done.
+
+**A session-close PR (builder-bugfix for §G74.7's two seams + doc reconciliation + session log) was in
+flight in the exec repo at the time this section was written** — confirmed via `gh pr list --state open`
+returning no such PR yet and `~/its` `origin/main` sitting at `a2623fd` with a clean working tree, so the
+close-out work is happening in a separate worktree not yet pushed. Do not cite a PR number for it; check
+`gh pr list` fresh next session instead of trusting this note's staleness.
+
+See auto-memory (new/updated entry expected from the exec-side close, not duplicated here); info-gap doc
+§1/§4/§5/§8 carry this session's companion edits (branch-protection block update, two new trap entries, the
+"Recently landed"/"Open queue" pointer-level summary, and the frontmatter `Last refreshed`/
+`last_verified_against` bump to `a2623fd`).
