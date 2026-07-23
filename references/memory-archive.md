@@ -5242,3 +5242,181 @@ See auto-memory (new/updated entry expected from the exec-side close, not duplic
 §1/§4/§5/§8 carry this session's companion edits (branch-protection block update, two new trap entries, the
 "Recently landed"/"Open queue" pointer-level summary, and the frontmatter `Last refreshed`/
 `last_verified_against` bump to `a2623fd`).
+
+## §G75 — 2026-07-23: tenant wipe + orchestrated stand-up rehearsal — 231-sheet Smartsheet tenant + 2/3 Box roots wiped/rebuilt, 5 defect classes caught, fleet 14/14 healthy, archive-on-closure audited NOT-proven (exec PRs #664–#672 + #674, exec HEAD `249afe9`)
+
+Numbered `§G75` — a `git fetch origin` immediately before writing confirmed the highest section on the
+FETCHED `origin/main` was `§G74`, so this is the correct next number, no concurrent-session collision.
+**Scope note: this section covers ONLY this session's own PRs — #664, #665, #666, #667, #668, #669, #670,
+#671, #672, #674.** PRs **#673, #675, #676 belong to a separate, concurrent session** (interleaved into the
+same merge sequence — #674 is in fact the LAST of the thirteen to merge, at `16:28:11Z`, after #673/#675/#676
+— confirmed via `gh pr view <N> --json mergedAt`) and are **not** claimed here or credited to this session's
+work; see the tail of this section for what little is known about them, cited without detail-ownership.
+
+### §G75.1 — The rehearsal: what was wiped, what survived, what it archived
+
+The session's premise: a full **dress-rehearsal of Evergreen's production-tenant cutover stand-up** against
+the `evergreenmirror.com` sandbox, executed as a real wipe-and-rebuild rather than a tabletop walkthrough —
+per this doc's own recurring "prove the control bites" convention (HOUSE_REFLEXES §2), the only way to know
+the cutover-day builder sequence actually works is to run it for real once, off-production, before the real
+thing. **11 of 12 Smartsheet workspaces were wiped**; the 12th, `Forfront IL portfolio` (id
+`2228567565199236`, note the source-typo'd name — pre-existing, not ITS-authored), survived because ITS does
+not own it. **2 of 3 Box roots were wiped** (`ITS_Progress_Reporting` id `396689250929`,
+`ITS_Safety_Portal` id `388017263015`); the third, `ITS DATA` (id `382010286207`), survived — not
+ITS-owned. **The pre-wipe archival record is `~/its/logs/migrations/prewipe_20260723T030026Z/`** —
+`_manifest.json` (12 workspaces enumerated, 231 sheets dumped, 4 unreadable-404 `ITS_Errors` shell
+duplicates, the 3 Box roots), a full per-workspace `smartsheet/` sheet-content dump, and `box_manifest.json`
+(structure only — file bytes deliberately NOT downloaded, per the dump's own documented `limitations`
+field). This dump is the sole row-restore source for the rebuild; Box document bytes were never going to be
+recreated (a wipe is metadata/structure-only on the Box side, or the rehearsal would need to re-upload every
+historical PDF).
+
+### §G75.2 — The new tooling family: `wipe_tenant.py` / `standup.py` / `sheet_ids_regen.py`
+
+Three new `scripts/migrations/` modules, none of which existed before this session:
+
+- **`wipe_tenant.py`** — dump-then-delete. Captures the pre-wipe manifest above (guard: an escaping dump
+  exception aborts the wipe with nothing deleted — fail-closed, "false abort OK, false skip NOT" is this
+  script's own stated polarity), then deletes every ITS-owned workspace/root, skipping anything not
+  ITS-owned (the `Forfront IL portfolio` / `ITS DATA` skip logic lives here).
+- **`standup.py`** — the orchestrated rebuild. A `Stage`-based runner (`build_stages`) that walks every
+  Smartsheet/Box builder script in dependency order, regenerates `shared/sheet_ids.py` after each stage via
+  `sheet_ids_regen.py`, restores dumped rows (`_stage_restore_rows`) and shares (`_stage_restore_shares`),
+  and finishes with `_stage_final_verify`. Supports `--dump DIR`, `--start-at STAGE` (resume a failed run
+  mid-sequence — load-bearing: this session needed it 5 times), `--skip-shares`, `--no-restore` (the
+  fresh-tenant/production path, no dump to restore from), and a hard daemon-down precondition
+  (`_require_daemons_down`). Writes/clears a marker file at `~/its/state/standup_in_progress.json`
+  (`_write_standup_marker`/`_clear_standup_marker`) — the same path `operator_dashboard/auth.py`'s
+  `STANDUP_MARKER_PATH` reads to drive the new ACT fence (§G75.4 below).
+- **`sheet_ids_regen.py`** — the single source of truth for `shared/sheet_ids.py` regeneration. Supports
+  `--check` (verify the committed file matches live tenant reality, no writes), `--write` (regenerate +
+  commit the constants), and (added mid-session, §G75.3) `--expect` (assert a specific builder's output
+  against a name→id mapping before flipping the constant, closing a nondeterministic-order class of bug).
+  **This is the tool CLAUDE.md's info-gap companion edit means when it says "sheet_ids.py is regenerable"**
+  — it is no longer a hand-maintained module; every ID in it now has a live, re-derivable source.
+
+### §G75.3 — Five defect classes caught mid-rehearsal, each fixed same-session
+
+1. **#665 — Smartsheet column-description 250-char API cap (`errorCode 1041`).** A builder writing a
+   column description longer than 250 chars 400'd on a fresh-tenant create (never hit before because no
+   prior builder run had ever created every column from scratch in one sequence). Fixed by capping at the
+   composition site, mirroring the existing 50-char sheet-NAME cap entry already in this doc's own §5 (the
+   same class of "Smartsheet silently enforces a string-length ceiling that only bites on a genuinely fresh
+   create," now confirmed for descriptions too).
+2. **#666/#667 — a create→read propagation race in `sheet_ids_regen` immediately after a builder stage.**
+   The SAME class already on record in this doc (§G74.7 / info-gap §5 "Smartsheet create→read propagation
+   window") — a just-created sheet/folder can 404 or read stale on the very next call. #666 added a bounded
+   `§45` propagation probe (retry-with-backoff before regen reads) so `sheet_ids_regen` doesn't race the
+   builder it just ran. #667 went further: **`sheet_ids_regen --expect`** makes the builder→regen handoff a
+   **deterministic, asserted contract** rather than "read whatever's there and hope the names match" — pass
+   an expected name→id mapping, fail loud (not silently write a wrong id) if live reality doesn't match.
+   This is now the third confirmed recurrence of the propagation-window class; the standing lesson (already
+   generalized in the info-gap doc) is to default every new create-then-immediately-use path to a bounded
+   probe rather than rediscovering the race per-caller.
+3. **#668 — a stale AUTO_NUMBER Job-ID doctrine caught by the OPERATOR, not by code.** The migrations'
+   manual-gate instructions (and this doc's own §6 "AUTO_NUMBER columns are UI-only" entry, which cited
+   `ITS_Active_Jobs Job ID` as the example needing a manual Insert-Column-via-UI step) were **stale since
+   P2.5 Slice 6** (2026-06-30) — the portal has assigned the canonical `JOB-######` and written it as a
+   plain **TEXT** column via the Worker `job_counter` for weeks; there is no AUTO_NUMBER column on Job ID
+   and never has been since that cutover. Seth caught the stale manual gate live during the rehearsal
+   walkthrough rather than dutifully performing a UI step for a column type that no longer exists. Fixed:
+   `standup.py`'s manual gate for Job ID retired; `docs/tech_debt.md`'s matching stale entry closed with
+   mechanical evidence. **Lesson for this doc:** the general AUTO_NUMBER-is-UI-only Smartsheet API constraint
+   in §6 remains TRUE — only its worked EXAMPLE (Job ID) was wrong, and had been wrong for three weeks
+   before anyone re-verified it against the live portal code. See info-gap §5 for the standing correction.
+4. **#669/#671 — 15 + 11 ITS_Config rows that existed live but had NO seeder script, caught by VC-03 on
+   the freshly-rebuilt tenant.** A tenant wipe+rebuild is the first event that actually EXERCISES "does
+   every live config row have a reproducing seeder" — rows an operator or an earlier ad-hoc session had
+   hand-created directly in the Smartsheet UI (never through a `seed_*_config.py` script) simply did not
+   come back after the rebuild. `verify_cutover.py`'s VC-03 caught the gap (15 rows on the first post-reload
+   sweep, PR #669; a second sweep after that fix found 11 more, PR #671 — two waves, not one, because the
+   first seeder pass itself surfaced fresh comparison targets). **New CI seeder-parity teeth added in #671**
+   so this class cannot recur silently on a future rebuild: every live-required config row must now trace to
+   a committed seeder, checked mechanically, not just caught live by VC-03 after the fact.
+5. **#672 — dashboard `system_map` hardcoded sheet ids instead of reading `shared/sheet_ids.py`.** Every
+   Smartsheet ID changing at once (the wipe's own consequence) exposed a hardcoded-copy anti-pattern in the
+   operator dashboard's `/system` map — it carried its own frozen ids rather than importing the single
+   source of truth. Fixed to import from `shared/sheet_ids.py` directly; this closes the class permanently
+   for the map (any FUTURE regen is automatically reflected, no second edit needed) and is itself an instance
+   of the "N implementations, enumerate them all" fan-out lesson (HOUSE_REFLEXES §1) — the sheet ids fan out
+   to more consumers than the obvious ones.
+
+### §G75.4 — #674: the stand-up ACT fence — dashboard stays up through a wipe/rebuild
+
+The operator wanted the dashboard **left running** through the wipe/rebuild window (rather than shut down
+for the duration) so its read-only observability panels remain useful mid-rehearsal — but ACT verbs (Class
+A/B/C writes) firing against a tenant mid-wipe or mid-rebuild is actively dangerous (writing to a sheet id
+that is about to be deleted, or that hasn't been regenerated yet, or double-driving a builder the standup
+script is also driving). #674 threads this: `standup.py` writes `~/its/state/standup_in_progress.json` at
+start and clears it at completion/abort; `operator_dashboard/auth.py` reads that same marker and **fences
+every ACT verb** (not just a subset) while it's present — the dashboard keeps serving reads, refuses writes,
+for the whole wipe→rebuild window. This is the validated form of a queued optimization idea from this
+session's own dossiers (`~/its/logs/reviews/2026-07-23_opt_runtime.json`, opportunity 2): the naive
+"just exempt the dashboard from the daemon-down requirement" idea had a real corruption window, closed here
+by the marker-file fence plus (per the dossier) an epilogue-restart expectation once the rebuild completes.
+
+### §G75.5 — Full pre-wipe gate restore (§44) + fleet health post-rebuild
+
+Every `ITS_Config` gate value present in the pre-wipe dump (`~/its/logs/migrations/prewipe_20260723T030026Z`)
+was restored to its exact pre-wipe value on the rebuilt tenant — an explicit Seth-authorized action (Op
+Stds §44: gate state is a FIXED high-capability-class category; a full-tenant gate restore touching every
+send/polling gate at once is squarely in that class and was not actioned without the operator's sign-off).
+Post-rebuild, the full daemon fleet reported healthy: **14/14 `ITS_Daemon_Health` heartbeats** green after
+reload. This is the dry-run proof the actual production cutover stand-up (due imminently per the Aug-7
+program) will not be discovering these five defect classes for the first time against the real tenant.
+
+### §G75.6 — Archive-on-closure audited: defined narrowly, implemented narrowly, NEVER proven live
+
+A three-lens adversarial audit of "what actually happens when a project is archived" ran this session,
+producing three dossiers — `~/its/logs/reviews/2026-07-23_arch_code.json` (code-level grep-verified),
+`2026-07-23_arch_docs.json` (doctrine/runbook-level), `2026-07-23_arch_inventory.json` (per-job-surface
+inventory) — that converge on one verdict: **Op Stds v21 §51 + its folded riders define archive-on-closure
+for exactly ONE slice — the four progress standing-tracker sheets** (Hours Log, Equipment, Material List,
+Material Incidents), implemented by `field_ops/fieldops_sync.py:811-869`
+(`_archive_closed_job_trackers` → `shared/smartsheet_client.move_sheet_to_folder`, its#462, PR #465). Three
+compounding narrowings on top of that one slice:
+
+- It fires **only** when a **portal-origin** job's lifecycle is explicitly set to `'archived'` — the
+  portal UI's own documented normal close path is `'inactive'` (`fieldops_job_write.ts:273-274`), which
+  does **not** archive anything; nothing in the UI or docs tells an operator that "closing" and "archiving"
+  are different actions with different consequences.
+- **Smartsheet-origin jobs are structurally exempt** — `fieldops_sync` mirrors only portal-origin dirty
+  jobs, so setting `Archived` directly in `ITS_Active_Jobs` can never trigger the move at all.
+- It has **never fired against live data** — no job has ever reached `lifecycle='archived'`; the `ITS —
+  Archive` workspace held **0 sheets** in the 2026-07-23 pre-wipe dump; the committed operator-run `pytest
+  -m integration -k move_sheet_to_folder` live smoke has been a listed TODO since the 2026-07-04 session log
+  and no later session log records it running (its#462's own §30 obligation, still open — a genuine
+  prove-the-control-bites gap, not a stale claim).
+
+Everything else a project owns has **no archive path at all, defined or implemented**: safety/progress week
+sheets and per-job Smartsheet folders, WSR/WPR review rows, PO/RFQ/estimate/subcontract per-job mirror
+sheets and flat Log rows, and **all** per-job Box content (`shared/box_client.py` has zero move/archive
+primitive). The only whole-project procedure on record anywhere is the destructive manual 3-system
+`purge-job` nuke (D1 cascade + manual Smartsheet + manual Box) — deletion, not archival, with its own
+documented footgun (delete the `ITS_Active_Jobs` row FIRST or the down-sync re-creates it). **This audit is
+diagnosis, not a fix** — see the exec-side `docs/tech_debt.md` entries this session added (citing these same
+three dossiers) for the open Seth decisions (trigger semantics inactive-vs-archived, closure policy for the
+~11 uncovered per-job surfaces, the overdue live move smoke).
+
+### §G75.7 — What the concurrent session did (not this session's work, cited for orientation only)
+
+Interleaved into the same merge window (per §G75's own opening note, #674 above merged LAST of the
+thirteen), a separate session landed PRs **#673** (wipe-dump fails closed on transient 429/5xx instead of
+misclassifying them `unreadable` and proceeding), **#675** (`doctrine_manifest.yaml` joins the
+`sheet_ids_regen` remap scope; the file-sweep widens to `.yaml`/`.md`, report-only), and **#676**
+(`standup.py` gains persisted run-state + bare `--resume`, streamed stage-prefixed child output, and a
+`STANDUP_NONINTERACTIVE` contract replacing a blind `y\n`-times-8 auto-feed). At the time this section was
+written, that same session had three further branches in flight as **open, unmerged** PRs — **#678**
+(`docs/project-closure-archive` — a project-closure runbook + closure-policy proposal, i.e. the doc-side
+answer to §G75.6's gaps), **#679** (`feat/standup-finish` — a `standup.py finish` epilogue subcommand), and
+**#680** (`feat/production-repoint` — `production_repoint.py`, a CL-12 repoint actuator) — plus a fourth
+local, not-yet-pushed branch (`feat/production-shares` in worktree `~/its-shares`, one commit ahead of
+`origin/main`: "mechanize CL-11 — approver-share manifest + guarded seeder + VC-10 approver-shares gate").
+**None of this is detailed further here** — it belongs to that session's own close, not this one's; noted
+only so a future reader of this section doesn't mistake the open-PR numbers for gaps still needing a brief.
+
+See exec `docs/tech_debt.md` (three new entries added this session, citing the dossiers above); info-gap
+doc §5/§6/§8 carry this session's companion edits (two new Smartsheet-constraint trap entries + the stale
+AUTO_NUMBER correction, the new wipe/standup/regen tooling family, and the "Recently landed" pointer-level
+summary); auto-memory `project_tenant-wipe-standup-2026-07-23.md` (written by the orchestrating session, not
+duplicated here) carries the topic-level operational narrative.
