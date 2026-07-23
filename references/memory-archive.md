@@ -5420,3 +5420,129 @@ doc §5/§6/§8 carry this session's companion edits (two new Smartsheet-constra
 AUTO_NUMBER correction, the new wipe/standup/regen tooling family, and the "Recently landed" pointer-level
 summary); auto-memory `project_tenant-wipe-standup-2026-07-23.md` (written by the orchestrating session, not
 duplicated here) carries the topic-level operational narrative.
+
+## §G76 — 2026-07-23 Brief-A: hardening the tenant wipe/stand-up/regen tooling family
+
+This is the full account of the "concurrent Brief-A session" §G75.7 above described only in orientation
+terms (partially in flight at the time §G75 was written). It closes out clean: **ten PRs — #673, #675,
+#676, #679, #680, #683, #685, #686, #687, #688 — all four-part-verified** (`state=MERGED`, `mergedAt`
+non-null, `mergeCommit.oid` present, main-branch CI on the merge commit = SUCCESS; #688 is the session-log
+PR itself and was still open at archive-write time). Exec HEAD after the landed nine is `fc27f75` (#686).
+Source: `docs/session_logs/2026-07-23_standup-process-optimization.md` (PR #688) + auto-memory
+`project_standup-optimization-2026-07-23.md`. Driven by a three-lens adversarial review dossier set —
+`~/its/logs/reviews/2026-07-23_opt_{simplify,operator,runtime}.json` — run against the §G75 tooling family
+immediately after its own rehearsal landed.
+
+### §G76.1 — What actually shipped, and why that approach over the alternatives
+
+- **#673 — P0: wipe dump fails CLOSED on transient errors.** `wipe_tenant.dump_workspace`'s
+  `except (requests.HTTPError, RuntimeError)` had been classifying 429/5xx/timeouts identically to a
+  genuine permanent 404 — "unreadable, skip and delete anyway." Since the dump is the SOLE row-restore
+  source for the whole family, that was a fail-open data-loss path masquerading as fail-closed language.
+  Fix: a new shared `scripts/migrations/_rest_retry.py` (bounded retry on 429/5xx, exhaustion propagates
+  rather than degrading to "unreadable," `raise_for_status=False` mode for callers that need the raw
+  response). Chosen over an inline per-call retry so `standup.py`'s restore-rows/restore-shares POSTs could
+  ride the same seam — the share-restore path was separately found silently WARN-dropping a rate-limited
+  add, which would have narrowed an F22 approver set without anyone noticing. "Unreadable" now classifies
+  ONLY on permanent signatures (404, errorCode 1006/1115). **The existing 2026-07-23 pre-wipe dump was
+  audited against the new classification and found NOT lossy** — its 4 "unreadable" sheets are exactly the
+  known 404 `ITS_Errors` duplicate shells, not a real gap.
+- **#676 — `STANDUP_NONINTERACTIVE` contract, not a single-`y` stopgap.** The prior blind `y\n`×8 feed
+  auto-confirmed every builder prompt uninspected. Chose a closed-stdin contract (any UNEXPECTED prompt
+  fails LOUD rather than silently auto-confirming) over an interim "just answer y once" patch, because the
+  actual latent hazard is a FUTURE builder growing a genuinely destructive confirmation prompt that the
+  blind feed would swallow just as silently as a benign one. `seed_its_config`'s inline `input()` was
+  extracted into the family's shared `_confirm` shape; the other five confirm seams got the carve-out in
+  place. Same PR also shipped `standup_state.json` + bare `--resume`, and streamed `[stage/script]`-prefixed
+  child output with a per-run transcript (`PYTHONUNBUFFERED` so the streaming isn't buffered dark).
+- **#679 — `standup.py finish` subcommand.** Mechanized the by-hand post-merge epilogue: preconditions →
+  heartbeat-state cleanup → a **fail-dark posture-table fleet reload** (IN CODE, not inferred from
+  ITS_Config — `--posture dark` deliberately EXCLUDES the 5 send-dispatch plists even if their gate rows
+  read `true`, because a gate value is a §44 human decision, not license to auto-load a send daemon) →
+  bounded heartbeat wait → an `ITS_Errors` sweep → a **READ-ONLY** gate-flip report (every actual flip stays
+  manual) → dashboard restart LAST → `--verify-only` mode. §43 runbook `docs/runbooks/tenant_standup.md`.
+  **Reconciled mid-flight with #674** (the dashboard session's ACT fence, `standup_in_progress.json`
+  marker, 6h fail-open, cleared only on standup completion) — this branch adopted #674's mechanism wholesale
+  and DELETED its own competing `_run_marker.py` context-manager design; its#677 was closed as superseded
+  by #674 rather than merged redundantly.
+- **#680 / #685 — CL-12 repoint actuator and CL-11 shares mechanization, both build-only, both through
+  `ops-stds-enforcer` adversarial review as definition-of-done** (operator-supplied-data → Smartsheet/config
+  write surface, per the exec CLAUDE.md "Adversarial review is definition-of-done on any trust-boundary
+  surface" rule). Two real catches, not just advisories:
+  - **#680 (`production_repoint.py`, plan/commit, typed-phrase confirm) — a BLOCK-severity finding.** The
+    §E send-scope exclusion (settings that must NEVER be touched by an automated repoint) was implemented
+    as a BLOCKLIST, and the blocklist missed `scheduled_send_local` — since `--map` accepts an arbitrary
+    path, a crafted map file could have repointed a send-timing setting through the "safe" tool. Fixed by
+    inverting to an A–D setting-name ALLOWLIST (a blocklist under-approximates; a future `send_window_local`
+    would have slipped through the same way). Two RED-light tests added proving the fix bites.
+  - **#685 (`production_shares_manifest.json` + ADD-only `seed_production_shares.py` + new
+    VC-10 `approver-shares` check in `verify_cutover.py`) — WARN-severity advisories, both fixed.** A
+    mirror-domain pin gap: a manifest typo could have blinded BOTH the seeder's own residue check and
+    VC-10's live check simultaneously (a leftover mirror-tenant share silently granting live F22 authority
+    would go undetected by either). Fixed by pinning `EXPECTED_MIRROR_DOMAIN` in the seeder AND a
+    `SANDBOX_DOMAIN_MARKER` in VC-10 — two independent constants, not one shared one, so a single typo can't
+    take out both checks at once. Also added a missing live-payload-shape smoke,
+    `test_list_workspace_shares_live` (flagged for the operator to run before trusting VC-10 at cutover —
+    not yet run as of this writing).
+- **#675 / #683 / #686 — smaller, no-drama fixes.** #675: `docs/doctrine_manifest.yaml` joins the
+  `sheet_ids_regen` remap scope (`remap_file_paths()`, parity-tested) — a proven miss from the original
+  #670 pass; sweep widens to `.yaml`/`.md`, report-only (no auto-rewrite of doctrine). #683: `regen
+  --retry-missing` scoped to ONLY the unresolved constants' workspaces via an overlay merge, so a filtered
+  retry can never silently degrade an already-resolved constant. #686: the checklist/punchlist/migrations-
+  README doc collapse around the now-one-step stand-up, **and the CL-12 "all gates true" doc bug fixed** —
+  the old line asserted a state that directly contradicted CL-03 (send daemons dark), CL-13 (read gate
+  Descriptions first), and the standup epilogue's own stated posture; rewritten as "gates flipped per the
+  activation plan, send gates last, Seth" per HOUSE_REFLEXES §5's "static text must never assert a live
+  gate state" rule. The no-production-wipe rationale (why a production wipe VARIANT is deliberately out of
+  scope — rollback is repoint-back, partial stand-ups RESUME) is now recorded in the migrations README
+  rather than living only in chat memory.
+- **#687 — run-branch mode, default ON.** Per-run `standup/run-<UTC>` branch with per-stage checkpoint
+  commits (pathspec `:(exclude)logs` — the dump directories are untracked-NOT-ignored, so a naive `add -A`
+  would commit multi-MB dump JSON into the run branch; bite-tested), a `--resume` flow that merges
+  `origin/main` and STOPS on conflict (never auto-resolves), and a landing-PR push on completion. Replaces
+  the stash/pull/pop dance the operator improvised six times during the §G75 rehearsal to land mid-run
+  fix-PRs without losing in-progress regen state.
+
+### §G76.2 — Deliberately NOT built (review-ratified, not just skipped)
+
+Scratch-prefix dress rehearsal (would need a 28-file name-canon fan-out plus a production wipe tool that
+doesn't exist and won't); builder parallelization (regen's shared-file rewrites force serialization —
+concurrent stages would race on the same `sheet_ids.py` write); a production-wipe tool variant (see #686's
+recorded rationale above); seeder-engine consolidation across the 11 near-identical `seed_*.py`/`build_*.py`
+config-seed engines (§14 — genuinely clears the ≥4-reuse-case bar per the `opt_simplify` dossier's finding
+#7, but still needs Seth's explicit sign-off before a speculative-refactor PR, per the constrained
+`improve-codebase-architecture` skill rule); generic dump-restore extraction for arbitrary sheets (deferred
+until the demo-tracker restore need actually materializes — HOUSE_REFLEXES §6 "don't harden dormant
+subsystems"); cross-invocation regen caching (a fresh subprocess read on every invocation IS the
+correctness property here, not an inefficiency to optimize away).
+
+### §G76.3 — Residual tech debt this session's own reviews surfaced (recorded in exec `docs/tech_debt.md`)
+
+Four new/updated exec tech-debt entries, all dated 2026-07-23: the "Un-adopted optimization findings" entry
+from §G75 flipped OPEN→RESOLVED (all 5 named opportunities landed, cross-referenced against the PR list
+above); a new §14 convergence-candidate note for `_loaded_its_daemons`/`_loaded_its_labels`/`_launchctl_list`
+— now 3-4 near-identical launchd-query copies across `wipe_tenant.py`/`standup.py`/`verify_cutover.py`/
+`production_repoint.py`, at the reuse-count threshold but explicitly NOT auto-extracted without Seth's
+sign-off; `seed_production_shares.list_workspace_shares` not enrolled in the `_rest_retry.py`
+AST-locked-allowlist transient-retry seam (deliberate — it's a one-shot CL-11 path today, not a hot path);
+and the shares seeder's `already_present` check being presence-only, not access-level-aware (a VIEWER-level
+approver share reads as "done" even though it can't actually exercise F22 approval authority — a manual
+spot-check note, not a code fix, because narrowing an ADD-only seeder into one that edits existing shares is
+a materially bigger and more dangerous surface than what the reviewed PR covered).
+
+### §G76.4 — Flagged for the operator / Seth (not actioned by this session)
+
+Run `test_list_workspace_shares_live` (the new #685 integration test) before trusting VC-10 at cutover; a
+mirror-tenant `production_repoint.py --commit` dry-run before Aug-3 as belt-and-braces; the open access-
+level/scope questions recorded directly in the #685/#680 PR bodies (per-workspace access-level narrowing,
+GROUP-share fail posture, the E1/E2 accounts must exist before shares can be seeded against them); and a
+housekeeping item — local branch `fix/worker-coverage` (PR #641, CLOSED-unmerged) carries a gitleaks
+generic-api-key finding at commit `16439fc`, present only on that branch and never on `main`, worth a
+MERGED-verify-then-`git update-ref -d` cleanup whenever someone is next in that area.
+
+See exec `docs/session_logs/2026-07-23_standup-process-optimization.md` (PR #688, comprehensive — includes
+the full per-PR four-part-verify table) and exec `docs/tech_debt.md` for the four new/updated entries cited
+above; info-gap doc §5/§6/§8 carry this session's companion edits (dump-retry fail-closed-classification
+trap, allowlist-over-blocklist actuator-safety pattern, the tooling-family capability update, and the
+"Recently landed" pointer summary); auto-memory `project_standup-optimization-2026-07-23.md` (already
+written by this session, not duplicated here) carries the topic-level operational narrative.
