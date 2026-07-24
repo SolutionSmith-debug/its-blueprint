@@ -5772,8 +5772,20 @@ lives in the durable artifacts a Tier-2 operator and a fresh CC session actually
 path the reader is not authorized or credentialed to exercise. **Correct framing: Developer-Operator
 self-service (removes a terminal round-trip for Seth), NOT a new Tier-2 capability.**
 
-**Blast radius was measured, not assumed** — the contaminated surface is one file:
+**Blast radius was measured, not assumed** — three surfaces carry it, one of them still uncommitted:
 
+- **⚠️ FIX HERE FIRST — still UNCOMMITTED, therefore free:**
+  `~/its/docs/session_logs/2026-07-24_m365-secrets-dashboard-rotatable.md` (194 lines) appeared as an
+  untracked file *during* this maintenance pass — an operator-invoked `session-log-writer` run, correctly
+  not this agent's artifact and deliberately not edited by it. It repeats the framing in 5+ places: the title
+  line (`:13`, "closing an Op Stds v21 §44 Tier-2 ship-and-leave hole"), the `successor_operator` frontmatter
+  tag (`:7`), and an entire decision bullet at `:58-61` headed *"Rotate-ability for the M365 secrets is a
+  **Tier-2 requirement**, not a convenience"* — *"A Successor-Operator who cannot re-seed it from the console
+  has no recovery path except Seth."* Diagnostic detail worth keeping: its own doctrine footer (`:184-185`)
+  cites *"§44 (Tier-2 Successor-Operator / the both-rule; the four FIXED high-class categories include
+  secrets/auth)"* — it cites the very rule that refutes it, which is the signature of a reasoning slip
+  propagating through a session's artifacts rather than a careless phrase. Correcting it before it is
+  committed costs one edit; after it lands it costs a PR.
 - **Needs the reword:** `docs/tech_debt.md:450-451` — *"PR #705 made all three M365 credentials
   dashboard-rotatable, so a Successor-Operator now has a **repair** path (Op Stds v21 §44 Tier-2)"*. Softer
   echo at `:461` — *"a Tier-2 operator cannot map symptom → the §43 repair without escalating"* (diagnosis
@@ -5787,7 +5799,8 @@ self-service (removes a terminal round-trip for Seth), NOT a new Tier-2 capabili
   HIGH-CLASS §44)", §69 "Acceptance smoke (Developer-Operator)", §97 "Boundary (escalate to the
   Developer-Operator, Seth)"); `docs/references/security_trust_model.md` is clean.
 
-So the fix is a two-sentence reword of ONE file. Queued in the info-gap Open queue.
+So: one still-uncommitted file to fix for free, plus a two-sentence reword of one tracked file. Queued in the
+info-gap Open queue.
 
 This is exactly the failure mode the session-close cross-repo supersession check exists to catch: a
 blueprint-side model change (2026-07-14) that exec-side prose written ten days later still contradicts.
@@ -5880,9 +5893,14 @@ Operator-owned, not actioned here:
    clean). Needs a PR (branch protection, `enforce_admins=true`).
 2. **Capture the M365 client-secret expiry date** at the cutover config-seed pass — the unblock condition for
    the #707 detection gap (§G78.6).
-3. **`session-log-writer` is warranted** for this session (2 commits + non-obvious decisions: the
-   keychain-vs-`box_guided` kind call, the doctrine-framing question, and the restart finding). This agent
-   flags the need; the operator invokes it directly.
+3. **`session-log-writer` was warranted AND was run** — `~/its/docs/session_logs/2026-07-24_m365-secrets-dashboard-rotatable.md`
+   appeared untracked mid-pass (operator-invoked, correct: subagents cannot spawn subagents). **Before
+   committing it, apply the §G78.3 reword there** — it is the largest carrier of the mis-framing and the only
+   one still free to fix. It DOES already capture the §G78.4 restart finding well (`:120-130`, including the
+   live PID evidence, the `launchctl kickstart -k` fix, the `/healthz secrets=14` verification, the DASH-12
+   equivalence, and the generalization) — so that half needs no change; §G78.4 and the auto-memory reference
+   file exist to make the finding reachable from the blueprint side and from a fresh session's memory index,
+   not because the log missed it.
 
 See exec `docs/tech_debt.md` (one new entry, added by #707 itself — this pass deliberately did **not**
 duplicate it) + info-gap doc §5/§6/§8 (this session's companion edits — one new §5 trap, one new §6
