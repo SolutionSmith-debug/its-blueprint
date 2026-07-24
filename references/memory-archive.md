@@ -5691,3 +5691,184 @@ See exec `docs/tech_debt.md` (four new entries, §G77.4) + info-gap doc §5/§6/
 edits — two new §5 traps, one new §6 tooling-gotcha entry, one new §8 Recently-landed bullet, frontmatter
 `last_verified_against` → `1742a31`); auto-memory `project_document-polish-2026-07-23.md` (already written
 by the orchestrating session, not duplicated here) carries the topic-level operational narrative.
+
+---
+
+## §G78 — 2026-07-24 the three M365 credentials become dashboard-rotatable; the expiry DETECTION gap stays open
+
+Small, high-leverage two-PR session against the operator dashboard's Class-C credential surface. **PR #705**
+(`2359e90490ad7d75cc6fc89f674c16624b125bb7`, mergedAt 2026-07-24T18:46:34Z) and **PR #707**
+(`d8652b8d3f440f0a05d557e69471113bdac66ce2`, mergedAt 2026-07-24T19:10:47Z), both four-part verified
+(`state=MERGED` · `mergedAt` non-null · `mergeCommit.oid` present · main-branch CI on the merge commit =
+SUCCESS). Exec HEAD now `d8652b8`. All PR numbers and merge commits above were re-verified with `gh pr view`
+at this maintenance pass, not carried from the session narrative.
+
+Recorded here because two things in this session are **not** recoverable from the diffs: the doctrine-framing
+mismatch (§G78.3) and the module-level-registry restart finding (§G78.4).
+
+### §G78.1 — What #705 changed, and the three "why not X" decisions behind it
+
+`operator_dashboard/act/registry.py` gained three `SecretEntry` rows in `_SECRETS` — `ITS_MS_TENANT_ID`,
+`ITS_MS_CLIENT_ID`, `ITS_MS_CLIENT_SECRET` — taking the registry from 11 to **14** entries. Verified live at
+this pass: `_SECRETS: list[SecretEntry]` at `registry.py:540`, the three entries at `:555`–`:559`,
+`SECRETS: dict[str, SecretEntry] = {s.key: s for s in _SECRETS}` at `:586`, 14 `SecretEntry(` constructions
+in the file.
+
+- **Why rotatable at all.** The Microsoft Graph **client secret expires** on an Entra-ID-set lifetime, and
+  `graph_client` is the sole transport for *every* external send in the system (safety weekly, progress, PO,
+  RFQ, subcontract). A credential that can only be replaced from a terminal session on the host is a
+  recovery hole, not a convenience gap. Operator-ratified 2026-07-24.
+- **Why `kind="keychain"` and NOT `box_guided`.** `box_guided` exists for the *single-consumer token that
+  rotates on every use* (`ITS_BOX_REFRESH_TOKEN` — paste-a-value is actively wrong there; it must go through
+  the guided quiesce → `setup_box_oauth` → smoke flow). The three M365 values are static, re-seedable
+  paste-in credentials, so plain `keychain` is correct. The code comment above the new entries says exactly
+  this, in-place, so the next reader doesn't have to re-derive it.
+- **Why placed after `ITS_BOX_CLIENT_SECRET`.** Ordering is load-bearing for *readability only*: it keeps the
+  `box_guided` refresh-token entry LAST in the keychain cluster, so the one entry with a different rotation
+  ceremony stays visually terminal rather than buried mid-list.
+- **No new code.** The three entries ride the existing `_rotate_keychain` path. This is a registry-data
+  change, which is precisely why the restart finding in §G78.4 bit.
+
+### §G78.2 — The fan-out pass found a SECOND, independent drift (HOUSE_REFLEXES §1 working as intended)
+
+Reconciling the surfaces in the same PR turned up a doc that had already gone stale on its own:
+
+- `docs/references/security_trust_model.md` — its rotatable-credential table **claims to be the complete
+  fixed list** and does **not** auto-generate. Beyond the three M365 additions, it was independently missing
+  `PORTAL_ESTIMATE_API_TOKEN` and `PORTAL_RFQ_API_TOKEN` (both from ADR-0004, landed weeks earlier), and its
+  `<!-- src: ... -->` line-ref pointed at `registry.py:371-388` when the block had moved to `540-585`. All
+  fixed in #705; verified at this pass (`security_trust_model.md:417` now reads `registry.py:540-585 |
+  verified 2026-07-24`, with the two portal bearers at `:433`–`:434`).
+- `docs/enablement/manifest.yaml` — sha256 re-recorded for the edited doc (the standing coupling: editing any
+  `docs/enablement/*.md`-manifested doc RED-lights `test_docs_pdf --check` until the sha is re-recorded).
+- **Verified as NOT needing change, and why** — this is the part worth keeping: `verify_cutover.REQUIRED_SECRETS`
+  (VC-01) and the host-migration A5 secrets table already carried all three, because these are **existing
+  secrets becoming rotatable, not new secrets**. The distinction generalizes: adding a credential to the
+  dashboard registry is not the same registry-fan-out event as introducing a credential.
+- `templates/config.html` needs no edit for a new entry — it loops `_SECRETS` and renders `.note`, so the
+  UI is genuinely registry-driven.
+
+### §G78.3 — Doctrine-framing mismatch: the rationale asserts a §44 model the blueprint superseded on 2026-07-14
+
+**Flagged by this maintenance pass, NOT fixed** (an exec-repo edit must ride a PR under branch protection).
+
+PR #705's body, the #707 `docs/tech_debt.md` entry, and the surrounding narrative all justify the change as
+closing a **Successor-Operator Tier-2** "ship-and-leave hole" — e.g. tech_debt: *"A Successor-Operator who
+cannot rotate it from the dashboard has no path to recovery except Seth — a ship-and-leave hole (Op Stds v21
+§44 Tier-2)."*
+
+The **§44 v21.x rider** (operator-ratified 2026-07-14, blueprint #69) says the opposite about who Class-C
+serves. `doctrine/operational-standards.md:1068`: the carve-out is *"Developer-Operator self-service, not a
+Tier-2 action — the dashboard's Class-C surface is scoped Developer-Operator-only."*
+`workstreams/operator-dashboard/mission.md:28`: *"a Successor-Operator does not hold or rotate secrets."*
+"Secrets / auth" also remains one of the four **FIXED** high-capability classes that always escalates
+regardless of documentation, and Class-C rotation is gated on the operator PIN — which a Successor-Operator
+does not hold.
+
+**The code is correct and doctrine-blessed either way.** The rider expressly authorizes *current-credential-gated
+self-rotation of an operator-held secret by its holder*, and reaching all three M365 credentials from the
+console instead of a terminal is exactly that. The defect is confined to the *rationale text* — but that text
+lives in the durable artifacts a Tier-2 operator and a fresh CC session actually read, and it promises a repair
+path the reader is not authorized or credentialed to exercise. **Correct framing: Developer-Operator
+self-service (removes a terminal round-trip for Seth), NOT a new Tier-2 capability.** Fix is a one-paragraph
+reword of the tech-debt entry and ideally the `registry.py` note. Queued in the info-gap Open queue.
+
+This is exactly the failure mode the session-close cross-repo supersession check exists to catch: a
+blueprint-side model change (2026-07-14) that exec-side prose written ten days later still contradicts.
+
+### §G78.4 — The durable operational finding, in NEITHER diff: a merged registry change is invisible until the process restarts
+
+`SECRETS` is a **module-level dict built at import** (`registry.py:586`). The dashboard is a long-lived
+launchd process (`org.solutionsmith.its.dashboard`). So after #705 merged and `~/its` was synced to main, the
+running process kept serving the OLD 11-entry registry: `/config` rendered no M365 rows and a hard browser
+refresh changed nothing. Live evidence from the session: the serving PID had been up **~15.5h** (since Jul 23
+23:34), long predating the 18:46Z merge.
+
+- **This is a third, distinct "nothing changed" class.** Not the Cloudflare edge-cache class, not the
+  browser-`index.html` class. The bytes on disk were current; the interpreter's already-imported module was
+  not. Misdiagnosing it as either of the other two sends you chasing a deploy or a cache that is fine.
+- **Fix:** `launchctl kickstart -k gui/$(id -u)/org.solutionsmith.its.dashboard`. DASH-12
+  (`POST /act/dashboard/restart`, Class-B elevated-confirm, audit-then-detached, restart-only-never-deploy)
+  is the in-dashboard sanctioned equivalent.
+- **Verified LIVE, not by eyeball:** `/healthz` reported `secrets=14` (was 11) and `/config` rendered all
+  three rows with rotate forms plus the expiry note.
+- **Generalizes** to every module-level dashboard constant — `registry.SECRETS`, `system_map`, `node_briefs`,
+  `validators`. Merging does not make them live. Only the daemon-tree state the dashboard re-READS per
+  request (markers, heartbeats, `ITS_Errors`, launchd state) updates without a restart. Note the adjacency:
+  PR #701 (system-map node briefs) landed the night before and is the same class of module-level-constant
+  change.
+
+### §G78.5 — Verification, and what prove-the-control-bites actually exercised
+
+Gates: **pytest 4495 passed / 2 skipped / 0 failed** · **mypy 0 errors / 465 source files** · **ruff clean** ·
+`check_doctrine_drift --strict` no blocking drift · docs-currency **22/22** enablement docs current.
+
+Green was not treated as proof (Op Stds v21 §55.2 / HOUSE_REFLEXES §2). Four controls were bitten:
+
+1. All three new entries rotate **end-to-end to `Keychain.set_secret`** — the path, not just the registry row.
+2. An unlisted lookalike (`ITS_MS_NOT_REAL`) is still **refused** — proving the registry stays *bound*, not
+   prefix-matched. This is the one that matters: adding three `ITS_MS_*` keys must not widen the surface to
+   an `ITS_MS_*` pattern.
+3. `ITS_BOX_REFRESH_TOKEN` still returns `guided` and renders **no paste form** — the differently-ceremonied
+   entry was not collaterally flattened.
+4. The **docs-currency gate was confirmed to RED-light** on the doc edit before the sha was re-recorded —
+   i.e. the enablement-manifest coupling was observed failing, then fixed, not assumed.
+
+### §G78.6 — #707: the half that was NOT closed, and why it can't be
+
+#707 is a docs-only PR adding one OPEN `docs/tech_debt.md` entry (tags `operator_dashboard` / `security` /
+`phase-1.5`, severity **high**; verified present at `docs/tech_debt.md:442`). Its thesis: **#705 closed the
+REPAIR path; the DETECTION path is still absent.** Nothing in ITS knows the secret's expiry date, so the
+first signal of expiry is a **simultaneous send failure across every lane at once**.
+
+Two open halves:
+
+- **No advance warning** — no watchdog check, no `ITS_Config` expiry row, no lead-time alert. The #705
+  registry note (*"EXPIRES — record the expiry at seed time and calendar the rotation; an unnoticed expiry is
+  a total send outage"*) is **narrated-not-enforced** per Op Stds v21 §52 — it informs a human reading the
+  console, it does not fire.
+- **No distinguishable failure signal** — a Graph auth failure surfaces as whatever CRITICAL the calling send
+  daemon happens to raise, so a Tier-2 operator cannot map symptom → §43 repair without escalating; nothing
+  anywhere names "the M365 client secret expired" as a symptom.
+
+Candidate shapes were sketched and **deliberately not decided** (avoiding the design-in-the-tech-debt-entry
+trap). The gating fact is real and not schedule-driven: the expiry date is only knowable once the
+**production** Entra app is registered, so the trigger is the cutover config-seed pass and this cannot be
+closed earlier.
+
+### §G78.7 — Concurrent sibling PRs the same day (orientation only, not this session's work)
+
+Four other PRs landed on `origin/main` on 2026-07-24 from concurrent session(s); all verified `state=MERGED`
+at this pass, recorded so a fresh session reading the day's log doesn't misattribute them. **#702** (`caa18c7`)
+tech-debt janitorial audit — 18 resolved items archived, 2 misleading headers fixed, 13 partials annotated
+(worth knowing: `docs/tech_debt.md` was structurally reorganized the same day #707 appended to it). **#703**
+(`1de7901`) a §50 config-actuator auto-PR, `delivery_contacts` 2 contacts → `config_version` 3. **#704**
+(`ade483d`) Phase-1 cutover — `safety_reports.weekly_send.from_mailbox` repoints to
+`safety@evergreenrenewables.com`, which is an **SMTP alias (proxy address) on the `its@` mailbox, not a second
+mailbox**, so decision **D3 (single production mailbox) is amended, not overturned**, and the
+`ITS-its-mailbox-only` RBAC scope (filtering on `PrimarySmtpAddress`) is unaffected; the other four
+`from_mailbox` lanes stay `its@`. **#706** (`e9b7a6f`) job-create Safety CC — the existing field gains a
+delivery-contacts-sourced dropdown, keeps free-text, becomes required on create only (the `/contacts` edit
+path may still blank it); no D1 migration, no Python, no `weekly_send`/`fieldops_sync` change.
+
+### §G78.8 — Hygiene + what's left for the operator
+
+Work rode per-task worktrees per HOUSE_REFLEXES §3 — `../its-m365-secrets` with its **own fresh venv** for the
+Python-source edit (never `cp -R .venv`), `../its-td` for the docs-only edit — both removed and their branches
+deleted after the MERGED verify; `~/its` synced to main at `d8652b8`. Clean, no residue to chase.
+
+Operator-owned, not actioned here:
+
+1. **Reword the Successor-Operator/Tier-2 framing** in `docs/tech_debt.md` (and ideally the `registry.py`
+   note) to Developer-Operator self-service — §G78.3. Needs a PR (branch protection, `enforce_admins=true`).
+2. **Capture the M365 client-secret expiry date** at the cutover config-seed pass — the unblock condition for
+   the #707 detection gap (§G78.6).
+3. **`session-log-writer` is warranted** for this session (2 commits + non-obvious decisions: the
+   keychain-vs-`box_guided` kind call, the doctrine-framing question, and the restart finding). This agent
+   flags the need; the operator invokes it directly.
+
+See exec `docs/tech_debt.md` (one new entry, added by #707 itself — this pass deliberately did **not**
+duplicate it) + info-gap doc §5/§6/§8 (this session's companion edits — one new §5 trap, one new §6
+Operator-Dashboard bullet, two new §8 Recently-landed bullets, two new §8 Open-queue entries, frontmatter
+`last_verified_against` → `d8652b8`); auto-memory `reference_dashboard-registry-restart-required.md` (new,
+carries §G78.4 as a standalone gotcha) + `project_ws2-operator-dashboard.md` (updated to 14 registry entries).
