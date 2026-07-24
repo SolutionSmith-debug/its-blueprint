@@ -5748,9 +5748,11 @@ Reconciling the surfaces in the same PR turned up a doc that had already gone st
 - `templates/config.html` needs no edit for a new entry — it loops `_SECRETS` and renders `.note`, so the
   UI is genuinely registry-driven.
 
-### §G78.3 — Doctrine-framing mismatch: the rationale asserts a §44 model the blueprint superseded on 2026-07-14
+### §G78.3 — Doctrine-framing mismatch: the rationale asserted a §44 model the blueprint superseded on 2026-07-14
 
-**Flagged by this maintenance pass, NOT fixed** (an exec-repo edit must ride a PR under branch protection).
+**Flagged by this maintenance pass; RESOLVED same-session by exec PR #709.** The analysis below is preserved
+because the doctrine reasoning is reusable — but see §G78.9 for the correction to this section's own carrier
+list, which was wrong on two of three files and is the more durable lesson.
 
 PR #705's body, the #707 `docs/tech_debt.md` entry, and the surrounding narrative all justify the change as
 closing a **Successor-Operator Tier-2** "ship-and-leave hole" — e.g. tech_debt: *"A Successor-Operator who
@@ -5886,24 +5888,54 @@ Work rode per-task worktrees per HOUSE_REFLEXES §3 — `../its-m365-secrets` wi
 Python-source edit (never `cp -R .venv`), `../its-td` for the docs-only edit — both removed and their branches
 deleted after the MERGED verify; `~/its` synced to main at `d8652b8`. Clean, no residue to chase.
 
-Operator-owned, not actioned here:
+Operator-owned:
 
-1. **Reword the Successor-Operator/Tier-2 framing** at `docs/tech_debt.md:450-451` to Developer-Operator
-   self-service — §G78.3 (one file, two sentences; `registry.py` and the sensitive-tier runbook are already
-   clean). Needs a PR (branch protection, `enforce_admins=true`).
+1. ~~**Reword the Successor-Operator/Tier-2 framing**~~ — **DONE, exec PR #709**, and it was *four* carriers,
+   not the one this pass scoped. See §G78.9.
 2. **Capture the M365 client-secret expiry date** at the cutover config-seed pass — the unblock condition for
-   the #707 detection gap (§G78.6).
-3. **`session-log-writer` was warranted AND was run** — `~/its/docs/session_logs/2026-07-24_m365-secrets-dashboard-rotatable.md`
-   appeared untracked mid-pass (operator-invoked, correct: subagents cannot spawn subagents). **Before
-   committing it, apply the §G78.3 reword there** — it is the largest carrier of the mis-framing and the only
-   one still free to fix. It DOES already capture the §G78.4 restart finding well (`:120-130`, including the
+   the #707 detection gap (§G78.6). **Still open**; this is the only remaining item from §G78.
+3. ~~**`session-log-writer` … apply the §G78.3 reword before committing**~~ — **DONE.** The reword was applied
+   to the untracked file and it was committed by #709 with an explicit framing-correction note at the top,
+   preserving the original wording wherever it is quoted as history (§55.4: the decision stands, its
+   justification does not). It DID already capture the §G78.4 restart finding well (`:120-130`, including the
    live PID evidence, the `launchctl kickstart -k` fix, the `/healthz secrets=14` verification, the DASH-12
-   equivalence, and the generalization) — so that half needs no change; §G78.4 and the auto-memory reference
+   equivalence, and the generalization) — so that half needed no change; §G78.4 and the auto-memory reference
    file exist to make the finding reachable from the blueprint side and from a fresh session's memory index,
    not because the log missed it.
 
+### §G78.9 — The correction that outlives the mismatch: a "verified clean" is itself a claim to re-grep
+
+§G78.3 closed its carrier survey with a confident **"Clean and needing no change:** `registry.py`'s note …,
+`operator_dashboard_sensitive_tier.md` …, and `docs/references/security_trust_model.md`." **Two of those three
+were wrong**, and the orchestrating session found it only by re-grepping rather than accepting the finding:
+
+- **`operator_dashboard/act/registry.py`** — the audit read the `note=` **string** (which genuinely carries no
+  role framing) and stopped there. The `_SECRETS` **block comment two lines above** read *"…a total send outage
+  with no path back except **Seth**"* — role framing that is only coherent under the retired Tier-2 model,
+  because under the correct one Seth (the Developer-Operator) **is** the rotator.
+- **`docs/references/security_trust_model.md`** — carried the single worst instance in the repo: *"an expiry the
+  **Successor-Operator** cannot repair from the console is a total send outage with no path back except the
+  Developer-Operator."* This is the **Tier-1 security reference a Successor-Operator reads**; left standing it
+  reads as permission to rotate a credential §44 forbids them to touch. It had been added in the very same
+  fan-out pass that §G78.2 praises — the fan-out was right about *where* the datum lives and wrong about *what*
+  to write there.
+- `operator_dashboard_sensitive_tier.md` was correctly assessed as clean.
+
+**The transferable lesson (§55.1, and a sharper edge on HOUSE_REFLEXES §1):** "I verified X is clean" is a
+current-state claim with exactly the same decay and blind-spot profile as "X is hardcoded" or "Y is not built."
+A phrase-level audit is only as good as its search string — a narrower one yields a confident, *wrong* all-clear,
+which is more dangerous than no audit because it actively suppresses the next check. Re-grep an agent's clean
+bill of health before acting on it, especially when the agent scoped its own search.
+
 See exec `docs/tech_debt.md` (one new entry, added by #707 itself — this pass deliberately did **not**
 duplicate it) + info-gap doc §5/§6/§8 (this session's companion edits — one new §5 trap, one new §6
-Operator-Dashboard bullet, two new §8 Recently-landed bullets, two new §8 Open-queue entries, frontmatter
-`last_verified_against` → `d8652b8`); auto-memory `reference_dashboard-registry-restart-required.md` (new,
-carries §G78.4 as a standalone gotcha) + `project_ws2-operator-dashboard.md` (updated to 14 registry entries).
+Operator-Dashboard bullet, two new §8 Recently-landed bullets, §8 Open-queue: the detection gap stays open and
+the model-mismatch entry is struck RESOLVED with its mis-audit correction, frontmatter `last_verified_against`
+→ `d8652b8`); auto-memory `reference_dashboard-registry-restart-required.md` (new, carries §G78.4 as a
+standalone gotcha) + `project_ws2-operator-dashboard.md` (updated to 14 registry entries).
+
+**Exec PRs for §G78, final:** #705 (`2359e90`) the registry + fan-out, #707 (`d8652b8`) the tech-debt entry,
+#709 the framing correction — all four-part verified. GitHub returned HTTP 500 on every PR-create (REST **and**
+GraphQL) for ~10 minutes between #707 and #709; reads were unaffected. The branch was pushed and waited it out,
+then created cleanly on retry — worth knowing that a total write-plane outage looks exactly like a malformed
+payload if you only read the `gh` error text.
