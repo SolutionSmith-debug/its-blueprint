@@ -5770,8 +5770,24 @@ self-rotation of an operator-held secret by its holder*, and reaching all three 
 console instead of a terminal is exactly that. The defect is confined to the *rationale text* — but that text
 lives in the durable artifacts a Tier-2 operator and a fresh CC session actually read, and it promises a repair
 path the reader is not authorized or credentialed to exercise. **Correct framing: Developer-Operator
-self-service (removes a terminal round-trip for Seth), NOT a new Tier-2 capability.** Fix is a one-paragraph
-reword of the tech-debt entry and ideally the `registry.py` note. Queued in the info-gap Open queue.
+self-service (removes a terminal round-trip for Seth), NOT a new Tier-2 capability.**
+
+**Blast radius was measured, not assumed** — the contaminated surface is one file:
+
+- **Needs the reword:** `docs/tech_debt.md:450-451` — *"PR #705 made all three M365 credentials
+  dashboard-rotatable, so a Successor-Operator now has a **repair** path (Op Stds v21 §44 Tier-2)"*. Softer
+  echo at `:461` — *"a Tier-2 operator cannot map symptom → the §43 repair without escalating"* (diagnosis
+  genuinely IS Tier-2 work, so this line is defensible, but read together with `:450` it implies the repair
+  itself is Tier-2-reachable).
+- **Immutable:** PR #705's body carries the same framing; nothing to do there.
+- **Verified CLEAN, no change needed:** `operator_dashboard/act/registry.py`'s note carries **no role framing
+  whatsoever** (just *"EXPIRES — record the expiry at seed time and calendar the rotation; an unnoticed expiry
+  is a total send outage"*); `docs/runbooks/operator_dashboard_sensitive_tier.md` already frames rotation as
+  Developer-Operator throughout (§54 heading "Box refresh-token rotation (Developer-Operator, guided —
+  HIGH-CLASS §44)", §69 "Acceptance smoke (Developer-Operator)", §97 "Boundary (escalate to the
+  Developer-Operator, Seth)"); `docs/references/security_trust_model.md` is clean.
+
+So the fix is a two-sentence reword of ONE file. Queued in the info-gap Open queue.
 
 This is exactly the failure mode the session-close cross-repo supersession check exists to catch: a
 blueprint-side model change (2026-07-14) that exec-side prose written ten days later still contradicts.
@@ -5859,8 +5875,9 @@ deleted after the MERGED verify; `~/its` synced to main at `d8652b8`. Clean, no 
 
 Operator-owned, not actioned here:
 
-1. **Reword the Successor-Operator/Tier-2 framing** in `docs/tech_debt.md` (and ideally the `registry.py`
-   note) to Developer-Operator self-service — §G78.3. Needs a PR (branch protection, `enforce_admins=true`).
+1. **Reword the Successor-Operator/Tier-2 framing** at `docs/tech_debt.md:450-451` to Developer-Operator
+   self-service — §G78.3 (one file, two sentences; `registry.py` and the sensitive-tier runbook are already
+   clean). Needs a PR (branch protection, `enforce_admins=true`).
 2. **Capture the M365 client-secret expiry date** at the cutover config-seed pass — the unblock condition for
    the #707 detection gap (§G78.6).
 3. **`session-log-writer` is warranted** for this session (2 commits + non-obvious decisions: the
