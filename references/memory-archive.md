@@ -5546,3 +5546,148 @@ above; info-gap doc §5/§6/§8 carry this session's companion edits (dump-retry
 trap, allowlist-over-blocklist actuator-safety pattern, the tooling-family capability update, and the
 "Recently landed" pointer summary); auto-memory `project_standup-optimization-2026-07-23.md` (already
 written by this session, not duplicated here) carries the topic-level operational narrative.
+
+## §G77 — 2026-07-23 second-gen document polish over every rendered deliverable
+
+Single-PR session, same day as the Brief-A hardening pass above (§G76) but unrelated in subject —
+operator-directed visual second-generation polish over ALL rendered deliverables, staying in the green/gold
+house design language. **PR #693** (`1742a31e26035c3779b81300577569ba67807543`), four-part verified
+(`state=MERGED`, `mergedAt` 2026-07-23T23:53:14Z, `mergeCommit.oid` present, main-branch CI on the merge
+commit = SUCCESS for both `ci` and `CodeQL`). Exec HEAD now `1742a31`. Source: auto-memory
+`project_document-polish-2026-07-23.md` (already written this session, topic-level narrative there — not
+duplicated in full here) + the PR body itself (`1742a31`'s commit message, comprehensive).
+
+### §G77.1 — What shipped and why (design directions were operator-approved up front, not improvised)
+
+The operator pre-approved three design directions via structured questions before any code was written:
+**(1)** a second-generation letterhead band (replacing the prior flat header); **(2)** compact confirm rows
+for confirm-style checklist scales (replacing full Item/Response/Comments tables where every value is
+affirmative-or-N/A); **(3)** light-touch styling for the Office-format deliverables (`.docx`/`.xlsx`) —
+spacing/fills only, never touching parseable geometry. All 10 rendered document types got a coordinated
+pass in one PR (11 files changed): safety/daily/JHA/visitor forms, the weekly packet cover+index+rollup,
+the PO, the RFQ, the subcontract package (`.docx` + Exhibit A + Annex C SoV `.xlsx`), and the vendor
+quote-form `.xlsx`.
+
+- **Letterhead band (`form_pdf._brand_header`, now accepts `doc_label`/`meta_lines` kwargs).** Logo left;
+  doc-type + identity metadata right-aligned in the band itself — forms carry Job/Date/Type, PO/RFQ their
+  number + dates — retiring the old separate meta band each renderer used to draw underneath the header.
+  Title moves below the gold rule, larger, in brand green.
+- **Shared `_callout()` extracted** as the one gold-emphasis-box primitive, replacing four independently
+  hand-rolled gold boxes: legal `static_text`, SOP guidance blocks, PO routing + supersession notices, and
+  the RFQ submit block. Textbook §14 parameterize-not-clone — one shape, four call sites, not four near-
+  identical implementations.
+- **Compact confirm rows.** `_is_confirm_scale()` detects a checklist scale where every value is in
+  `_OK_WORDS ∪ _NA_WORDS` (the SOP daily form's dozens of 1–2-item "Confirmed" groups are the driving case)
+  and renders it as a lean label + checkmark row via `_confirm_group()`, instead of a full three-column
+  table for a scale with no real variance to show. Multi-value scales are untouched — still the full table.
+  Blank-vs-N/A semantics and `incomplete_checklist_items` counting are untouched (styling-only change; the
+  underlying completeness logic doesn't know or care how a row is drawn).
+- **The checkmark itself is drawn as vector strokes (`_CheckMark`, two `canvas.line()` calls), not a font
+  glyph** — see §G77.2 below for why (a real, tested finding, not an a-priori design choice).
+- **Response colour is now vocabulary-gated** (`_OK_WORDS`/`_BAD_WORDS`) rather than "scale[0] is always
+  green" — this FIXED a real, previously-shipped bug: an incident report's first scale value ("EMS," not a
+  pass/fail word) was printing in green as if it were an affirmative response, because the old logic
+  colour-coded by POSITION in the scale list, not by the word's actual meaning.
+- **Weekly cover redesigned** (deep-evergreen title panel + a stats strip) **and its title PARAMETERIZED**
+  via a NEW `GenerateConfig.cover_title` field. This FIXED a second real, previously-undetected bug: every
+  Progress-Reporting weekly packet's cover page was hardcoded to print "WEEKLY SAFETY REPORT" regardless of
+  workstream — `progress_weekly_generate.py` now explicitly binds `cover_title="WEEKLY PROGRESS REPORT"`;
+  Safety's default ("WEEKLY SAFETY REPORT") is preserved byte-identical on all three derived surfaces (the
+  cover panel text, the footer, and the PDF `/Title` metadata field) via the same single parameter, so there
+  is no way for those three surfaces to drift from each other again. Contents/index gains dot leaders;
+  progress rollup numbers render as larger stat tiles.
+- **PO/RFQ:** identity moves into the shared band (their old separate meta bands retired, same pattern as
+  the forms); the SELLER block no longer floats centred; the TOTAL row gets a tint fill; signature blocks
+  use labelled hairline fill rules instead of typed underscore characters.
+- **Office docs, deliberately light-touch:** subcontract `.docx` gets heading/title spacing changes only —
+  text content verbatim, zero wording risk on a legal document. SOV `.xlsx` and the vendor quote-form
+  `.xlsx` get branded header cell fills only. **Quote-form geometry is explicitly FROZEN** — `parse_quote_form`
+  (the vendor-side read-back half of the RFQ round-trip, `po_materials/quote_form.py`) reads fixed row/column
+  positions (row 8 header, row 9 first data line), so this PR's styling touches fills/fonts only and never
+  moves a cell; any FUTURE quote-form styling change must re-verify the parse-side geometry assumption
+  before touching layout.
+- **Two deliberate customer-facing wording deltas**, fanned out to every dependent surface in the same PR
+  (not left as a follow-up): the progress rollup's Materials line changed from "— (coming soon)" to
+  "Materials reporting is not yet included in this packet." — updated in `tests/test_form_pdf.py` (pin),
+  `docs/runbooks/progress_weekly_generate.md`, `docs/enablement/progress_rollup_numbers.md`, AND
+  `docs/enablement/manifest.yaml`'s recorded sha256 (all four in the same commit — the exact multi-surface
+  fan-out discipline HOUSE_REFLEXES §1 exists to enforce); and the cover packet note "safety forms" →
+  "the forms," now that the cover is a shared component across both workstreams.
+
+### §G77.2 — Verification (four-lens adversarial-verify Workflow, all four PASSED)
+
+Base verification: pytest 4482 passed / 2 skipped / 51 deselected; mypy 0 errors / 464 source files; ruff
+clean; the docs-currency gate (manifest sha256 vs. actual doc content) green. On top of that, a 4-lens
+adversarial verify Workflow ran in parallel:
+
+1. **Escaping red-team** — positive AND negative controls across all 5 changed rendering surfaces, proving
+   hostile markup renders as literal text everywhere the new `_callout()`/letterhead/confirm-row code
+   touches user-influenced strings. One residual, non-blocking finding: `form_pdf._esc` neutralizes
+   `<`/`>`/`&` but not `"`/`'` — safe today only because no call site interpolates escaped data into a
+   Paragraph markup ATTRIBUTE value (only into element content); recorded as a §5 trap + a tech-debt
+   discipline note rather than a fix, since there is no reachable injection today. See §G77.3.
+2. **Byte-determinism** — PO/RFQ/subcontract-package/zip/quote-form renders proven byte-identical across
+   repeated runs BOTH in-process and cross-process under different `PYTHONHASHSEED` values (the class of
+   bug this guards against: an unordered dict/set iteration silently changing output byte-for-byte between
+   two otherwise-identical renders). `render_submission_pdf` (the safety/progress form renderer) was
+   correctly excluded from this set — it embeds a wall-clock filing timestamp by design, so byte-identity
+   isn't a meaningful property for it; this predates the PR and is not a regression (tech-debt entry
+   recorded purely so it isn't mistaken for one later).
+3. **Blank-vs-digital legal parity + quote-form round-trip** — confirmed the pre-existing blank-form/
+   digitally-filled-form legal-equivalence delegation is intact after the styling changes, and that a
+   STYLED quote-form still round-trips through `parse_quote_form` with `verified=True` and correct cents
+   math — the frozen-geometry claim in §G77.1 is proven, not asserted.
+4. **Ops-stds diff review** — one real finding: the weekly-cover PDF `/Title` metadata string needed
+   genericizing (it had been carrying workstream-specific wording that would have leaked into a PDF
+   viewer's title bar / properties pane inconsistently across the two workstreams) — fixed in the same
+   diff before merge, not a follow-up.
+
+All 10 document types were also re-rendered with fixture data and visually inspected page-by-page. **Host
+note, recorded as a new §6 info-gap entry:** `pdftoppm`/poppler on this dev Mac drops ALL base-14 PDF text
+when rasterizing (a fontconfig issue on this host, not a bug in the PDFs or the renderer) — the visual
+inspection loop used macOS Quartz rasterization instead, which renders text correctly.
+
+### §G77.3 — Two class-of-bug discoveries recorded as new §5 info-gap traps (not just PR-local findings)
+
+- **Font-substitution rendering is viewer-dependent — never trust a symbol-font glyph without an actual
+  rendered test.** A ZapfDingbats character referenced from inside a ReportLab `Paragraph` for the confirm-
+  row checkmark rendered as a plain SQUARE when actually tested, despite ReportLab accepting the font name
+  without error. Fixed by drawing the checkmark as vector strokes instead, which renders identically across
+  every viewer. General lesson: "no exception raised" only proves a font name was accepted, never that the
+  intended glyph appears — anything visually load-bearing (checkmarks, icons, bullets) needs an actual
+  rendered-and-viewed test, and vector drawing is the safer default over symbol-font glyphs.
+- **A clean red-team pass is a snapshot, not a permanent guarantee — verify what's reachable, not just
+  what's currently escaped.** `_esc`'s missing quote-escaping is a latent, not active, gap — it becomes
+  exploitable only if a future change interpolates external/operator data into a Paragraph markup ATTRIBUTE
+  rather than element content. Recorded so a future `form_pdf.py`/PO/RFQ/subcontract renderer change that
+  adds a new attribute-position interpolation re-checks this assumption before shipping, rather than
+  inheriting a false sense of "already red-teamed clean."
+
+### §G77.4 — Residual tech debt recorded in exec `docs/tech_debt.md` (four new entries, all dated 2026-07-23)
+
+`render_submission_pdf` non-determinism (informational — pre-existing/deliberate, not a regression, closing
+the loop opened by the byte-determinism lens in §G77.2); the `_esc` quote-escaping discipline note from
+§G77.3 (informational, cites the exact safe-today/latent-risk reasoning); and a combined worktree-cleanup
+entry covering **six** merged-and-clean worktrees now awaiting operator-run `git worktree remove` — the
+session's own `~/its-pdf-polish` (`feat/pdf-polish`, PR #693) plus five pre-existing Claude Code
+agent-managed worktrees under `~/its/.claude/worktrees/agent-*` left over from earlier sessions (PRs #562,
+#563, #505, #564, #566 — all independently confirmed `state=MERGED` via `gh pr list --state merged --head
+<branch>` before being flagged, not assumed). The `progress_rollup_numbers` enablement-PDF re-render (its
+source sha was re-recorded in-PR per the wording-delta fan-out) was deliberately NOT given its own new
+tech-debt entry — it folds into the pre-existing, still-open "§6a enablement-doc DoD" entry's item (c),
+which already tracks the D2-3 Box-publish leg as not-yet-built; duplicating it would have split one open
+item into two trackers for the same underlying gap.
+
+### §G77.5 — Flagged for the operator (not actioned by this session)
+
+Nothing FIXED-high-class or Seth-decision-gated surfaced this session — this was a self-contained styling
+pass with its own complete verification loop, not a trust-boundary or send-gate change. The only operator
+action items are administrative: run `git worktree remove` on the six worktrees named in §G77.4 next
+terminal session, and note that a `session-log-writer` invocation is still warranted for this PR (≥1 commit
++ non-obvious decisions — the cover-title parameterization bug fix and the font-glyph/vector-checkmark
+finding both qualify) — this agent flags that need but does not write the log itself.
+
+See exec `docs/tech_debt.md` (four new entries, §G77.4) + info-gap doc §5/§6/§8 (this session's companion
+edits — two new §5 traps, one new §6 tooling-gotcha entry, one new §8 Recently-landed bullet, frontmatter
+`last_verified_against` → `1742a31`); auto-memory `project_document-polish-2026-07-23.md` (already written
+by the orchestrating session, not duplicated here) carries the topic-level operational narrative.
