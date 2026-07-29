@@ -5939,3 +5939,164 @@ standalone gotcha) + `project_ws2-operator-dashboard.md` (updated to 14 registry
 GraphQL) for ~10 minutes between #707 and #709; reads were unaffected. The branch was pushed and waited it out,
 then created cleanly on retry — worth knowing that a total write-plane outage looks exactly like a malformed
 payload if you only read the `gh` error text.
+
+## §G79 — 2026-07-25/26 production-host migration off the dev MacBook — an operational session, ZERO exec/blueprint commits
+
+This session moved ITS off Seth's dev MacBook (daily-use, now in Boston) onto a dedicated production Mac
+(Florida, reached over Tailscale) intended to run **unattended while Seth travels**. Nothing here shows up in
+`git log` — no exec or blueprint commit was made — so this section, plus the companion info-gap doc §5/§6/§8
+edits, is the ONLY durable record of the session. The single commit visible on exec `origin/main` in this
+window, PR #710 (`885d4a4`, "repoint sheet_ids to the Evergreen production tenant"), landed 2026-07-25T03:28Z
+— **before** this session started, from the prior session's work, and is cited here for orientation only.
+
+### §G79.1 — Operator decisions, locked via AskUserQuestion
+
+- **Production Mac origin = `https://github.com/its-sys-admin/evergreen-its`** — a full non-fork mirror of
+  `SolutionSmith-debug/its`, created 2026-07-25, public, HEAD `885d4a4` at creation. **Both repos stay live**:
+  dev commits continue on `SolutionSmith-debug`, production commits (machine-generated only, see below) land
+  on `evergreen-its`. This is a deliberate two-host operational split, not a fork-and-abandon or a rename.
+  Divergence surface is bounded to two daemon classes: `publish_daemon` (commits `safety_portal/catalog.json`
+  + `safety_portal/forms/`) and `config_actuator` (commits the ITS config surface) — each runs independently
+  per host against that host's own repo, so the two trees will drift on exactly those paths and nothing else
+  is expected to diverge.
+- **Old Mac: FULLY out of service, durable teardown.** Not "booted out" in the sense of being physically
+  decommissioned or wiped — the daemons are cleanly unloaded so the machine itself is simply retired from the
+  ITS fleet, reversible if ever needed. Verified live at the code level this session: `install.sh unload`
+  (`scripts/launchd/install.sh:207-219`) runs `launchctl bootout` **and** `rm -f`s the plist from
+  `~/Library/LaunchAgents/` — so "durable" is accurate at the mechanism level, not just the intent level; a
+  reboot of the old Mac cannot silently reload a daemon.
+- **FileVault OFF on the production host** — a deliberate tradeoff: unattended reboots (power blip, macOS
+  update) complete without a human present to enter the FileVault passphrase. Accepted risk, not an oversight.
+- **External-send posture: FULLY DARK for the travel period.** All 5 send dispatchers (`weekly_send_poll`,
+  `progress_send_poll`, `po_send_poll`, `rfq_send_poll`, `subcontract_send_poll`) stay unloaded on the
+  production host. `verify_cutover.py` VC-02 (launchd — every shipped plist loaded except the 5 named
+  send-scope exceptions) therefore reads **FAIL BY DESIGN** — this is the posture working as intended, not a
+  defect; a future session reading a red VC-02 on this host should check this decision before treating it as
+  a regression.
+- **Tenant posture: migrate AS-IS.** `sheet_ids` is already the production Smartsheet tenant (PR #710,
+  `885d4a4`, landed the session before this one); `worker_base_url` stays the mirror (`phase1-hybrid` posture,
+  unchanged). Nothing was repointed this session — the migration is host-only, not tenant-only.
+- **Alerting (heartbeat + Resend) fix: tracked as a follow-up, explicitly NOT a migration blocker.** The
+  operator chose to complete the host move first and harden alerting after — see §G79.4 for what that leaves
+  open (PM-2/PM-3 in exec `docs/tech_debt.md`).
+- **Blueprint: cloned as a sibling on the production host from `SolutionSmith-debug/its-blueprint` only** —
+  deliberately NOT mirrored to the `its-sys-admin`/Evergreen account. The blueprint is Solution Smith
+  cross-customer IP per CLAUDE.md, not Evergreen-specific; only the exec repo gets an Evergreen-account mirror.
+
+### §G79.2 — Work executed
+
+1. **10-agent recon workflow** over every host-bound dependency (Keychain, launchd, Cloudflare auth, Box
+   OAuth, venv/editable-install, blueprint symlinks, CI/branch-protection posture, state-file inventory) —
+   2.0M tokens, 463 tool calls.
+2. **Production-host stand-up brief authored**: `~/Desktop/ITS_prod_host_standup_prompt.md` (432 lines, 13
+   stages). **Not yet committed to either repo** — a candidate for landing in `docs/runbooks/` or
+   `docs/operations/` once stable; flagged in the info-gap doc Open queue and exec tech-debt PM-1.
+3. **Dev-Mac teardown executed 2026-07-25T15:53:15Z**: all 15 loaded daemons unloaded via `install.sh unload`
+   (verified this session to internally run `launchctl bootout` + remove the plist — see §G79.1). Both
+   `launchctl list | grep solutionsmith` and the LaunchAgents directory listing came back empty. Re-verified
+   2026-07-26T17:59:27Z (still empty, ~26h later). Evidence recorded at
+   `~/Desktop/ITS_oldmac_teardown_evidence.txt`.
+4. **State pushed Boston→Florida over Tailscale rsync**: 26 state files + 19 watchdog markers, with **three
+   deliberate exclusions** — `*.lock` (per-host `fcntl` locks, meaningless across a host boundary);
+   `heartbeat_row_ids.json` (withheld ON PURPOSE — since nothing in ITS records host identity anywhere, a
+   reset-then-climbing `Total Cycles` count on `ITS_Daemon_Health` is the ONLY positive proof the production
+   host, not the old one, is now the daemon of record — copying the row-id cache across would have silently
+   preserved the old host's cycle count and erased that signal); `box_oauth_last_refresh.json` (withheld so
+   watchdog Check P's first verdict on the new host — freshness of the Box OAuth token — is an honest
+   first-read, not inherited staleness data from the old host).
+5. **12-agent doc-consolidation workflow**: 172 confirmed-stale findings, 52 dangerous, 3 rejected. **NOT yet
+   landed** — full results parked at a Claude Code scratchpad task-output path (session-local, not durable;
+   exec tech-debt PM-8 flags the reclamation risk). Distinct from this maintenance pass's own edits — the
+   12-agent workflow's findings are unreviewed/unactioned, not folded into anything landed this session.
+
+### §G79.3 — Production host verified state (2026-07-26)
+
+arm64, macOS 26.5.2, `TZ America/New_York` (host is EDT, same class of fact as the 2026-07-15 EDT-not-PDT
+finding — always confirm host timezone before reasoning about any timestamp on a new host). FileVault Off;
+sleep 0 / disksleep 0 on both AC and Battery (required for true unattended operation — a sleeping Mac doesn't
+run launchd `StartInterval` jobs). Repo `evergreen-its` @`885d4a4`, clean on main. Blueprint sibling present,
+zero broken symlinks (the DR-D1/H1 guard-hook dangling-symlink risk, info-gap §8, was checked and is clean on
+this host). venv Python 3.13.14 with `its` installed (editable). 20/20 Keychain secrets seeded. Box OAuth
+completed on the production host itself 2026-07-26T20:07:43Z (a fresh grant, not a copied token — Box refresh
+tokens rotate on every exchange per the standing `_store_tokens` invariant, so this had to be done freshly
+rather than copied via rsync). `state/` 29 files, `.watchdog/` 19 markers present. **launchd is correctly
+EMPTY** — Stage 10-13 (plist load) has not run yet; an empty launchd list on this host right now is the
+expected state, not a fault. Cloudflare authed as a personal (non-org) Gmail account — accepted risk, noted
+not fixed. `wrangler d1 migrations list --remote` returns "No migrations to apply" (genuinely current here,
+unlike the 2026-06-28/its-forensic-class-#2 stale-checkout false version of this same message — this host's
+repo really is at the tip). CI on `evergreen-its` completed SUCCESS.
+
+### §G79.4 — Outstanding, filed as exec `docs/tech_debt.md` PM-1 through PM-9
+
+Full detail in tech_debt.md's new "Production-host migration — outstanding items" section; summary here for
+a session that only has this archive loaded:
+
+- **PM-1 (HIGH):** Stand-up Stages 10-13 not run — no daemon is actually loaded on the production host yet.
+- **PM-2 (HIGH):** dead-man's-switch unarmed — `system.heartbeat_url` still the literal placeholder; the real
+  vendor in code is **Healthchecks.io** (`shared/heartbeat_client.py`, `hc-ping.com`), not UptimeRobot as most
+  docs claim — a naming drift discovered on top of the unset-value gap. ~24h detection latency once armed
+  (daily 07:00 beacon).
+- **PM-3 (MEDIUM, NOT a new item — enriches a pre-existing entry):** Resend `DEFAULT_FROM` still
+  `onboarding@resend.dev`, already tracked exec-side as "resend_client.DEFAULT_FROM swap — blocked
+  on CL-10 solutionsmith sender-domain verification" (`OPEN 2026-07-23`) — this session added
+  evidence rather than filing a duplicate: 403s to every recipient except the mirror sender; 38
+  CRITICALs undeliverable 2026-07-24; VC-06 passes anyway (shape-only, not deliverability-proving).
+  Severity raised low→medium on that existing entry.
+- **PM-4 (MEDIUM):** `scripts/watchdog.py:1743` `GH_MAIN_CI_REPO` hardcodes `SolutionSmith-debug/its` — Check
+  S on the production host reads a FALSE GREEN, not a safe skip.
+- **PM-5 (MEDIUM→HIGH once publish-daemon loads):** `publish_daemon._wait_for_ci` (`:450`) gates on
+  `mergeStateStatus == CLEAN` alone, ignoring the `statusCheckRollup` it already fetches — safe on
+  `SolutionSmith-debug/its` only because that repo's required-status-checks protection makes `CLEAN` mean
+  "CI passed"; `evergreen-its`'s protection state is **unverified**, and GitHub's branch-protection API
+  returns 404 to a non-admin token whether protection exists or not (new info-gap §5 trap) — so this cannot
+  be confirmed safe by a bare API check. No live exposure today (PM-1 means the daemon isn't loaded), but a
+  real fail-open on the §50 privileged-actuation gate the moment it is, if the target repo lacks required
+  checks.
+- **PM-6 (MEDIUM, Seth-owned):** old-Mac disarm (venv teardown / secrets removal / tenant-access revocation)
+  deliberately deferred until the production host completes one full unattended Friday weekly-generate cycle
+  — do this too early and there is no fallback host.
+- **PM-7 (MEDIUM→HIGH if recurs):** five procurement daemons (`config_actuator`, `estimate_poll`, `po_poll`,
+  `rfq_poll`, `subcontract_poll`) froze on the OLD host 2026-07-24 ~15:23-15:28, never diagnosed. If the cause
+  is code/config rather than host-specific, it moved with the clone.
+- **PM-8 (LOW):** the 172-finding doc-consolidation output sits at a non-durable scratchpad path.
+- **PM-9 (LOW, doc-currency):** CLAUDE.md's `ITS_ANTHROPIC_KEY`/`anthropic_client` framing ("sole live LLM
+  consumer") reads as live-exercised but is not — verified this session that `process_portal_submission`
+  (`intake.py:2252`, the only reachable live path — `intake_poll.py`/`process_message`'s email path was
+  deleted 2026-07-03) never calls `classify_and_extract` (`intake.py:739`, the sole `anthropic_client.call`
+  site). **ITS currently makes ZERO live inference calls.** CLAUDE.md's table row is technically accurate
+  (intake.py does house the code) but misleading about liveness; out of this maintainer's scope to edit
+  CLAUDE.md directly, so filed as PM-9 for the next docs-currency pass.
+
+### §G79.5 — New durable gotchas (recorded in full in info-gap doc §5 — summarized here for archive completeness)
+
+1. **A non-GUI SSH session on macOS cannot decrypt the login Keychain.** `gh auth status`, secret-fingerprint
+   checks, and daemon smokes reading a token all return false negatives ("User interaction is not allowed")
+   over headless SSH — Keychain item PRESENCE checks (no `-w`) still work; only VALUE reads need the GUI. The
+   unattended-reboot credential-read verification pass must run in a GUI/Screen-Sharing session or it always
+   reports LOCKED.
+2. **GitHub's branch-protection API returns 404, not 403, to a non-admin token** — indistinguishable from "no
+   protection configured." Only an admin-scoped token (or an actual push attempt) can tell the two apart.
+3. **`ITS_OPERATOR_PIN` on the old host was the literal string `"123456"`** (sha256 prefix `8d969eef`) —
+   found and changed during the migration. Remediated, not an open item; recorded here in case the same
+   pattern (a weak seed PIN surviving from an early setup step) recurs on a future host stand-up.
+4. **`publish_daemon._wait_for_ci` fail-open class** — detailed in §G79.4 PM-5 and info-gap §5; the durable
+   lesson is that a CI-wait helper that reads `mergeStateStatus` alone is only as strong as the TARGET repo's
+   branch protection, which is an assumption, not a property of the helper itself.
+
+### §G79.6 — Session-log flag
+
+This session produced **zero commits** in either repo, so there is nothing for the four-part PR-landed verify
+to check and no `pr-landed-verifier` output to quote. It nonetheless carries multiple non-obvious operational
+decisions (the two-live-repo model, the fully-dark send posture, the deliberate state-sync exclusions, the
+old-Mac teardown-not-disarm distinction) that a session log would normally capture. **This agent flags but
+does not write it** — the operator should invoke `session-log-writer` directly for BOTH the execution-repo log
+(`~/its/docs/session_logs/`, since real infra state changed — daemons unloaded, secrets rotated, a new repo
+created) and, given the architectural weight of the two-repo decision, consider whether the planning-side log
+(`~/its-blueprint/session-logs/`) is also warranted. See the top-level output for this pass's explicit
+recommendation.
+
+**Companion edits, same pass:** info-gap doc — three new §5 traps (SSH/Keychain, branch-protection-404,
+`_wait_for_ci` fail-open), one new §6 topology entry (two-live-repo model), one new §8 Recently-landed bullet,
+nine new §8 Open-queue bullets (PM-1 through PM-9 summarized), `Last refreshed` + frontmatter
+`last_verified`/`last_verified_against` moved to 2026-07-26/`885d4a4`. Exec `docs/tech_debt.md` — one new
+section, "Production-host migration — outstanding items," PM-1 through PM-9.
