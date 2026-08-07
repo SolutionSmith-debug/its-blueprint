@@ -6101,16 +6101,22 @@ nine new §8 Open-queue bullets (PM-1 through PM-9 summarized), `Last refreshed`
 `last_verified`/`last_verified_against` moved to 2026-07-26/`885d4a4`. Exec `docs/tech_debt.md` — one new
 section, "Production-host migration — outstanding items," PM-1 through PM-9.
 
-## §G80 — 2026-08-06/07 materials-tracking program: append-only receipt ledger, per-job Materials page, manifest parser (exec PRs #724/#725 MERGED, #727 OPEN not merged)
+## §G80 — 2026-08-06/07 materials-tracking program: append-only receipt ledger, per-job Materials page, manifest parser (exec PRs #724/#725/#727 all MERGED)
 
-An operator-directed materials-tracking build, planned then executed as staged PRs. Two landed
-four-part-clean (#724, #725); the third (#727, the manifest parser) is **still OPEN** at session
-close — CI was mid-run (`test`/`portal` pending) and it had not been reviewed/merged. **This is a
-live instance of the PR-number-prediction-drift trap (info-gap §5, line ~179):** the session's own
-closing summary asserted #727 as "landed," which `gh pr view 727` disproves — `state: OPEN`. Cite
-the verified number, not the narrated one. A concurrent, unrelated Track-6 job-archive session
-landed **#726** on top of this session's work the same day (17:29Z, well after #725's 02:01Z merge)
-— cited here for orientation only, not narrated; see the Track-6 session's own record.
+An operator-directed materials-tracking build, planned then executed as staged PRs. #724 and #725
+were four-part-clean at the start of this maintenance pass. #727 (the manifest parser) was checked
+first and found **`state: OPEN`**, CI mid-run (`test`/`portal` pending), not yet
+reviewed/merged — **a live instance of the PR-number-prediction-drift trap (info-gap §5, line
+~179):** the session's own closing summary had asserted #727 as "landed," which `gh pr view 727`
+at that moment disproved. **#727 then genuinely merged (`437e8fa`, 2026-08-07T17:40:02Z) DURING
+this maintenance pass** — a live example, inside a single session, of exactly the concurrent-
+landing collision this agent's charter warns about (the same class as the 2026-05-28 PR #17 §8
+collision cited in this agent's own instructions, just compressed into one sitting instead of two
+sessions). Leg 4 of the four-part verify (main-branch CI on the merge commit) was still
+**IN PROGRESS** (`test` job running) when last checked here — confirm it before treating #727 as
+fully landed. A concurrent, unrelated Track-6 job-archive session landed **#726** on top of this
+session's work the same day (17:29Z, well after #725's 02:01Z merge) — cited here for orientation
+only, not narrated; see the Track-6 session's own record.
 
 ### §G80.1 — What landed
 
@@ -6131,7 +6137,9 @@ landed **#726** on top of this session's work the same day (17:29Z, well after #
   `src/pages/JobMaterialsPage.tsx` at `/jobs/:jobId/materials` + deep links from the Job Tracker and
   the daily report's `expected_materials` mount (no form-definition change needed). New
   `docs/runbooks/job_materials.md` §43 entry + a troubleshooting-tree node.
-- **#727** (`field_ops/manifest_parse.py`, OPEN, NOT merged as of this session close) — the
+- **#727** (`field_ops/manifest_parse.py`, `state: OPEN` when first checked this pass → **MERGED
+  `437e8fa` at 17:40:02Z DURING this maintenance pass**, leg-4 CI on the merge commit still running
+  when last polled here — re-verify before citing as fully four-part-clean) — the
   BOM/shipping-log document parser (PR3a of manifest import): pure functions over cell grids, no
   I/O, no network, no daemon. 20 new tests + `scripts/eval_manifest_parse.py` (operator-run corpus
   replay, verified 10/10 against the real documents in `~/Desktop/evergreen project/manifests`).
@@ -6139,8 +6147,9 @@ landed **#726** on top of this session's work the same day (17:29Z, well after #
   stays human (REV 2 defaults-and-checks via `Σquantity + OVERAGE == REV n`, both real Bonacci files
   47/47 and 48/48). Deliberately does NOT flag "ragged rows" (a cell-count heuristic produced 28
   false positives across the two real logs and missed its own motivating case) and does NOT merge by
-  part number (duplicates are universal; that's the validate page's decision, PR3b). CI was mid-run
-  (`portal`/`test` pending) at session close — next session should confirm green and merge.
+  part number (duplicates are universal; that's the validate page's decision, PR3b). Merged
+  mid-pass; a fresh session should confirm leg-4 (main-branch CI on `437e8fa`) is SUCCESS before
+  relying on it.
 
 ### §G80.2 — Operator decisions ratified this session (durable — do not re-ask)
 
@@ -6238,21 +6247,23 @@ daemon, an `extract_xlsx_rows` sandbox child, the validate-upload page, the comm
 (daily-report snapshot + `daily-report-v7` + confirmation photos via a server-side
 `daily_photo_pool.line_uuid` column + the §51 receipts-ledger Smartsheet mirror, §G80.2 decision 6).
 Full corrected design + handoff brief: `~/.claude/plans/we-need-to-create-eager-rossum.md` (exec-host
-scratch, not committed to either repo — read it before resuming). #727 itself needs its CI confirmed
-green and to be merged before PR3b starts (PR3b's daemon imports `manifest_parse`).
+scratch, not committed to either repo — read it before resuming). #727 merged mid-pass (`437e8fa`);
+confirm leg-4 CI on that merge commit before starting PR3b (PR3b's daemon imports `manifest_parse`).
 
 ### §G80.9 — Session-log flag
 
-Two commits landed (#724, #725) with several non-obvious decisions (the append-only-ledger vs.
-status-flag call, the §51-mirror-deferred-to-PR4 call, the CI registry fan-out). Warrants an
-execution-repo session log. **This agent flags but does not write it** — operator should invoke
-`session-log-writer` directly. No planning-side (blueprint) decision shifted doctrine this session
-(the §51 mirror question is deferred/design, not yet a doctrine action), so a blueprint-side log is
-optional, not required.
+Three PRs landed (#724, #725, #727 — the last one mid-maintenance-pass) with several non-obvious
+decisions (the append-only-ledger vs. status-flag call, the §51-mirror-deferred-to-PR4 call, the CI
+registry fan-out, the corrected corpus-size claim). Warrants an execution-repo session log. **This
+agent flags but does not write it** — operator should invoke `session-log-writer` directly. No
+planning-side (blueprint) decision shifted doctrine this session (the §51 mirror question is
+deferred/design, not yet a doctrine action), so a blueprint-side log is optional, not required.
 
 **Companion edits, same pass:** info-gap doc — one new §5 trap (the CI registry-parity fan-out
 class, three named gates), one new §8 Recently-landed bullet, one new §8 Open-queue bullet (PR3b/PR4
 + #727 merge-status), `Last refreshed` + frontmatter `last_verified`/`last_verified_against` moved to
 2026-08-07/`799e2d6` (current `origin/main` tip at fetch time — includes the concurrent #726, not
-narrated). Exec `docs/tech_debt.md` — no new entry; the "D1-primary tables have no ITS-side backup"
-entry's 2026-08-07 update (already landed in #725) was verified to read correctly, not duplicated.
+narrated; predates #727's mid-pass merge, which is why leg-4 CI on `437e8fa` is called out as
+unverified throughout this section rather than silently assumed clean). Exec `docs/tech_debt.md` —
+no new entry; the "D1-primary tables have no ITS-side backup" entry's 2026-08-07 update (already
+landed in #725) was verified to read correctly, not duplicated.
