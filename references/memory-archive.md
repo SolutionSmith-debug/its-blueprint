@@ -6100,3 +6100,170 @@ recommendation.
 nine new §8 Open-queue bullets (PM-1 through PM-9 summarized), `Last refreshed` + frontmatter
 `last_verified`/`last_verified_against` moved to 2026-07-26/`885d4a4`. Exec `docs/tech_debt.md` — one new
 section, "Production-host migration — outstanding items," PM-1 through PM-9.
+
+## §G80 — 2026-08-06/07 materials-tracking program: append-only receipt ledger, per-job Materials page, manifest parser (exec PRs #724/#725/#727 all MERGED)
+
+An operator-directed materials-tracking build, planned then executed as staged PRs. #724 and #725
+were four-part-clean at the start of this maintenance pass. #727 (the manifest parser) was checked
+first and found **`state: OPEN`**, CI mid-run (`test`/`portal` pending), not yet
+reviewed/merged — **a live instance of the PR-number-prediction-drift trap (info-gap §5, line
+~179):** the session's own closing summary had asserted #727 as "landed," which `gh pr view 727`
+at that moment disproved. **#727 then genuinely merged (`437e8fa`, 2026-08-07T17:40:02Z) DURING
+this maintenance pass** — a live example, inside a single session, of exactly the concurrent-
+landing collision this agent's charter warns about (the same class as the 2026-05-28 PR #17 §8
+collision cited in this agent's own instructions, just compressed into one sitting instead of two
+sessions). Leg 4 of the four-part verify (main-branch CI on the merge commit) was still
+**IN PROGRESS** (`test` job running) when last checked here — confirm it before treating #727 as
+fully landed. A concurrent, unrelated Track-6 job-archive session landed **#726** on top of this
+session's work the same day (17:29Z, well after #725's 02:01Z merge) — cited here for orientation
+only, not narrated; see the Track-6 session's own record.
+
+### §G80.1 — What landed
+
+- **#724** (`546adfbd`, mergedAt 2026-08-07T01:02:19Z) — the deep-link "← Back to My Tasks" control
+  on `FormFillPage.tsx:334` rendered `.btn--ghost` (the white-on-green `AppHeader` variant) on the
+  light page ground (~1.04:1 contrast) — operator-reported as invisible. Fixed to `.btn--secondary`;
+  swept 5 sibling light-surface ghosts (`ChecklistItemRow` ×4, `RfqBuilderPage` remove-chip →
+  `.btn--danger`). New `tests/test_portal_button_variants.py` promotes the existing prose rule in
+  `global.css` to a CI gate: `.btn--ghost` may appear only on a line that also calls `logout()`.
+  Prove-the-control-bites run (RED on the pre-fix tree).
+- **#725** (`63723e68`, mergedAt 2026-08-07T02:01:04Z) — per-job Materials tracking page. Migration
+  `0059_material_tracking.sql` adds `part_number`/`category`/`expected_ship_date` to
+  `job_expected_materials`, plus two NEW D1-primary tables: `material_receipt_events` (append-only
+  delivery ledger) and `material_shipments` (scheduled loads). New Worker routes
+  (`worker/fieldops_expected_materials.ts`: three-way receipt mark, shipment CRUD), `/receive`
+  re-pointed onto the ledger, a shared `RECEIPT_ROLLUP_SQL` used by both the read route and the
+  future §51 snapshot, purge-job cascade extended to both new tables. New
+  `src/pages/JobMaterialsPage.tsx` at `/jobs/:jobId/materials` + deep links from the Job Tracker and
+  the daily report's `expected_materials` mount (no form-definition change needed). New
+  `docs/runbooks/job_materials.md` §43 entry + a troubleshooting-tree node.
+- **#727** (`field_ops/manifest_parse.py`, `state: OPEN` when first checked this pass → **MERGED
+  `437e8fa` at 17:40:02Z DURING this maintenance pass**, leg-4 CI on the merge commit still running
+  when last polled here — re-verify before citing as fully four-part-clean) — the
+  BOM/shipping-log document parser (PR3a of manifest import): pure functions over cell grids, no
+  I/O, no network, no daemon. 20 new tests + `scripts/eval_manifest_parse.py` (operator-run corpus
+  replay, verified 10/10 against the real documents in `~/Desktop/evergreen project/manifests`).
+  Emits a grid + a proposal, not lines — the DELTA-BOM "which quantity column is authoritative" call
+  stays human (REV 2 defaults-and-checks via `Σquantity + OVERAGE == REV n`, both real Bonacci files
+  47/47 and 48/48). Deliberately does NOT flag "ragged rows" (a cell-count heuristic produced 28
+  false positives across the two real logs and missed its own motivating case) and does NOT merge by
+  part number (duplicates are universal; that's the validate page's decision, PR3b). Merged
+  mid-pass; a fresh session should confirm leg-4 (main-branch CI on `437e8fa`) is SUCCESS before
+  relying on it.
+
+### §G80.2 — Operator decisions ratified this session (durable — do not re-ask)
+
+1. Delivery marks are an **append-only ledger**, not a status flag; the line shows a rollup derived
+   from the ledger.
+2. **Two-level import model**: BOM rows → expected-material lines; shipping-log rows → shipments
+   (loads) attached to a line by part number.
+3. Re-upload is a **tracked batch**; merge-by-part-number vs. add-as-new is chosen at validation
+   (PR3b), not at parse time.
+4. **REV 2 is the authoritative quantity column on DELTA BOMs**, with office/admin review and a
+   per-upload override — not REV 1, not a computed DELTA.
+5. **PR4 = Option A**: the filed daily report WILL carry a server-sourced snapshot of the day's
+   marks, accepting the inversion of the `expected_materials` mount's documented "files no values"
+   contract. Cuts a new form version, `daily-report-v7`, when built.
+6. **Mirror the receipt ledger into Smartsheet** — a per-job `<Job> — Material Receipts` append-only
+   sheet on the `material_incidents.py` pattern (the "one row per event, never delete" shape already
+   proven live for M3).
+
+### §G80.3 — Non-obvious engineering decisions
+
+- **The `status` CHECK on `job_expected_materials` was deliberately NOT widened** to add
+  `partial`/`not_delivered`. `incident` and a partial delivery are ORTHOGONAL axes — one column
+  cannot hold both, and the next mark would erase the incident flag. The three-way state (Delivered /
+  Partially delivered / Not delivered) is derived from the `material_receipt_events` ledger instead —
+  also avoiding a table rebuild, a UNIQUE-index recreate on the mirror key, and a five-surface
+  vocabulary fan-out.
+- **The §51 Material List mirror columns were deliberately DEFERRED to PR4** because
+  `shared/smartsheet_client._resolve_cells` raises `KeyError` for a column absent from an
+  already-created per-job sheet — the mirror columns need a live-sheet migration step PR4 will carry,
+  not a silent no-op today.
+- **`prune.ts` was deliberately NOT given new guards** for the two new tables: lines are soft-deleted,
+  never hard-deleted, so the existing `job_expected_materials` `NOT IN` guard covers
+  `material_receipt_events`/`material_shipments` transitively — confirmed independently by
+  `portal-worker-security-reviewer`, not just asserted.
+
+### §G80.4 — Adversarial review findings (both returned BLOCK first pass; all folded before merge)
+
+- **`portal-worker-security-reviewer` found a REAL regression** on #725: `/receive` returned a
+  hardcoded `status: "received"` even on an incident-flagged line where the projection UPDATE
+  deliberately no-ops — the daily form would show the crew a resolved delivery while the §51 mirror
+  still flagged the problem. Pre-PR that call was an honest 409. Fixed by returning the persisted
+  status; the existing test had asserted the DB row but NOT the response body — that blind spot is
+  now closed (`JobMaterialsPage.test.tsx` + the worker test both assert the body).
+- **`ops-stds-enforcer` found on #725**: (a) `docs/runbooks/material_catalog_admin.md` still
+  documented the 409-on-repeat contract this PR changed, AND a Worker comment claimed "Documented in
+  the §43 runbook" for a runbook entry that didn't exist yet — a false claim in shipped code; (b) no
+  §43 entry existed for the new page, which ships live gated only on a capability every field role
+  holds; (c) `docs/ROADMAP.md` Track 2 M2's "OPEN DECISION" text was resolved by the PR but still read
+  as open. All three fixed in the same PR (see `docs/runbooks/job_materials.md` +
+  `docs/ROADMAP.md:69-81`).
+
+### §G80.5 — CI registry-parity gates fired (the fan-out class, HOUSE_REFLEXES §1)
+
+Three independent CI registries required same-PR updates on #725, each catching a genuine miss:
+
+1. `tests/test_error_copy_parity.py` — every field-ops Worker error code needs plain-language copy in
+   `src/lib/errorCopy.ts`. Name collisions are real: `invalid_kind` and `invalid_part_number` were
+   already taken by other features, so the new receipt-mark error became `invalid_receipt_kind`.
+2. `tests/test_docs_pdf.py` — editing a `docs/enablement/manifest.yaml`-tracked doc (the runbook) 
+   drifts its recorded sha256; had to be re-recorded in the same PR.
+3. `tests/test_troubleshooting_tree.py` — a new runbook must be referenced by a `tree.yaml` node or
+   explicitly exempted, then `build_runbook_xrefs` AND `build_troubleshooting_guide` re-run — and the
+   generated guide is itself manifest-tracked, so its sha needed a SECOND re-record pass.
+
+Two scoping mistakes in the same session, worth naming: ran `mypy <file>` instead of `mypy .` (two
+errors surfaced only in full-repo CI, not the scoped local run); ran a source-scanning guard BEFORE
+the last edit landed rather than after (stale-result false-pass).
+
+### §G80.6 — A factual correction that reached two durable artifacts before being caught
+
+A design subagent earlier reported the Deep Lake shipping log as "51 parts across 1,195 continuation
+rows." It actually holds **57 non-empty rows (51 parts + 5 extra loads)** inside a sheet that
+DECLARES 1,247 rows × 92 columns. The wrong figure reached both an operator summary and migration
+`0059`'s header comment before `field_ops/manifest_parse.py` (#727) falsified it against the real
+file; `0059`'s comment was corrected in #727. Filed here as another data point for info-gap §5's
+"trust the live code/data, never the claim" class — this time the claim originated from an
+upstream agent, not stale memory.
+
+### §G80.7 — Parser findings from the real corpus (#727, each now a regression test)
+
+Customer BOM headers appear on **page 1 only** — a per-table column-inference reset would silently
+drop ~60% of every document (Bradley 1 yields all 90 rows across 3 pages, not 33 from page 1 alone).
+The Roxbury XLSX header is on row 4 with an empty row 3 above it, scanned for rather than assumed.
+DELTA BOMs satisfy `Σ quantities + OVERAGE == REV 2` on 47/47 and 48/48 real rows. The Kiwi shipping
+log carries requirement dates ("Job Ship By"/"Last Need By") alongside actual ship/delivery dates,
+and conflating them would import a deadline as though goods had already moved. A generic "ragged
+row" cell-count heuristic produced 28 false flags across the two real logs and missed its own
+motivating case (a Customer-BOM row whose truncated description bled a stray digit into an adjacent
+column, with every cell otherwise populated) — removed rather than kept as noise.
+
+### §G80.8 — NOT done — next session
+
+PR3b (manifest import transport: migration `0060`, Worker routes, a `field_ops/manifest_poll.py`
+daemon, an `extract_xlsx_rows` sandbox child, the validate-upload page, the commit path) and PR4
+(daily-report snapshot + `daily-report-v7` + confirmation photos via a server-side
+`daily_photo_pool.line_uuid` column + the §51 receipts-ledger Smartsheet mirror, §G80.2 decision 6).
+Full corrected design + handoff brief: `~/.claude/plans/we-need-to-create-eager-rossum.md` (exec-host
+scratch, not committed to either repo — read it before resuming). #727 merged mid-pass (`437e8fa`);
+confirm leg-4 CI on that merge commit before starting PR3b (PR3b's daemon imports `manifest_parse`).
+
+### §G80.9 — Session-log flag
+
+Three PRs landed (#724, #725, #727 — the last one mid-maintenance-pass) with several non-obvious
+decisions (the append-only-ledger vs. status-flag call, the §51-mirror-deferred-to-PR4 call, the CI
+registry fan-out, the corrected corpus-size claim). Warrants an execution-repo session log. **This
+agent flags but does not write it** — operator should invoke `session-log-writer` directly. No
+planning-side (blueprint) decision shifted doctrine this session (the §51 mirror question is
+deferred/design, not yet a doctrine action), so a blueprint-side log is optional, not required.
+
+**Companion edits, same pass:** info-gap doc — one new §5 trap (the CI registry-parity fan-out
+class, three named gates), one new §8 Recently-landed bullet, one new §8 Open-queue bullet (PR3b/PR4
++ #727 merge-status), `Last refreshed` + frontmatter `last_verified`/`last_verified_against` moved to
+2026-08-07/`799e2d6` (current `origin/main` tip at fetch time — includes the concurrent #726, not
+narrated; predates #727's mid-pass merge, which is why leg-4 CI on `437e8fa` is called out as
+unverified throughout this section rather than silently assumed clean). Exec `docs/tech_debt.md` —
+no new entry; the "D1-primary tables have no ITS-side backup" entry's 2026-08-07 update (already
+landed in #725) was verified to read correctly, not duplicated.
